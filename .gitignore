@@ -1,0 +1,8 @@
+# Quarto hidden folder
+.quarto/
+
+# Ignore intermediate rendering files
+*.log
+*.aux
+*.out
+*.tex
