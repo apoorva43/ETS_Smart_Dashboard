@@ -204,21 +204,21 @@ By incorporating contextual variables into distributional comparisons, the dashb
 
 ## Evaluation & Success Criteria
 
-The success of this project will be evaluated across four dimensions that reflect both technical correctness and real-world usability:
+We will evaluate the project across four dimensions tailored to our stakeholders:
 
-1. **Statistical Accuracy:** Every figure displayed must be computed correctly according to PISA methodology, utilizing weighted means and percentiles averaged across all 10 plausible values. We will validate our results against publicly published OECD statistics. 
-2. **Equity Story Visibility:** The dashboard must produce meaningfully different insights when filtered by student groups. We will qualitatively assess whether breakdowns by socioeconomic status, gender, and immigration status reveal distinct, interpretable patterns.
-3. **Usability by Non-Experts:** An educator or policymaker must be able to use the dashboard and arrive at meaningful insights without reading technical documentation. We will evaluate this through informal walkthroughs with our ETS partners.
-4. **Partner Sign-Off:** ETS will ultimately confirm whether the tool reflects their reporting goals, specifically ensuring the design avoids deficit framing by prioritizing contextualized score distributions.
+1. **Metrics (Statistical Accuracy):** We will validate our computational engine against published OECD statistics. Success requires our weighted means and percentiles to exactly match official benchmarks, ensuring absolute validity for ETS.
+2. **Success for the Capstone Partner:** ETS's core priority is equitable assessment. Success means the dashboard actively discourages deficit framing by making contextualized score distributions the default visual, successfully shifting the narrative from intrinsic gaps to systemic factors.
+3. **Usage in Practice:** Education policymakers and researchers will use this tool to intuitively explore systemic drivers of achievement gaps, informing fairer resource allocation without needing to run complex statistical software.
+4. **Stakeholder Usability:** The dashboard must be accessible to non-technical users. We will evaluate interface friction through informal walkthroughs, ensuring users can extract meaningful policy insights effortlessly.
 
 ## Timeline
 
 Our work is organized into four two-week phases:
 
-* **Phase 1 (Weeks 1 and 2):** Finalize variable selection in consultation with ETS and build the core statistical engine. This engine will be validated against OECD figures before UI development begins. *Risk Mitigation:* If certain equity variables lack global coverage, we will fall back to a minimum viable equity layer of ESCS and gender.
-* **Phase 2 (Weeks 3 and 4):** Build the first working version of the dashboard using Canada and the United States. This includes page structure, filter interfaces, and the core percentile charts. 
-* **Phase 3 (Weeks 5 and 6):** Integrate the equity layer. We will add breakdowns for SES, gender, and immigration status alongside school context overlays and dynamic insight text. 
-* **Phase 4 (Weeks 7 and 8):** Scale the dashboard to all 81 PISA countries, finalize interactivity, incorporate partner feedback, and attempt the AI chatbot stretch goal.
+* **Phase 1 (Weeks 1-2):** Finalize variable selection with ETS and build the core statistical engine. This engine will be validated against OECD figures before UI development begins.
+* **Phase 2 (Weeks 3-4):** Build the initial Streamlit dashboard using Canada and the United States. This includes page structure, the dual-filter interface, and core percentile charting.
+* **Phase 3 (Weeks 5-6):** Integrate the contextual equity layer (SES, gender, immigration, school resources) alongside dynamic insight generation.
+* **Phase 4 (Weeks 7-8):** Scale the pipeline to all 81 PISA countries across the three historical cycles, finalize interactivity, incorporate ETS feedback, and address the AI chatbot stretch goal.
 
 ## References
 
