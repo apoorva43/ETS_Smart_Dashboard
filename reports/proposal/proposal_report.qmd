@@ -113,8 +113,6 @@ Image("../../data/images/fig3_escs_dist.png")
 
 The distributions shift systematically rightward from the lowest index (Q1) to the highest index (Q4) in both countries. On average across OECD countries, students in the top quarter of the ESCS distribution score 93 points higher in mathematics than those in the bottom quarter [@oecd_pisa_2022, Chapter 4] - a gap visible in @fig-escs-dist and the primary motivation for including ESCS as a dashboard filter. 
 
-These three findings directly shape our visualization priorities: Finding 1 motivates distributional displays as the default view rather than bar charts of means; Finding 2 suggests gap plots are more readable than overlapping distributions for policy audiences; Finding 3 confirms ESCS quartile breakdowns as a primary dashboard filter. 
-
 ### Data Limitations and Challenges
 
 Missingness is the primary data quality concern. @tbl-missingness summarizes missingness rates for key variables.
@@ -156,45 +154,32 @@ Several columns from the optional parent and wellbeing questionnaires are 100% m
 
 ## Data Science Approach
 
-### Overview
-
-We propose to develop an interactive dashboard that prioritizes distributional analysis over summary statistics. Rather than relying on average scores, we plan to use distribution-focused visualizations such as histograms, density plots, and percentile line plots. These allow users to observe variation across the full range of student performance, rather than focusing on central tendencies alone. This aligns with the project goal of supporting more equitable and context-aware interpretations of education data. 
-[Blueprint](data/images/blueprint.png)
-
-### Interactive Filtering Design
-
-Patterns of whole population could also be misleading. Simpson's Paradox which suggests subgroups could have different relationships with the outcome variable compared to the overall population highlights the importance of examining subgroups within the data. We decide to include two layers of filters to increase flexibility and interpretability, ensuring users can explore patterns in different subgroups instead of simply reading static summaries.
-
-The first layer consists of basic filters, including country, year, subject (mathematics, reading, science), and gender. These allow users to explore how score distributions vary across broad populations.
-
-The second layer consists of contextual filters, which are central to our approach. These include socioeconomic status (ESCS), school resources, immigration background, student motivation, and sense of belonging. These variables are selected because they provide explanatory context for observed differences in student performance.
-
-### From Filters to Insights
-
-Rather than treating filters as simple subgroup selectors, the dashboard is designed to generate interpretable insights.
-
-For example, users can compare score distributions between students with high versus low access to school resources. This allows them to observe not only differences in average performance, but also where disparities occur across the distribution (e.g. students with lower access to school resources usually have lower performance).
-
-Similarly, users can explore how sense of belonging relates to student outcomes. If students who report lower belonging consistently show lower performance across percentiles, this suggests that non-academic factors may play a significant role, helping the students fit in school might be important as well.
-
-These comparisons shift the focus from identifying which group performs better to understanding why differences exist.
-
-### Visualization Design
-
-To support distribution-focused analysis, we plan to include several visualization types.
-
-1. Histograms and density plots will be used to display the full score distribution within selected groups. These visualizations allow users to see the shape of the distribution and detailed density, identify skewness, and observe where gaps are most pronounced across the performance spectrum.
-
-2. Percentile line plots will be included to compare distributions across groups in a more structured way. By showing key percentiles (e.g., 10th, 50th, 90th), users can identify where the bigge, such as among lower- or higher-performing students.
-
-3. Boxplots or violin plots may be used for compact comparisons across multiple subgroups. These visualizations provide a quick overview of distribution shape, spread, and central tendency, making them useful when comparing several groups simultaneously.
-
-These visualization choices are guided by the goal of making variation and inequality visible, while remaining interpretable for non-technical users. By combining multiple plot types, the dashboard supports both detailed exploration and high-level comparison.
+```{python}
+#| label: fig-blueprint
+#| fig-cap: "System blueprint and filtering architecture for the interactive dashboard."
+from IPython.display import Image
+Image("../../data/images/blueprint.png")
 
 ### Baseline Approach
 
-Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
+Our baseline model is the full, weighted OECD score distribution for each country. Computed using student sampling weights averaged across all ten plausible values, this provides a statistically valid foundation for evaluating all subsequent subgroups. 
 
+### Interactive Filtering and Visualization
+
+To move beyond baseline population averages, we will implement a two-tiered filtering system:
+
+1. **Primary Filters:** Broad demographic segments (Country, Year, Subject, Gender).
+2. **Contextual Filters:** Explanatory variables (ESCS, school resources, immigration background, sense of belonging).
+
+These filters will dynamically update Kernel Density Estimation (KDE) distributions and percentile line plots. Rather than presenting isolated metrics, the dashboard overlays contrasting groups. For instance, plotting high vs. low school resource access immediately reveals structural disparities across the entire performance spectrum. 
+
+### Justification
+
+Simpson's Paradox demonstrates how whole-population summaries can mislead. Visualizing full distributions prevents audiences from attributing performance gaps to intrinsic deficits. By incorporating contextual variables, we ensure fair comparisons between students with similar backgrounds, allowing policymakers to identify targetable structural factors.
+
+### Anticipated Challenges
+
+Performance is a primary concern; computing weighted distributions dynamically across millions of rows can induce dashboard latency. We will mitigate this by pre-computing aggregated percentile bounds where possible. Furthermore, contextual variables are sparsely populated outside North America, requiring robust fallback handling to prevent visual errors when users explore other countries.
 
 ### Justification
 
@@ -204,21 +189,21 @@ By incorporating contextual variables into distributional comparisons, the dashb
 
 ## Evaluation & Success Criteria
 
-We will evaluate the project across four dimensions tailored to our stakeholders:
+The success of this project will be evaluated across four dimensions that reflect both technical correctness and real-world usability:
 
-1. **Metrics (Statistical Accuracy):** We will validate our computational engine against published OECD statistics. Success requires our weighted means and percentiles to exactly match official benchmarks, ensuring absolute validity for ETS.
-2. **Success for the Capstone Partner:** ETS's core priority is equitable assessment. Success means the dashboard actively discourages deficit framing by making contextualized score distributions the default visual, successfully shifting the narrative from intrinsic gaps to systemic factors.
-3. **Usage in Practice:** Education policymakers and researchers will use this tool to intuitively explore systemic drivers of achievement gaps, informing fairer resource allocation without needing to run complex statistical software.
-4. **Stakeholder Usability:** The dashboard must be accessible to non-technical users. We will evaluate interface friction through informal walkthroughs, ensuring users can extract meaningful policy insights effortlessly.
+1. **Statistical Accuracy:** Every figure displayed must be computed correctly according to PISA methodology, utilizing weighted means and percentiles averaged across all 10 plausible values. We will validate our results against publicly published OECD statistics. 
+2. **Equity Story Visibility:** The dashboard must produce meaningfully different insights when filtered by student groups. We will qualitatively assess whether breakdowns by socioeconomic status, gender, and immigration status reveal distinct, interpretable patterns.
+3. **Usability by Non-Experts:** An educator or policymaker must be able to use the dashboard and arrive at meaningful insights without reading technical documentation. We will evaluate this through informal walkthroughs with our ETS partners.
+4. **Partner Sign-Off:** ETS will ultimately confirm whether the tool reflects their reporting goals, specifically ensuring the design avoids deficit framing by prioritizing contextualized score distributions.
 
 ## Timeline
 
 Our work is organized into four two-week phases:
 
-* **Phase 1 (Weeks 1-2):** Finalize variable selection with ETS and build the core statistical engine. This engine will be validated against OECD figures before UI development begins.
-* **Phase 2 (Weeks 3-4):** Build the initial Streamlit dashboard using Canada and the United States. This includes page structure, the dual-filter interface, and core percentile charting.
-* **Phase 3 (Weeks 5-6):** Integrate the contextual equity layer (SES, gender, immigration, school resources) alongside dynamic insight generation.
-* **Phase 4 (Weeks 7-8):** Scale the pipeline to all 81 PISA countries across the three historical cycles, finalize interactivity, incorporate ETS feedback, and address the AI chatbot stretch goal.
+* **Phase 1 (Weeks 1 and 2):** Finalize variable selection in consultation with ETS and build the core statistical engine. This engine will be validated against OECD figures before UI development begins. *Risk Mitigation:* If certain equity variables lack global coverage, we will fall back to a minimum viable equity layer of ESCS and gender.
+* **Phase 2 (Weeks 3 and 4):** Build the first working version of the dashboard using Canada and the United States. This includes page structure, filter interfaces, and the core percentile charts. 
+* **Phase 3 (Weeks 5 and 6):** Integrate the equity layer. We will add breakdowns for SES, gender, and immigration status alongside school context overlays and dynamic insight text. 
+* **Phase 4 (Weeks 7 and 8):** Scale the dashboard to all 81 PISA countries, finalize interactivity, incorporate partner feedback, and attempt the AI chatbot stretch goal.
 
 ## References
 
