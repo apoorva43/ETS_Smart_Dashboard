@@ -99,17 +99,17 @@ for ax, country in zip(axes, ["CAN", "USA"]):
     ax.axvline(mean, color=mean_color, linewidth=2,
                linestyle="-", zorder=4)
 
-    ax.text(p25, label_y, f"P25\n{p25:.0f}",
+    ax.text(p25 - 15, label_y, f"P25\n{p25:.0f}",
             fontsize=9, color=pct_colors["p25"],
             fontweight="bold", ha="center", va="bottom")
-    ax.text(mean + 8, label_y, f"Mean\n{mean:.0f}",
+    ax.text(mean + 19.5, label_y, f"Mean\n{mean:.0f}",
             fontsize=9, color=mean_color,
             fontweight="bold", ha="center", va="bottom")
-    ax.text(p75 + 8, label_y, f"P75\n{p75:.0f}",
+    ax.text(p75 + 15, label_y, f"P75\n{p75:.0f}",
             fontsize=9, color=pct_colors["p75"],
             fontweight="bold", ha="center", va="bottom")
 
-    ax.text(0.02, 0.93, country_labels[country],
+    ax.text(0.02, 0.95, country_labels[country],
             transform=ax.transAxes, fontsize=11,
             fontweight="bold", color="#1a2e3b", va="top")
 
