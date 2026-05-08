@@ -158,15 +158,12 @@ Several columns from the optional parent and wellbeing questionnaires are 100% m
 
 ### Overview
 
-We propose to develop an interactive dashboard that prioritizes distributional analysis over summary statistics. Rather than relying on average scores, the dashboard will display full weighted score distributions to better reflect variation within student groups. This aligns with the project goal of supporting more equitable and context-aware interpretations of education data.
-
-### Baseline Approach
-
-Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
+We propose to develop an interactive dashboard that prioritizes distributional analysis over summary statistics. Rather than relying on average scores, we plan to use distribution-focused visualizations such as histograms, density plots, and percentile line plots. These allow users to observe variation across the full range of student performance, rather than focusing on central tendencies alone. This aligns with the project goal of supporting more equitable and context-aware interpretations of education data. 
+[Blueprint](data/images/blueprint.png)
 
 ### Interactive Filtering Design
 
-The dashboard will include two layers of filters.
+Patterns of whole population could also be misleading. Simpson's Paradox which suggests subgroups could have different relationships with the outcome variable compared to the overall population highlights the importance of examining subgroups within the data. We decide to include two layers of filters to increase flexibility and interpretability, ensuring users can explore patterns in different subgroups instead of simply reading static summaries.
 
 The first layer consists of basic filters, including country, year, subject (mathematics, reading, science), and gender. These allow users to explore how score distributions vary across broad populations.
 
@@ -181,6 +178,23 @@ For example, users can compare score distributions between students with high ve
 Similarly, users can explore how sense of belonging relates to student outcomes. If students who report lower belonging consistently show lower performance across percentiles, this suggests that non-academic factors may play a significant role, helping the students fit in school might be important as well.
 
 These comparisons shift the focus from identifying which group performs better to understanding why differences exist.
+
+### Visualization Design
+
+To support distribution-focused analysis, we plan to include several visualization types.
+
+1. Histograms and density plots will be used to display the full score distribution within selected groups. These visualizations allow users to see the shape of the distribution and detailed density, identify skewness, and observe where gaps are most pronounced across the performance spectrum.
+
+2. Percentile line plots will be included to compare distributions across groups in a more structured way. By showing key percentiles (e.g., 10th, 50th, 90th), users can identify where the bigge, such as among lower- or higher-performing students.
+
+3. Boxplots or violin plots may be used for compact comparisons across multiple subgroups. These visualizations provide a quick overview of distribution shape, spread, and central tendency, making them useful when comparing several groups simultaneously.
+
+These visualization choices are guided by the goal of making variation and inequality visible, while remaining interpretable for non-technical users. By combining multiple plot types, the dashboard supports both detailed exploration and high-level comparison.
+
+### Baseline Approach
+
+Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
+
 
 ### Justification
 
