@@ -131,6 +131,18 @@ Similarly, users can explore how sense of belonging relates to student outcomes.
 
 These comparisons shift the focus from identifying which group performs better to understanding why differences exist.
 
+### Visualization Design
+
+To support distribution-focused analysis, we plan to include several visualization types.
+
+1. Histograms and density plots will be used to display the full score distribution within selected groups. These visualizations allow users to see the shape of the distribution and detailed density, identify skewness, and observe where gaps are most pronounced across the performance spectrum.
+
+2. Percentile line plots will be included to compare distributions across groups in a more structured way. By showing key percentiles (e.g., 10th, 50th, 90th), users can identify where the bigge, such as among lower- or higher-performing students.
+
+3. Boxplots or violin plots may be used for compact comparisons across multiple subgroups. These visualizations provide a quick overview of distribution shape, spread, and central tendency, making them useful when comparing several groups simultaneously.
+
+These visualization choices are guided by the goal of making variation and inequality visible, while remaining interpretable for non-technical users. By combining multiple plot types, the dashboard supports both detailed exploration and high-level comparison.
+
 ### Baseline Approach
 
 Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
