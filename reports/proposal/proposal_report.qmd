@@ -137,9 +137,7 @@ Image("../../data/images/fig1_math_dist.png")
 @fig-gender-gap shows the gender gap (male minus female) at key 
 percentiles across all three subjects. In mathematics, males score higher 
 at every percentile, with the gap widening to approximately 25–30 points 
-at the 90th percentile in both countries. The pattern reverses in 
-reading, where females consistently outscore males across the full 
-distribution.
+at the 90th percentile in both countries — consistent with the broader PISA literature showing boys' advantage in mathematics increases towards the upper tail of the distribution [@stoet_geary_2013; @munir_winter_2018]. The pattern reverses in reading, where females consistently outscore males across the full distribution. This inverse relationship between math and reading gaps is a cross-national finding [@stoet_geary_2013], and research suggests the reading gap is partly explained by boys' lower reading engagement and effort rather than ability alone [@gender_achievment_gap_2024].
 
 ```{python}
 #| label: fig-gender-gap
