@@ -1,6 +1,6 @@
 ---
 title: "Proposal Report"
-authors: "Gaurang Ahuja, Apoorva Srivastava, Sidharth Malik, Gloria Yi"
+author: "Gaurang Ahuja, Apoorva Srivastava, Sidharth Malik, Gloria Yi"
 format:
   pdf:
     toc: true
@@ -11,9 +11,17 @@ execute:
   echo: false
   warning: false
   message: false
+jupyter: python3
 bibliography: references.bib
 link-citations: true
 ---
+
+```{python}
+#| label: setup
+import json
+with open("../../data/processed/stats.json") as f:
+  s = json.load(f)
+```
 
 ## Executive Summary
 
@@ -45,7 +53,7 @@ The deliverable is an interactive Python application built using Streamlit, inco
 
 As introduced, our primary data source is the PISA dataset. Our working sample, provided by ETS, covers Canada and the United States for the 2022 cycle. This subset serves as the foundation for developing our pipeline before expanding to all 81 countries across the 2015, 2018, and 2022 cycles.
 
-The working dataset contains 27,625 students and 1,699 columns in a merged student and school level file. Each row corresponds to one student, which is the **observational unit** for all analyses. After removing columns with non-trivial missingness, dropping redundant information, and consulting with our partners, we narrowed the feature space to 132 columns. These span four broad categories, summarized in @tbl-variables.
+The working dataset contains `{python} s['n_total']` students and `{python} s['n_cols']` columns in a merged student and school level file. Each row corresponds to one student, which is the **observational unit** for all analyses. After removing columns with non-trivial missingness, dropping redundant information, and consulting with our partners, we narrowed the feature space to `{python} s['n_cols_selected']` columns. These span four broad categories, summarized in @tbl-variables.
 
 | Category | Key Variables | Description |
 |---|---|---|
@@ -58,19 +66,24 @@ The working dataset contains 27,625 students and 1,699 columns in a merged stude
 
 ### Statistical Complexity
 
-A defining feature of the PISA dataset is that student proficiency is not reported as a single score. Instead, each student receives 10 plausible values per subject - statistically drawn estimates of their true latent ability, derived through Item Response Theory scaling [@oecd_pisa_2022_technical, Chapter 11]. Correct estimation of any population statistic requires averaging across all ten plausible values, each weighted by the student's sampling weight (`W_FSTUWT`). For example, Canada's weighted mean math score computed across all 10 plausible values is 497 points; the United States' is 465 points.
+A defining feature of the PISA dataset is that student proficiency is not reported as a single score. Instead, each student receives 10 plausible values per subject - statistically drawn estimates of their true latent ability, derived through Item Response Theory scaling [@oecd_pisa_2022_technical, Chapter 11]. Correct estimation of any population statistic requires averaging across all ten plausible values, each weighted by the student's sampling weight (`W_FSTUWT`). For example, Canada's weighted mean math score computed across all 10 plausible values is `{python} s['can_math_mean']` points; the United States' is `{python} s['usa_math_mean']` points.
 
 Standard errors cannot be computed using conventional formulas because students are sampled within schools, not independently. Instead, PISA provides 80 replicate weights (`W_FSTURWT1` - `W_FSTURWT80`) for **jackknife resampling** [@oecd_pisa_2022_technical, Chapter 10].
 
 ### Exploratory Data Analysis
 
-#### Finding 1: Averages Conceal Distributional Differences
+#### Finding 1: Quantifying What the Average Hides
 
-@fig-math-dist shows the full math score distributions for Canada and the United States on a shared scale.
+Prior research establishes that average scores obscure distributional variation and risk deficit framing [@holder_dispersion_2022]. Our data quantifies this directly: @fig-math-dist shows the full math score distributions for Canada and the United States on a shared scale.
 
-![PISA 2022 math score distributions for Canada and the United States](figures/fig1_math_dist.png){#fig-math-dist}
+```{python}
+#| label: fig-math-dist
+#| fig-cap: "PISA 2022 math score distributions for Canada and the United States, shown on a shared scale with weighted mean, 25th and 75th percentile markers."
+from IPython.display import Image
+Image("../../data/images/fig1_math_dist.png")
+```
 
-While Canada's weighted mean (497) exceeds the USA's (465) by 32 points, the distributional comparison reveals a more nuanced story. The gap at the 25th percentile (35 points) is larger than the mean gap, while the gap at the 75th percentile narrows to 31 points.
+While Canada's weighted mean (`{python} s['can_math_mean']`) exceeds the USA's (`{python} s['usa_math_mean']`) by `{python} s['mean_gap']` points, the distributional comparison reveals a more nuanced story. The gap at the 25th percentile (`{python} s['gap_p25']` points) is larger than the mean gap, while the gap at the 75th percentile narrows to `{python} s['gap_p75']` points.
 
 The finding that the gap is more pronounced at the lower end of the distribution has direct policy implications, and is a pattern that is entirely invisible in a bar chart of averages. This aligns with recent analyses showing that achievement gaps between high and low scorers are widening across PISA cycles [@malkus_2023].
 
@@ -78,33 +91,68 @@ The finding that the gap is more pronounced at the lower end of the distribution
 
 The gender gap is not uniform across the performance spectrum. @fig-gender-gap shows the gender gap (male minus female score) at various percentiles across all three subjects.
 
-![Gender gap (male minus female score) across the score distribution](figures/fig2_gender_gap.png){#fig-gender-gap}
+```{python}
+#| label: fig-gender-gap
+#| fig-cap: "Gender gap (male minus female score) across the score distribution at the 10th, 25th, 50th, 75th and 90th percentiles for mathematics, reading and science - Canada and USA."
+from IPython.display import Image
+Image("../../data/images/fig2_gender_gap.png")
+```
 
-In mathematics, males score higher than females at every percentile, and the gap widens at the top of the distribution, reaching approximately 25 to 30 points at the 90th percentile in both countries. The pattern reverses in reading, where females consistently outscore males across the full distribution.
+In mathematics, males score higher than females at every percentile, and the gap widens at the top of the distribution, reaching approximately 25 to 30 points at the 90th percentile in both countries. The pattern reverses in reading, where females consistently outscore males across the full distribution. 
 
 #### Finding 3: Socioeconomic Gap Across the Distribution
 
 @fig-escs-dist displays the math score distribution separated by quartiles of the ESCS index, PISA's composite measure of socioeconomic background.
 
-![Math score distributions by ESCS quartile (KDE) for Canada and the United States](figures/fig3_escs_dist.png){#fig-escs-dist}
+```{python}
+#| label: fig-escs-dist
+#| fig-cap: "Math score distributions by ESCS quartile (KDE) for Canada and the United States - Q1 (lowest ESCS) to Q4 (highest ESCS)."
+from IPython.display import Image
+Image("../../data/images/fig3_escs_dist.png")
+```
 
-The distributions shift systematically rightward from the lowest index (Q1) to the highest index (Q4) in both countries. While a clear socioeconomic gradient emerges, significant overlap remains, demonstrating that students from lower socioeconomic backgrounds frequently achieve high scores. 
+The distributions shift systematically rightward from the lowest index (Q1) to the highest index (Q4) in both countries. On average across OECD countries, students in the top quarter of the ESCS distribution score 93 points higher in mathematics than those in the bottom quarter [@oecd_pisa_2022, Chapter 4] - a gap visible in @fig-escs-dist and the primary motivation for including ESCS as a dashboard filter. 
+
+These three findings directly shape our visualization priorities: Finding 1 motivates distributional displays as the default view rather than bar charts of means; Finding 2 suggests gap plots are more readable than overlapping distributions for policy audiences; Finding 3 confirms ESCS quartile breakdowns as a primary dashboard filter. 
 
 ### Data Limitations and Challenges
 
 Missingness is the primary data quality concern. @tbl-missingness summarizes missingness rates for key variables.
 
-| Variable | Missing Values | Missing (%) |
-|---|---|---|
-| Gender (`ST004D01T`) | 47 | 0.2% |
-| School type (`SC001Q01TA`) | 1,789 | 6.5% |
-| Language at home (`ST022Q01TA`) | 1,816 | 6.6% |
-| ESCS index | 1,887 | 6.8% |
-| Immigration background (`IMMIG`) | 3,008 | 10.9% |
+```{python}
+#| label: tbl-missingness
+#| tbl-cap: "Missingness in Key Contextual Variables"
+import pandas as pd
+from IPython.display import display
+pd.set_option('display.max_colwidth', None)
 
-: Missingness in Key Contextual Variables {#tbl-missingness}
+missingness_df = pd.DataFrame({
+    "Variable": [
+        "Gender (ST004D01T)",
+        "School type (SC001Q01TA)", 
+        "Language at home (ST022Q01TA)",
+        "ESCS index",
+        "Immigration background (IMMIG)"
+    ],
+    "Missing Values": [
+        s["missing_gender"],
+        s["missing_school_type"],
+        s["missing_lang"],
+        s["missing_escs"],
+        s["missing_immig"]
+    ],
+    "Missing (%)": [
+        f"{s['missing_gender_pct']}%",
+        f"{s['missing_school_pct']}%",
+        f"{s['missing_lang_pct']}%",
+        f"{s['missing_escs_pct']}%",
+        f"{s['missing_immig_pct']}%"
+    ]
+})
+display(missingness_df)
+```
 
-Several columns from the optional parent and wellbeing questionnaires are 100% missing in our sample. We dropped these columns entirely, reducing the effective feature space. Comparability across cycles presents a secondary challenge, as PISA occasionally revises questionnaire items [@oecd_pisa_2022_technical, Chapter 20]. Finally, the unequal sample size between Canada (23,073 students) and the United States (4,552 students) requires strict adherence to sampling weights to correct imbalances.
+Several columns from the optional parent and wellbeing questionnaires are 100% missing in our sample. We dropped these columns entirely, reducing the effective feature space. Comparability across cycles presents a secondary challenge, as PISA occasionally revises questionnaire items [@oecd_pisa_2022_technical, Chapter 20]. Finally, the unequal sample size between Canada (`{python} s['n_canada']` students) and the United States (`{python} s['n_usa']` students) requires strict adherence to sampling weights to correct imbalances.
 
 ## Data Science Approach
 
