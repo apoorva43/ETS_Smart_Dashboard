@@ -159,6 +159,7 @@ Several columns from the optional parent and wellbeing questionnaires are 100% m
 #| fig-cap: "System blueprint and filtering architecture for the interactive dashboard."
 from IPython.display import Image
 Image("../../data/images/blueprint.png")
+```
 
 ### Baseline Approach
 
