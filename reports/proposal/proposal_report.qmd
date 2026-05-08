@@ -156,6 +156,12 @@ Several columns from the optional parent and wellbeing questionnaires are 100% m
 
 ## Data Science Approach
 
+```{python}
+#| label: fig-blueprint
+#| fig-cap: "System blueprint and filtering architecture for the interactive dashboard."
+from IPython.display import Image
+Image("../../data/images/blueprint.png")
+
 ### Baseline Approach
 
 Our baseline model is the full, weighted OECD score distribution for each country. Computed using student sampling weights averaged across all ten plausible values, this provides a statistically valid foundation for evaluating all subsequent subgroups. 
