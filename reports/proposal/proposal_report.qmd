@@ -110,15 +110,12 @@ Several columns from the optional parent and wellbeing questionnaires are 100% m
 
 ### Overview
 
-We propose to develop an interactive dashboard that prioritizes distributional analysis over summary statistics. Rather than relying on average scores, the dashboard will display full weighted score distributions to better reflect variation within student groups. This aligns with the project goal of supporting more equitable and context-aware interpretations of education data.
-
-### Baseline Approach
-
-Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
+We propose to develop an interactive dashboard that prioritizes distributional analysis over summary statistics. Rather than relying on average scores, we plan to use distribution-focused visualizations such as histograms, density plots, and percentile line plots. These allow users to observe variation across the full range of student performance, rather than focusing on central tendencies alone. This aligns with the project goal of supporting more equitable and context-aware interpretations of education data. 
+[Blueprint](data/images/blueprint.png)
 
 ### Interactive Filtering Design
 
-The dashboard will include two layers of filters.
+Patterns of whole population could also be misleading. Simpson's Paradox which suggests subgroups could have different relationships with the outcome variable compared to the overall population highlights the importance of examining subgroups within the data. We decide to include two layers of filters to increase flexibility and interpretability, ensuring users can explore patterns in different subgroups instead of simply reading static summaries.
 
 The first layer consists of basic filters, including country, year, subject (mathematics, reading, science), and gender. These allow users to explore how score distributions vary across broad populations.
 
@@ -133,6 +130,11 @@ For example, users can compare score distributions between students with high ve
 Similarly, users can explore how sense of belonging relates to student outcomes. If students who report lower belonging consistently show lower performance across percentiles, this suggests that non-academic factors may play a significant role, helping the students fit in school might be important as well.
 
 These comparisons shift the focus from identifying which group performs better to understanding why differences exist.
+
+### Baseline Approach
+
+Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
+
 
 ### Justification
 
