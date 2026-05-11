@@ -9,3 +9,5 @@ SCORE_COLS = (
 )
 
 KEEP_COLS = ID_COLS + WEIGHT_COLS + SCORE_COLS
+
+MIN_GROUP_N = 30  # minimum rows to compute a stat; below this return NaN
