@@ -40,7 +40,7 @@ clean:
 	rm -f reports/proposal/proposal_report.pdf
 
 data:
-	python build_data.py
+	python src/build_data.py
 
 setup:
 	conda env create -f environment.yml
