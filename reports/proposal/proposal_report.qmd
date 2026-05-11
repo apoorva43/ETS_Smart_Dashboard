@@ -1,6 +1,6 @@
 ---
 title: "Proposal Report"
-authors: "Gaurang Ahuja, Apoorva Srivastava, Sidharth Malik, Gloria Yi"
+author: "Gaurang Ahuja, Apoorva Srivastava, Sidharth Malik, Gloria Yi"
 format:
   pdf:
     toc: true
@@ -11,152 +11,273 @@ execute:
   echo: false
   warning: false
   message: false
+jupyter: python3
 bibliography: references.bib
 link-citations: true
 ---
 
+```{python}
+#| label: setup
+import json
+with open("../../data/processed/stats.json") as f:
+  s = json.load(f)
+```
+
 ## Executive Summary
 
-Educational assessment data is frequently reported as average scores, omitting crucial context, leading policymakers to attribute achievement gaps to demographic groups rather than systemic inequities. To address this, we propose an interactive dashboard using Programme for International Student Assessment (PISA) data. By displaying full score distributions alongside contextual variables like socioeconomic background, this tool will guide users toward fairer interpretations of education data and reduce the risk of biased policymaking.
+Educational assessment data is frequently reported as average scores, 
+omitting crucial context and leading policymakers to attribute achievement 
+gaps to demographic groups rather than systemic inequities. We propose an 
+interactive dashboard using Programme for International Student Assessment 
+(PISA) data that displays full score distributions alongside contextual 
+variables like socioeconomic background, guiding users toward fairer 
+interpretations and reducing the risk of biased policymaking.
 
 ## Introduction
 
 ### The Problem and Why It Matters
 
-Relying solely on average scores to compare student groups obscures critical information. It hides within-group variation and ignores structural inequities like disparities in school resources. Research shows this approach causes audiences to attribute performance gaps to intrinsic group traits rather than systemic factors [@holder_dispersion_2022].
+Relying solely on average scores to compare student groups obscures 
+critical information: it hides within-group variation and ignores 
+structural inequities such as disparities in school resources. Research 
+shows this approach causes audiences to attribute performance gaps to 
+intrinsic group traits rather than systemic factors 
+[@holder_dispersion_2022], with direct consequences for how education 
+departments allocate resources. Students most in need of support are the 
+most likely to be mischaracterised and underserved.
 
-This presentation flaw has significant consequences. When education departments allocate resources based on standard reports, the students most in need of support are the most likely to be mischaracterised and underserved. Aligning directly with ETS's mission regarding fairness and equity in assessment [@ets_mission], this project aims to mitigate this issue globally. It builds upon the success of ETS's existing [NAEP dashboard for US data](https://rt.ets.org/dashboard/dashboard_highcharts.html) to prove that better data presentation leads to better policy.
+Aligning with ETS's mission regarding fairness and equity in assessment 
+[@ets_mission], this project builds on the success of ETS's existing 
+[NAEP dashboard](https://rt.ets.org/dashboard/dashboard_highcharts.html) 
+to demonstrate that better data presentation leads to better policy.
 
 ### Background
 
-PISA is the largest comparative education study globally. Administered by the OECD every three years, it assesses 15-year-old students across 81 countries [@oecd_pisa_2022]. Beyond cognitive scores in mathematics, reading, and science, PISA collects extensive contextual data on socioeconomic status and learning environments.
+PISA is the largest comparative education study globally. Administered by 
+the OECD every three years, it assesses 15-year-old students across 81 
+countries [@oecd_pisa_2022]. Beyond cognitive scores in mathematics, 
+reading, and science, PISA collects extensive contextual data on 
+socioeconomic status and learning environments.
 
 ### Specific Objectives
 
-We will build an interactive, scaffolded dashboard that displays full score distributions and contextual filters, allowing for nuanced comparisons over time and across comparable countries. Ultimately, this tool aims to replace deficit thinking with contextually grounded interpretations of student data for policymakers without requiring statistical expertise. As a stretch goal, we will look to integrate an AI-assisted interface to enable natural language querying of the dashboard.
+We will build an interactive, scaffolded dashboard that displays full 
+score distributions with contextual filters, enabling nuanced comparisons 
+over time and across comparable countries. The tool aims to replace 
+deficit thinking with contextually grounded interpretations of student 
+data — accessible to policymakers without statistical expertise. As a 
+stretch goal, we will integrate an AI-assisted interface for natural 
+language querying.
 
 ### Final Data Product
 
-The deliverable is an interactive Python application built using Streamlit, incorporating PISA data from 2015 to 2022. The user-friendly interface will intuitively guide users through progressive questions to deliver deep insights without overwhelming them with simultaneous variables.
+The deliverable is an interactive Python application built with Streamlit, 
+incorporating PISA data from 2015 to 2022.
 
 ## Data & Exploratory Data Analysis (EDA)
 
 ### Data Source, Size and Structure
 
-As introduced, our primary data source is the PISA dataset. Our working sample, provided by ETS, covers Canada and the United States for the 2022 cycle. This subset serves as the foundation for developing our pipeline before expanding to all 81 countries across the 2015, 2018, and 2022 cycles.
+Our primary data source is the PISA dataset. Our working sample, provided 
+by ETS, covers Canada and the United States for the 2022 cycle — the 
+foundation for our pipeline before expanding to all 81 countries across 
+the 2015, 2018, and 2022 cycles.
 
-The working dataset contains 27,625 students and 1,699 columns in a merged student and school level file. Each row corresponds to one student, which is the **observational unit** for all analyses. After removing columns with non-trivial missingness, dropping redundant information, and consulting with our partners, we narrowed the feature space to 132 columns. These span four broad categories, summarized in @tbl-variables.
+The working dataset contains `{python} s['n_total']` students and 
+`{python} s['n_cols']` columns in a merged student-and-school-level file. 
+Each row corresponds to one student, the **observational unit** for all 
+analyses. After removing columns with non-trivial missingness and 
+consulting with our partners, we narrowed the feature space to 
+`{python} s['n_cols_selected']` columns across four categories, 
+summarised in @tbl-variables.
 
 | Category | Key Variables | Description |
 |---|---|---|
-| Identifiers and weights | `CNT` (country), `CNTSCHID` (school ID), `W_FSTUWT`, `W_FSTURWT1` - `W_FSTURWT80` | Student and school identifiers, primary sampling weight, 80 replicate weights for standard error estimation. |
-| Cognitive outcome variables | `PV1MATH` - `PV10MATH`, `PV1READ` - `PV10READ`, `PV1SCIE` - `PV10SCIE` | Ten plausible values per subject per student - statistically drawn estimates of latent ability. |
-| Grouping variables | `ST004D01T` (gender), `IMMIG` (immigration background), `ESCS` (economic, social and cultural status index) | Student-level demographic and socioeconomic variables used to define subgroups for distributional comparisons. |
-| Contextual variables | `BELONG` (sense of belonging), `MATHMOT` (math motivation), `ST062Q01TA` (truancy) | Student attitudes, behaviors and school environment variables used to contextualize score distributions. |
+| Identifiers and weights | `CNT`, `CNTSCHID`, `W_FSTUWT`, `W_FSTURWT1`–`W_FSTURWT80` | Student/school identifiers, primary sampling weight, 80 replicate weights for standard error estimation. |
+| Cognitive outcomes | `PV1MATH`–`PV10MATH`, `PV1READ`–`PV10READ`, `PV1SCIE`–`PV10SCIE` | Ten plausible values per subject — statistically drawn estimates of latent ability. |
+| Grouping variables | `ST004D01T`, `IMMIG`, `ESCS` | Gender, immigration background, and socioeconomic status index for distributional comparisons. |
+| Contextual variables | `BELONG`, `MATHMOT`, `ST062Q01TA` | Student attitudes, behaviours, and school environment variables. |
 
 : Variable Categories and Key Columns {#tbl-variables}
 
 ### Statistical Complexity
 
-A defining feature of the PISA dataset is that student proficiency is not reported as a single score. Instead, each student receives 10 plausible values per subject - statistically drawn estimates of their true latent ability, derived through Item Response Theory scaling [@oecd_pisa_2022_technical, Chapter 11]. Correct estimation of any population statistic requires averaging across all ten plausible values, each weighted by the student's sampling weight (`W_FSTUWT`). For example, Canada's weighted mean math score computed across all 10 plausible values is 497 points; the United States' is 465 points.
-
-Standard errors cannot be computed using conventional formulas because students are sampled within schools, not independently. Instead, PISA provides 80 replicate weights (`W_FSTURWT1` - `W_FSTURWT80`) for **jackknife resampling** [@oecd_pisa_2022_technical, Chapter 10].
+Student proficiency is not reported as a single score. Each student 
+receives 10 plausible values per subject derived through Item Response 
+Theory scaling [@oecd_pisa_2022_technical, Chapter 11]. Correct 
+estimation requires averaging across all ten plausible values, each 
+weighted by `W_FSTUWT`. Canada's weighted mean math score is 
+`{python} s['can_math_mean']` points; the United States' is 
+`{python} s['usa_math_mean']` points. Standard errors require jackknife 
+resampling via 80 replicate weights, as students are sampled within 
+schools [@oecd_pisa_2022_technical, Chapter 10].
 
 ### Exploratory Data Analysis
 
-#### Finding 1: Averages Conceal Distributional Differences
+#### Finding 1: Quantifying What the Average Hides
 
-@fig-math-dist shows the full math score distributions for Canada and the United States on a shared scale.
+@fig-math-dist shows the full math score distributions for Canada and the 
+United States on a shared scale. While Canada's mean exceeds the USA's by 
+`{python} s['mean_gap']` points, the distributional view reveals more: 
+the gap at the 25th percentile (`{python} s['gap_p25']` points) is larger 
+than the mean gap, while the gap at the 75th percentile narrows to 
+`{python} s['gap_p75']` points. This widening at the lower end is 
+entirely invisible in a bar chart of averages, yet has direct policy 
+implications [@malkus_2023].
 
-![PISA 2022 math score distributions for Canada and the United States](figures/fig1_math_dist.png){#fig-math-dist}
-
-While Canada's weighted mean (497) exceeds the USA's (465) by 32 points, the distributional comparison reveals a more nuanced story. The gap at the 25th percentile (35 points) is larger than the mean gap, while the gap at the 75th percentile narrows to 31 points.
-
-The finding that the gap is more pronounced at the lower end of the distribution has direct policy implications, and is a pattern that is entirely invisible in a bar chart of averages. This aligns with recent analyses showing that achievement gaps between high and low scorers are widening across PISA cycles [@malkus_2023].
+```{python}
+#| label: fig-math-dist
+#| fig-cap: "PISA 2022 math score distributions for Canada and the United States, with weighted mean, 25th and 75th percentile markers."
+from IPython.display import Image
+Image("../../data/images/fig1_math_dist.png")
+```
 
 #### Finding 2: Gender Gap Across the Distribution
 
-The gender gap is not uniform across the performance spectrum. @fig-gender-gap shows the gender gap (male minus female score) at various percentiles across all three subjects.
+@fig-gender-gap shows the gender gap (male minus female) at key 
+percentiles across all three subjects. In mathematics, males score higher 
+at every percentile, with the gap widening to approximately 25–30 points 
+at the 90th percentile in both countries — consistent with the broader PISA literature showing boys' advantage in mathematics increases towards the upper tail of the distribution [@stoet_geary_2013; @munir_winter_2018]. The pattern reverses in reading, where females consistently outscore males across the full distribution. This inverse relationship between math and reading gaps is a cross-national finding [@stoet_geary_2013], and research suggests the reading gap is partly explained by boys' lower reading engagement and effort rather than ability alone [@gender_achievment_gap_2024].
 
-![Gender gap (male minus female score) across the score distribution](figures/fig2_gender_gap.png){#fig-gender-gap}
-
-In mathematics, males score higher than females at every percentile, and the gap widens at the top of the distribution, reaching approximately 25 to 30 points at the 90th percentile in both countries. The pattern reverses in reading, where females consistently outscore males across the full distribution.
+```{python}
+#| label: fig-gender-gap
+#| fig-cap: "Gender gap (male minus female score) at the 10th, 25th, 50th, 75th, and 90th percentiles for mathematics, reading, and science — Canada and USA."
+from IPython.display import Image
+Image("../../data/images/fig2_gender_gap.png")
+```
 
 #### Finding 3: Socioeconomic Gap Across the Distribution
 
-@fig-escs-dist displays the math score distribution separated by quartiles of the ESCS index, PISA's composite measure of socioeconomic background.
+@fig-escs-dist displays math score distributions by ESCS quartile. 
+Distributions shift systematically rightward from Q1 (lowest) to Q4 
+(highest), consistent with the OECD finding that students in the top 
+ESCS quartile score 93 points higher in mathematics than those in the 
+bottom [@oecd_pisa_2022, Chapter 4] — the primary motivation for 
+including ESCS as a dashboard filter.
 
-![Math score distributions by ESCS quartile (KDE) for Canada and the United States](figures/fig3_escs_dist.png){#fig-escs-dist}
-
-The distributions shift systematically rightward from the lowest index (Q1) to the highest index (Q4) in both countries. While a clear socioeconomic gradient emerges, significant overlap remains, demonstrating that students from lower socioeconomic backgrounds frequently achieve high scores. 
+```{python}
+#| label: fig-escs-dist
+#| fig-cap: "Math score distributions by ESCS quartile (KDE) for Canada and the United States."
+from IPython.display import Image
+Image("../../data/images/fig3_escs_dist.png")
+```
 
 ### Data Limitations and Challenges
 
-Missingness is the primary data quality concern. @tbl-missingness summarizes missingness rates for key variables.
+Missingness is the primary data quality concern, summarised in 
+@tbl-missingness. Columns from optional parent and wellbeing 
+questionnaires are 100% missing in our sample and were dropped entirely. 
+Comparability across cycles is a secondary challenge, as PISA 
+occasionally revises questionnaire items [@oecd_pisa_2022_technical, 
+Chapter 20]. Finally, the unequal sample sizes — Canada 
+(`{python} s['n_canada']` students) vs. the United States 
+(`{python} s['n_usa']` students) — require strict adherence to sampling 
+weights.
 
-| Variable | Missing Values | Missing (%) |
-|---|---|---|
-| Gender (`ST004D01T`) | 47 | 0.2% |
-| School type (`SC001Q01TA`) | 1,789 | 6.5% |
-| Language at home (`ST022Q01TA`) | 1,816 | 6.6% |
-| ESCS index | 1,887 | 6.8% |
-| Immigration background (`IMMIG`) | 3,008 | 10.9% |
+```{python}
+#| label: tbl-missingness
+#| tbl-cap: "Missingness in Key Contextual Variables"
+import pandas as pd
+from IPython.display import display
+pd.set_option('display.max_colwidth', None)
 
-: Missingness in Key Contextual Variables {#tbl-missingness}
-
-Several columns from the optional parent and wellbeing questionnaires are 100% missing in our sample. We dropped these columns entirely, reducing the effective feature space. Comparability across cycles presents a secondary challenge, as PISA occasionally revises questionnaire items [@oecd_pisa_2022_technical, Chapter 20]. Finally, the unequal sample size between Canada (23,073 students) and the United States (4,552 students) requires strict adherence to sampling weights to correct imbalances.
+missingness_df = pd.DataFrame({
+    "Variable": [
+        "Gender (ST004D01T)",
+        "School type (SC001Q01TA)", 
+        "Language at home (ST022Q01TA)",
+        "ESCS index",
+        "Immigration background (IMMIG)"
+    ],
+    "Missing Values": [
+        s["missing_gender"],
+        s["missing_school_type"],
+        s["missing_lang"],
+        s["missing_escs"],
+        s["missing_immig"]
+    ],
+    "Missing (%)": [
+        f"{s['missing_gender_pct']}%",
+        f"{s['missing_school_pct']}%",
+        f"{s['missing_lang_pct']}%",
+        f"{s['missing_escs_pct']}%",
+        f"{s['missing_immig_pct']}%"
+    ]
+})
+display(missingness_df)
+```
 
 ## Data Science Approach
+```{python}
+#| label: fig-blueprint
+#| fig-cap: "System blueprint and filtering architecture for the interactive dashboard."
+from IPython.display import Image
+Image("../../data/images/blueprint.png")
+```
 
-### Overview
+### Baseline
 
-We propose to develop an interactive dashboard that prioritizes distributional analysis over summary statistics. Rather than relying on average scores, the dashboard will display full weighted score distributions to better reflect variation within student groups. This aligns with the project goal of supporting more equitable and context-aware interpretations of education data.
+Our baseline is the full, weighted OECD score distribution per country, 
+computed using sampling weights averaged across all ten plausible values. 
+This provides a statistically valid benchmark for evaluating all 
+subsequent subgroup comparisons.
 
-### Baseline Approach
+### Interactive Filtering and Visualisation
 
-Our baseline is the full weighted OECD score distribution within each country. All distributions will be computed using student sampling weights and averaged across all ten plausible values, following OECD methodology. This baseline provides a statistically valid reference for comparing subgroups within the same country.
+We will implement a two-tiered filtering system: primary filters (country, 
+year, subject, gender) and contextual filters (ESCS, school resources, 
+immigration background, sense of belonging). These will dynamically update 
+Kernel Density Estimation (KDE) distributions and percentile line plots, 
+overlaying contrasting groups rather than presenting isolated metrics.
 
-### Interactive Filtering Design
+Visualising full distributions prevents audiences from attributing 
+performance gaps to intrinsic deficits — directly addressing Simpson's 
+Paradox, where whole-population summaries mislead. Incorporating 
+contextual variables enables fair comparisons between students with 
+similar backgrounds, allowing policymakers to identify targetable 
+structural factors.
 
-The dashboard will include two layers of filters.
+### Anticipated Challenges
 
-The first layer consists of basic filters, including country, year, subject (mathematics, reading, science), and gender. These allow users to explore how score distributions vary across broad populations.
-
-The second layer consists of contextual filters, which are central to our approach. These include socioeconomic status (ESCS), school resources, immigration background, student motivation, and sense of belonging. These variables are selected because they provide explanatory context for observed differences in student performance.
-
-### From Filters to Insights
-
-Rather than treating filters as simple subgroup selectors, the dashboard is designed to generate interpretable insights.
-
-For example, users can compare score distributions between students with high versus low access to school resources. This allows them to observe not only differences in average performance, but also where disparities occur across the distribution (e.g. students with lower access to school resources usually have lower performance).
-
-Similarly, users can explore how sense of belonging relates to student outcomes. If students who report lower belonging consistently show lower performance across percentiles, this suggests that non-academic factors may play a significant role, helping the students fit in school might be important as well.
-
-These comparisons shift the focus from identifying which group performs better to understanding why differences exist.
-
-### Justification
-
-Students are exposed to different learning environments, teaching practices, and levels of support. Direct comparisons without context risk attributing performance differences to inherent ability rather than external conditions.
-
-By incorporating contextual variables into distributional comparisons, the dashboard enables more meaningful and fair comparisons between students with similar backgrounds. This approach supports the identification of structural factors, such as resource disparities, that could be targeted by policies in the future.
+Computing weighted distributions dynamically across millions of rows risks 
+dashboard latency; we will mitigate this by pre-computing aggregated 
+percentile bounds where possible. Contextual variables are also sparsely 
+populated outside North America, requiring robust fallback handling to 
+prevent visual errors.
 
 ## Evaluation & Success Criteria
 
-The success of this project will be evaluated across four dimensions that reflect both technical correctness and real-world usability:
+Success will be evaluated across four dimensions:
 
-1. **Statistical Accuracy:** Every figure displayed must be computed correctly according to PISA methodology, utilizing weighted means and percentiles averaged across all 10 plausible values. We will validate our results against publicly published OECD statistics. 
-2. **Equity Story Visibility:** The dashboard must produce meaningfully different insights when filtered by student groups. We will qualitatively assess whether breakdowns by socioeconomic status, gender, and immigration status reveal distinct, interpretable patterns.
-3. **Usability by Non-Experts:** An educator or policymaker must be able to use the dashboard and arrive at meaningful insights without reading technical documentation. We will evaluate this through informal walkthroughs with our ETS partners.
-4. **Partner Sign-Off:** ETS will ultimately confirm whether the tool reflects their reporting goals, specifically ensuring the design avoids deficit framing by prioritizing contextualized score distributions.
+1. **Statistical accuracy:** All figures must use weighted means and 
+percentiles averaged across all 10 plausible values, validated against 
+published OECD statistics.
+2. **Equity story visibility:** Breakdowns by socioeconomic status, 
+gender, and immigration status must reveal distinct, interpretable 
+distributional patterns.
+3. **Usability by non-experts:** An educator or policymaker must reach 
+meaningful insights without reading technical documentation, evaluated 
+through walkthroughs with ETS partners.
+4. **Partner sign-off:** ETS must confirm the design avoids deficit 
+framing by prioritising contextualised score distributions.
 
 ## Timeline
 
-Our work is organized into four two-week phases:
+Work is organised into four two-week phases:
 
-* **Phase 1 (Weeks 1 and 2):** Finalize variable selection in consultation with ETS and build the core statistical engine. This engine will be validated against OECD figures before UI development begins. *Risk Mitigation:* If certain equity variables lack global coverage, we will fall back to a minimum viable equity layer of ESCS and gender.
-* **Phase 2 (Weeks 3 and 4):** Build the first working version of the dashboard using Canada and the United States. This includes page structure, filter interfaces, and the core percentile charts. 
-* **Phase 3 (Weeks 5 and 6):** Integrate the equity layer. We will add breakdowns for SES, gender, and immigration status alongside school context overlays and dynamic insight text. 
-* **Phase 4 (Weeks 7 and 8):** Scale the dashboard to all 81 PISA countries, finalize interactivity, incorporate partner feedback, and attempt the AI chatbot stretch goal.
+- **Phase 1 (Weeks 1–2):** Finalise variable selection with ETS and build 
+the core statistical engine, validated against OECD figures before UI 
+development begins. Fallback: if equity variables lack global coverage, 
+we will use a minimum viable layer of ESCS and gender.
+- **Phase 2 (Weeks 3–4):** Build the first working dashboard for Canada 
+and the United States, including page structure, filter interfaces, and 
+core percentile charts.
+- **Phase 3 (Weeks 5–6):** Integrate the equity layer — SES, gender, and 
+immigration breakdowns alongside school context overlays and dynamic 
+insight text.
+- **Phase 4 (Weeks 7–8):** Scale to all 81 PISA countries, finalise 
+interactivity, incorporate partner feedback, and attempt the AI chatbot 
+stretch goal.
 
 ## References
 
