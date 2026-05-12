@@ -115,3 +115,89 @@ def download_pisa_year(year: int, raw_dir: str = "data/raw") -> Path:
 
     print(f" Done: {dest_dir}")
     return dest_dir
+
+def sav_to_parquet(sav_path: str, parquet_path: str, year: int) -> None:
+    """
+    Converts a PISA SPSS (.sav) file to a filtered Parquet file.
+
+    Reads column metadata first to avoid loading the full dataset into memory
+    unnecessarily. Only columns present in the global `KEEP_COLS` list are 
+    loaded; any expected columns that are missing from the source file are 
+    added and populated with NaN values to ensure schema consistency.
+
+    Parameters
+    ----------
+    sav_path : str
+        The file path to the input raw SPSS (.sav) file.
+    parquet_path : str
+        The destination file path for the output Parquet file.
+    year : int
+        The PISA cycle year associated with the dataset (e.g., 2022), 
+        which will be appended as a new column.
+
+    Returns
+    -------
+    None
+        This function saves the processed data directly to disk and 
+        does not return a value.
+
+    Raises
+    ------
+    ImportError
+        If the `pyreadstat` library is not installed in the environment.
+    """
+    import pyreadstat
+
+    print(f" Reading column list from {Path(sav_path).name}...")
+    _, meta = pyreadstat.read_sav(sav_path, row_limit=0)
+    available = [c for c in KEEP_COLS if c in meta.column_names]
+    missing = [c for c in KEEP_COLS if c not in meta.column_names]
+
+    if missing:
+        print(f" {len(missing)} expected columns not in file: "
+              f"{missing[:5]}{'...' if len(missing) > 5 else ''}")
+
+    print(f" Loading {len(available)} columns from {len(meta.column_names)} total "
+          f"({Path(sav_path).name})...")
+    print(f" This may take several minutes for a large file...")
+
+    df, _ = pyreadstat.read_sav(sav_path, usecols=available)
+    df["YEAR"] = year
+
+    if missing:
+        missing_df = pd.DataFrame(float("nan"), index=df.index, columns=missing)
+        df = pd.concat([df, missing_df], axis=1)
+
+    df = df[KEEP_COLS + ["YEAR"]]
+
+    Path(parquet_path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(parquet_path, index=False)
+
+    size_mb = Path(parquet_path).stat().st_size / 1e6
+    print(f" Saved: {parquet_path}  ({len(df):,} rows, {size_mb:.0f} MB)")
+
+
+def load_sample_csv(path: str) -> pd.DataFrame:
+    """
+    Loads a sample CSV dataset for rapid development without requiring full Parquet files.
+
+    Reads the CSV header first to determine available columns, filters them 
+    against the global `KEEP_COLS` list, and loads the data efficiently. 
+    Automatically injects a `YEAR` column into the resulting dataframe.
+
+    Parameters
+    ----------
+    path : str
+        The file path to the sample CSV dataset.
+
+    Returns
+    -------
+    pd.DataFrame
+        The filtered dataset containing only the specified columns and the 
+        appended `YEAR` column.
+    """
+    all_cols = pd.read_csv(path, nrows=0).columns.tolist()
+    available = [c for c in KEEP_COLS if c in all_cols]
+    df = pd.read_csv(path, usecols=available, low_memory=False)
+    df["YEAR"] = 2022
+    return df
