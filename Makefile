@@ -1,4 +1,4 @@
-.PHONY: all stats figures report clean
+.PHONY: all stats figures report clean data setup
 
 # Default target - runs full pipeline
 all: stats figures report
@@ -38,3 +38,10 @@ clean:
 	rm -f data/images/fig2_gender_gap.png
 	rm -f data/images/fig3_escs_dist.png
 	rm -f reports/proposal/proposal_report.pdf
+
+data:
+	python src/build_data.py
+
+setup:
+	conda env create -f environment.yml
+	pip install -e .
