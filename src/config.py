@@ -8,8 +8,6 @@ SCORE_COLS = (
     [f"PV{i}SCIE" for i in range(1, 11)]
 )
 
-KEEP_COLS = ID_COLS + WEIGHT_COLS + SCORE_COLS
-
 EQUITY_COLS = [
     "ST004D01T", "IMMIG", "ESCS", "HISEI",
     "PAREDINT", "HOMEPOS", "REPEAT", "LANGN",
