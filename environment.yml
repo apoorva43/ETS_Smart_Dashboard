@@ -26,3 +26,4 @@ dependencies:
       - nbformat==5.10.4
       - nbclient==0.10.0
       - ipython==8.26.0
+      - pyreadstat==1.3.4

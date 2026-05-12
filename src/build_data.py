@@ -1,10 +1,11 @@
 """
-PISA Data Downloader Script.
+PISA Data Processing Orchestrator.
 
-This script orchestrates the downloading of raw PISA student questionnaire 
-datasets for the specified cycle years (2022, 2018, 2015). It validates the 
-target URLs before attempting to download and extract the zip archives into 
-the raw data directory.
+This script manages the end-to-end data pipeline for the PISA student 
+questionnaire datasets across specified cycle years. It handles URL validation, 
+downloading, unarchiving, identifying the primary SPSS (.sav) data file 
+amongst supplementary files, and triggering the conversion to an optimized 
+Parquet format.
 
 Notes
 -----
@@ -17,10 +18,35 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.data_loader import download_pisa_year, validate_url, PISA_URLS
+from src.data_loader import download_pisa_year, sav_to_parquet, validate_url, PISA_URLS
 
 for year in [2022, 2018, 2015]:
+    parquet_path = Path(f"data/processed/pisa_{year}.parquet")
+
+    if parquet_path.exists():
+        print(f"  {year}: parquet already exists, skipping")
+        continue
+
     if not validate_url(PISA_URLS.get(year, ""), year):
         continue
 
     raw_dir = download_pisa_year(year)
+    sav_files = list(raw_dir.rglob("*.sav")) + list(raw_dir.rglob("*.SAV"))
+
+    if not sav_files:
+        print(f" No .sav file found anywhere under {raw_dir}. Contents:")
+        for f in raw_dir.rglob("*"):
+            if f.is_file():
+                print(f"  {f.relative_to(raw_dir)}  ({f.stat().st_size / 1e6:.0f} MB)")
+        raise FileNotFoundError(f"Could not find .sav file under {raw_dir}")
+
+    # NOTE: Use the largest .sav, since it the main student file.
+    # Supplementary files should not be concatenated.
+    sav_file = max(sav_files, key=lambda f: f.stat().st_size)
+
+    if len(sav_files) > 1:
+        others = [f.name for f in sav_files if f != sav_file]
+        print(f" Found {len(sav_files)} .sav files -- using largest, ignoring: {others}")
+
+    print(f" Using: {sav_file.relative_to(raw_dir)}  ({sav_file.stat().st_size / 1e6:.0f} MB)")
+    sav_to_parquet(str(sav_file), str(parquet_path), year)
