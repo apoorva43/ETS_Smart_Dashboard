@@ -20,33 +20,54 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data_loader import download_pisa_year, sav_to_parquet, validate_url, PISA_URLS
 
-for year in [2022, 2018, 2015]:
-    parquet_path = Path(f"data/processed/pisa_{year}.parquet")
+TARGET_YEARS = [2022, 2018, 2015]
 
-    if parquet_path.exists():
-        print(f"  {year}: parquet already exists, skipping")
-        continue
 
-    if not validate_url(PISA_URLS.get(year, ""), year):
-        continue
+def main():
+    for year in TARGET_YEARS:
+        parquet_path = Path(f"data/processed/pisa_{year}.parquet")
 
-    raw_dir = download_pisa_year(year)
-    sav_files = list(raw_dir.rglob("*.sav")) + list(raw_dir.rglob("*.SAV"))
+        if parquet_path.exists():
+            print(f" {year}: parquet already exists, skipping")
+            continue
 
-    if not sav_files:
-        print(f" No .sav file found anywhere under {raw_dir}. Contents:")
-        for f in raw_dir.rglob("*"):
-            if f.is_file():
-                print(f"  {f.relative_to(raw_dir)}  ({f.stat().st_size / 1e6:.0f} MB)")
-        raise FileNotFoundError(f"Could not find .sav file under {raw_dir}")
+        if not validate_url(PISA_URLS.get(year, ""), year):
+            continue
 
-    # NOTE: Use the largest .sav, since it the main student file.
-    # Supplementary files should not be concatenated.
-    sav_file = max(sav_files, key=lambda f: f.stat().st_size)
+        try:
+            raw_dir = download_pisa_year(year)
+            sav_files = list(raw_dir.rglob("*.sav")) + list(raw_dir.rglob("*.SAV"))
 
-    if len(sav_files) > 1:
-        others = [f.name for f in sav_files if f != sav_file]
-        print(f" Found {len(sav_files)} .sav files -- using largest, ignoring: {others}")
+            if not sav_files:
+                print(f" No .sav file found anywhere under {raw_dir}. Contents:")
+                for f in raw_dir.rglob("*"):
+                    if f.is_file():
+                        print(f" {f.relative_to(raw_dir)}  "
+                              f"({f.stat().st_size / 1e6:.0f} MB)")
+                raise FileNotFoundError(
+                    f"Could not find .sav file under {raw_dir}"
+                )
 
-    print(f" Using: {sav_file.relative_to(raw_dir)}  ({sav_file.stat().st_size / 1e6:.0f} MB)")
-    sav_to_parquet(str(sav_file), str(parquet_path), year)
+            # NOTE: Use the largest .sav, since it the main student file.
+            # Supplementary files should not be concatenated.
+            sav_file = max(sav_files, key=lambda f: f.stat().st_size)
+
+            if len(sav_files) > 1:
+                others = [f.name for f in sav_files if f != sav_file]
+                print(f" Found {len(sav_files)} .sav files -- "
+                      f"using largest, ignoring: {others}")
+
+            print(f" Using: {sav_file.relative_to(raw_dir)}  "
+                  f"({sav_file.stat().st_size / 1e6:.0f} MB)")
+            sav_to_parquet(sav_file, parquet_path, year)
+
+        except FileNotFoundError as e:
+            print(f" {year}: file not found -- {e} -- skipping")
+        except RuntimeError as e:
+            print(f" {year}: download failed -- {e} -- skipping")
+        except Exception as e:
+            print(f" {year}: unexpected error -- {e} -- skipping")
+
+
+if __name__ == "__main__":
+    main()
