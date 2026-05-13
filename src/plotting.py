@@ -98,7 +98,7 @@ def plot_country_distributions(df, subject: str,
     for i, cnt in enumerate(countries):
         subset = df[df["CNT"] == cnt]
         if year is not None and "YEAR" in df.columns:
-            subset = subset[df["YEAR"] == year]
+            subset = subset[subset["YEAR"] == year]
         percs = weighted_percentiles_pv(subset, subject, PERCENTILES_COARSE)
         if np.isnan(percs).all():
             continue
@@ -162,13 +162,39 @@ def plot_escs_gap(df, subject: str, cnt: str,
     plt.tight_layout()
     return fig
 
+
 def plot_gender_percentile_line(df, subject: str, cnt: str,
                                  year: int = None) -> plt.Figure:
     """
-    NAEP-style gender plot: x-axis = Female score at each percentile.
-    Female is the reference group; Male line plotted against it.
+    Create a NAEP-style gender comparison plot across score percentiles.
+
+    Female student scores are used as the reference distribution on the 
+    x-axis, while male student scores are plotted on the y-axis. The 
+    diagonal reference line represents equal performance between genders.
+
+    Curves above the diagonal indicate higher male performance at a given
+    percentile, while curves below indicate higher female performance.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing gender identifiers, weights, plausible
+        value score columns, and optionally a year column.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are 
+        used.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Matplotlib figure containing the gender percentile comparison plot.
     """
-    from src.config import GENDER_MAP
+    # from src.config import GENDER_MAP
     fig, ax = plt.subplots(figsize=(9, 5))
 
     subset = df[df["CNT"] == cnt]
@@ -213,13 +239,43 @@ def plot_gender_percentile_line(df, subject: str, cnt: str,
     plt.tight_layout()
     return fig
 
+
 def plot_group_comparison(df, subject: str, group_col: str,
                            group_vals: dict, cnt: str,
                            year: int = None,
                            title: str = "") -> plt.Figure:
     """
-    Percentile line plot broken down by any group variable.
-    Works for gender, immigration, school type, etc.
+    Plot percentile score distributions for arbitrary demographic or
+    contextual groups.
+
+    This function generalizes percentile comparison plots across grouping
+    variables such as gender, immigration status, school type, or school 
+    location.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing grouping variables, weights, plausible value
+        score columns, and optionally a year column.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    group_col : str
+        Column name containing the grouping variable.
+    group_vals : dict
+        Mapping from raw coded values to readable group labels.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are
+        used.
+    title : str, optional
+        Custom plot title. If empty, a default title is generated.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Matplotlib figure containing percentile comparison curves by group.
     """
     fig, ax = plt.subplots(figsize=(9, 5))
 
@@ -238,6 +294,7 @@ def plot_group_comparison(df, subject: str, group_col: str,
     plt.tight_layout()
     return fig
 
+
 def plot_naep_time_comparison(df, subject: str, cnt: str,
                                reference_year: int,
                                comparison_years: list,
@@ -245,9 +302,42 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
                                group_val: float = None,
                                group_label: str = "All students") -> plt.Figure:
     """
-    NAEP-style time comparison:
-    x-axis = reference year scores; each other year plotted against it.
-    Optionally filtered to one group (e.g. Female only).
+    Create a NAEP-style time comparison plot across score percentiles.
+
+    Percentile scores from a reference year are placed on the x-axis, while
+    percentile scores from comparison years are plotted on the y-axis. The
+    diagonal reference line represents no change relative to the reference
+    year.
+
+    Curves above the diagonal indicate score improvements relative to the
+    reference year, while curves below indicate declines.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing country identifiers, weights, plausible
+        value score columns, and a year column.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    reference_year : int
+        Baseline PISA cycle year used as the x-axis reference distribution.
+    comparison_years : list of int
+        Additional PISA cycle years to compare against the reference year.
+    group_col : str, optional
+        Column name for subgroup filtering, such as gender or immigration
+        status.
+    group_val : float, optional
+        Specific subgroup value used for filtering.
+    group_label : str, optional
+        Human-readable subgroup label used in the plot title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Matplotlib figure containing percentile-based time comparison curves.    
     """
     fig, ax = plt.subplots(figsize=(9, 5.5))
     all_years = [reference_year] + comparison_years

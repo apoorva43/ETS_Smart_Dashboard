@@ -57,9 +57,35 @@ def country_distribution_text(df, subject, countries, year=None):
     subject_label = SUBJECTS[subject]
     return f"Weighted mean {subject_label} scores — " + ",  ".join(lines) + "."
 
+
 def gender_gap_text(df, subject, cnt, year=None):
-    """Generate interpretive text for the gender gap chart."""
-    from src.config import GENDER_MAP
+    """
+    Generate interpretive summary text for the gender percentile comparisons.
+
+    The generated text summarizes median gender differences and whether the
+    gap changes across the score distribution.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing gender identifiers, weights, and plausible
+        value score columns.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are
+        used.
+
+    Returns
+    -------
+    str
+        Concise interpretation of the gender achievement gap across the
+        score distribution.
+    """
+    # from src.config import GENDER_MAP
     subset = df[df["CNT"] == cnt]
     if year and "YEAR" in df.columns:
         subset = subset[subset["YEAR"] == year]
@@ -96,9 +122,33 @@ def gender_gap_text(df, subject, cnt, year=None):
 
     return f"{overall} {spread}"
 
+
 def ses_gap_text(df, subject, cnt, year=None):
-    """Generate interpretive text for the SES gap chart."""
-    from src.pisa_stats import compute_escs_quartile_percentiles
+    """
+    Generate interpretive summary text for socioeconomic achievement gaps.
+
+    The generated text compares median scores between students in the 
+    highest and lowest ESCS quartiles.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing ESCS values, weights, and plausible value
+        score columns.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are
+        used.
+
+    Returns
+    -------
+    str
+        Concise interpretation of the socioeconomic achievement gap.
+    """
     curves = compute_escs_quartile_percentiles(df, subject,
                                                [50], cnt=cnt, year=year)
     q1_med = curves.get("Q1 (low SES)", [np.nan])[0]
