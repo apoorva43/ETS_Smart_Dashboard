@@ -36,3 +36,11 @@ This runs three steps in order:
 1. `python src/compute_stats.py` - computes weighted statistics and saves to `data/processed/stats.json`
 2. `python src/figures.py` - generates all three report figures and saves to `data/images`
 3. `quarto render reports/proposal/proposal_report.qmd --to pdf` - renders the final PDF report
+
+## Run the App
+![running app example](data/images/running_app.png)
+
+The app skeleton could be opened by using 
+```bash
+PYTHONPATH=. streamlit run src/app.py
+```
