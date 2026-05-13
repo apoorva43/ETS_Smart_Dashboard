@@ -201,3 +201,54 @@ def load_sample_csv(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, usecols=available, low_memory=False)
     df["YEAR"] = 2022
     return df
+
+def load_parquet(path: Union[str, Path]) -> pd.DataFrame:
+    """
+    Loads a single processed Parquet dataset into memory.
+
+    Parameters
+    ----------
+    path : Union[str, Path]
+        The file path to the target Parquet file.
+
+    Returns
+    -------
+    pd.DataFrame
+        The loaded dataset.
+    """
+    return pd.read_parquet(Path(path))
+
+
+def load_all_years(processed_dir: Union[str, Path] = "data/processed") -> pd.DataFrame:
+    """
+    Loads and concatenates all available yearly Parquet files into a unified dataframe.
+
+    Iterates through the target cycle years and attempts to load their corresponding 
+    processed Parquet files. Missing years are skipped gracefully with a console warning.
+
+    Parameters
+    ----------
+    processed_dir : Union[str, Path], optional
+        The directory containing the processed Parquet files. Defaults to "data/processed".
+
+    Returns
+    -------
+    pd.DataFrame
+        A unified dataframe containing all loaded years concatenated vertically.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no Parquet files are found for any of the target years in the specified directory.
+    """
+    processed_dir = Path(processed_dir)
+    frames = []
+    for year in [2015, 2018, 2022]:
+        path = processed_dir / f"pisa_{year}.parquet"
+        if path.exists():
+            frames.append(pd.read_parquet(path))
+        else:
+            print(f"  Warning: {path} not found, skipping year {year}")
+    if not frames:
+        raise FileNotFoundError(f"No parquet files found in {processed_dir}")
+    return pd.concat(frames, ignore_index=True)
