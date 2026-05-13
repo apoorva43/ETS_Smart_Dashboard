@@ -24,6 +24,8 @@ import numpy as np
 
 from pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from config import KEEP_COLS
+from plotting import plot_country_distributions, plot_escs_gap
+#from text_gen import country_distribution_text
 
 
 @st.cache_data
@@ -93,28 +95,66 @@ group_col, group_vals = GROUP_MAP.get(group_by, (None, None))
 
 # Compute and plot
 subset = df[df["CNT"] == country]
-PERCS = [10, 25, 50, 75, 90]
+# PERCS = [10, 25, 50, 75, 90]
 
-fig, ax = plt.subplots(figsize=(9, 5))
+# fig, ax = plt.subplots(figsize=(9, 5))
 
-if group_col and group_vals:
+# if group_col and group_vals:
+#     for code, label in group_vals.items():
+#         g_data = subset[subset[group_col] == code]
+#         if len(g_data) < 30:
+#             continue
+#         percs = weighted_percentiles_pv(g_data, subject, PERCS)
+#         ax.plot(PERCS, percs, lw=2.5, marker="o", ms=5, label=label)
+# else:
+#     percs = weighted_percentiles_pv(subset, subject, PERCS)
+#     ax.plot(PERCS, percs, lw=2.5, marker="o",
+#             ms=5, color="#185FA5", label=country)
+
+
+# ax.set_xticks(PERCS)
+# ax.set_xlabel("Percentile")
+# ax.set_ylabel("Score")
+# ax.legend()
+# st.pyplot(fig)
+
+if group_by == "None":
+    fig = plot_country_distributions(
+        df=df,
+        subject=subject,
+        countries=[country],
+        show_oecd=True
+    )
+
+elif group_by == "SES quartile":
+    fig = plot_escs_gap(
+        df=df,
+        subject=subject,
+        cnt=country
+    )
+
+else:
+    group_col, group_vals = GROUP_MAP[group_by]
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    subset = df[df["CNT"] == country]
+    PERCS = [10, 25, 50, 75, 90]
+
     for code, label in group_vals.items():
         g_data = subset[subset[group_col] == code]
         if len(g_data) < 30:
             continue
+
         percs = weighted_percentiles_pv(g_data, subject, PERCS)
         ax.plot(PERCS, percs, lw=2.5, marker="o", ms=5, label=label)
-else:
-    percs = weighted_percentiles_pv(subset, subject, PERCS)
-    ax.plot(PERCS, percs, lw=2.5, marker="o",
-            ms=5, color="#185FA5", label=country)
 
+    ax.set_xticks(PERCS)
+    ax.set_xlabel("Percentile")
+    ax.set_ylabel("Score")
+    ax.legend()
 
-ax.set_xticks(PERCS)
-ax.set_xlabel("Percentile")
-ax.set_ylabel("Score")
-ax.legend()
 st.pyplot(fig)
+
 
 # Dynamic text below the chart
 mean_score = weighted_mean_pv(subset, subject)
