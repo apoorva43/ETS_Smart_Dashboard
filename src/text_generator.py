@@ -85,7 +85,6 @@ def gender_gap_text(df, subject, cnt, year=None):
         Concise interpretation of the gender achievement gap across the
         score distribution.
     """
-    # from src.config import GENDER_MAP
     subset = df[df["CNT"] == cnt]
     if year and "YEAR" in df.columns:
         subset = subset[subset["YEAR"] == year]

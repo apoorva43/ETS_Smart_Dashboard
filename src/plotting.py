@@ -194,7 +194,6 @@ def plot_gender_percentile_line(df, subject: str, cnt: str,
     matplotlib.figure.Figure
         Matplotlib figure containing the gender percentile comparison plot.
     """
-    # from src.config import GENDER_MAP
     fig, ax = plt.subplots(figsize=(9, 5))
 
     subset = df[df["CNT"] == cnt]
