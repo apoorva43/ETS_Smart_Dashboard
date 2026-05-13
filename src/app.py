@@ -15,7 +15,7 @@ Examples
 --------
 Run the app from the project root with:
 
-    streamlit run src/app.py
+    PYTHONPATH=. streamlit run src/app.py
 """
 import streamlit as st
 import pandas as pd
