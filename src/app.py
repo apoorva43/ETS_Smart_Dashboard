@@ -25,7 +25,7 @@ import numpy as np
 from pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from config import KEEP_COLS
 from plotting import plot_country_distributions, plot_escs_gap
-#from text_gen import country_distribution_text
+from text_generator import country_distribution_text
 
 
 @st.cache_data
@@ -157,15 +157,16 @@ st.pyplot(fig)
 
 
 # Dynamic text below the chart
-mean_score = weighted_mean_pv(subset, subject)
+# mean_score = weighted_mean_pv(subset, subject)
 
-# Handle the case where the group is too small and returns NaN
-if np.isnan(mean_score):
-    mean_text = "unavailable due to insufficient data"
-else:
-    mean_text = f"**{mean_score:.0f}**"
+# # Handle the case where the group is too small and returns NaN
+# if np.isnan(mean_score):
+#     mean_text = "unavailable due to insufficient data"
+# else:
+#     mean_text = f"**{mean_score:.0f}**"
 
-st.markdown(f"""
-**How to read this chart:** Each point shows the score at that percentile 
-for students in **{country}**. The weighted mean score is {mean_text}.
-""")
+# st.markdown(f"""
+# **How to read this chart:** Each point shows the score at that percentile 
+# for students in **{country}**. The weighted mean score is {mean_text}.
+# """)
+st.markdown(country_distribution_text(df, subject, [country]))
