@@ -42,7 +42,7 @@ This runs three steps in order:
 
 The Streamlit App could be opened by using:
 ```bash
-streamlit run src/app.py
+streamlit run app.py
 ```
 
 Run it in dev mode for showing memory savings:
