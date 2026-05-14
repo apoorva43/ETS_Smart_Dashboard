@@ -21,152 +21,224 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+from pathlib import Path
+from src.data_loader import load_all_years, load_sample_csv
 
-from pisa_stats import weighted_percentiles_pv, weighted_mean_pv
-from config import KEEP_COLS
-from plotting import plot_country_distributions, plot_escs_gap
-from text_generator import country_distribution_text
+from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
+from src.config import SUBJECTS, GROUP_OPTIONS
+from src.plotting import (plot_country_distributions,
+                          plot_group_comparison,
+                          plot_gender_percentile_line,
+                          plot_escs_gap,
+                          plot_naep_time_comparison)
+from src.text_generator import (country_distribution_text,
+                                ses_gap_text,
+                                gender_gap_text)
 
+st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
+# Helper function to load data with caching
 @st.cache_data
-def load_data():
+def get_data():
     """
-    Load the sample PISA dataset for the dashboard.
-
-    The function reads only the columns defined in ``KEEP_COLS`` that are
-    present in the raw CSV file. If a ``YEAR`` column is not available in the
-    dataset, it is added manually and set to 2022.
+    Load all processed PISA years if available; otherwise use sample CSV.
 
     Returns
     -------
     pandas.DataFrame
-        Filtered PISA dataset containing selected identifier, score, weight,
-        equity, and contextual variables.
+        PISA data loaded from processed parquet files or sample CSV.
     """
-    filepath = "data/raw/sampledat.csv"
 
-    # Read just the header first to see what columns actually exist in the sample
-    available_cols = pd.read_csv(filepath, nrows=0).columns.tolist()
-    keep = [c for c in KEEP_COLS if c in available_cols]
+    available = [
+        y for y in [2015, 2018, 2022]
+        if Path(f"data/processed/pisa_{y}.parquet").exists()
+    ]
 
-    # Check if YEAR is in the file, if so load it, otherwise we add it later
-    usecols = keep + ["YEAR"] if "YEAR" in available_cols else keep
+    if not available:
+        st.warning("No parquet files found -- using sample CSV")
+        return load_sample_csv("data/raw/sampledat.csv")
 
-    df = pd.read_csv(filepath, usecols=usecols, low_memory=False)
-
-    if "YEAR" not in df.columns:
-        df["YEAR"] = 2022
-
-    return df
+    # Set PISA_PROFILE_MEMORY=1 in your shell to see memory savings on load
+    profile = os.environ.get("PISA_PROFILE_MEMORY", "0") == "1"
+    return load_all_years(optimize_memory=True, profile_memory=profile)
 
 
-df = load_data()
+def check_group_sizes(df, group_col, group_vals, cnt, year=None):
+    """
+    The function counts valid observations for each group category within a
+    selected country and optional year. Groups with fewer than 30 observations
+    are flagged because weighted percentile estimates may be unstable or
+    suppressed in the dashboard.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing country, year, weight, and grouping columns.
+    group_col : str
+        Column name used to define subgroup categories.
+    group_vals : dict
+        Mapping from raw category codes to human-readable group labels.
+    cnt : str
+        Country code used to filter the dataset, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year used to filter the dataset. If ``None``, all available
+        years are included.
+
+    Returns
+    -------
+    list of str
+        Warning messages for groups with fewer than 30 valid observations.
+        Returns an empty list if all groups meet the minimum size threshold.
+    """
+    subset = df[df["CNT"] == cnt]
+    if year is not None and "YEAR" in df.columns:
+        subset = subset[subset["YEAR"] == year]
+    warnings = []
+    for code, label in group_vals.items():
+        n = len(subset[subset[group_col] == code].dropna(subset=["W_FSTUWT"]))
+        if n < 30:
+            warnings.append(f"{label}: only {n} students — results suppressed")
+    return warnings
+
+
+# ── Load data and derive country lists ────────────────────────────────────────
+df = get_data()
+
+available_years = sorted(df["YEAR"].unique().tolist())
+all_countries = sorted(df["CNT"].unique().tolist())
+oecd_countries = sorted(df[df["OECD"] == 1]["CNT"].unique().tolist())
+partner_countries = sorted(df[df["OECD"] == 0]["CNT"].unique().tolist())
 
 # ── Sidebar controls ──────────────────────────────────────────────────────────
 st.sidebar.header("Filters")
 
-country = st.sidebar.selectbox(
-    "Country", sorted(df["CNT"].unique()), index=0
+country_group = st.sidebar.radio(
+    "Country group", ["All", "OECD members", "Partner countries"]
 )
+if country_group == "OECD members":
+    country_pool = oecd_countries
+elif country_group == "Partner countries":
+    country_pool = partner_countries
+else:
+    country_pool = all_countries
+
+selected_countries = st.sidebar.multiselect(
+    "Countries", country_pool,
+    default=country_pool[:2]
+)
+
+# prevent multiselect from returning empty list if user clears it
+if not selected_countries:
+    st.warning("Please select at least one country.")
+    st.stop()
+
 subject = st.sidebar.selectbox(
-    "Subject", ["MATH", "READ", "SCIE"],
-    format_func=lambda x: {"MATH": "Mathematics",
-                           "READ": "Reading", "SCIE": "Science"}[x]
+    "Subject", list(SUBJECTS.keys()),
+    format_func=lambda x: SUBJECTS[x]
 )
-group_by = st.sidebar.selectbox(
-    "Break down by",
-    ["None", "Gender", "Immigration status", "SES quartile"]
+
+# Chart type selector
+chart_type = st.sidebar.radio(
+    "View",
+    ["Score distribution", "Gender gap", "SES gap",
+     "Group comparison", "Change over time"]
 )
+
+# Year selector -- only relevant for single-country charts
+if len(available_years) > 1:
+    year_mode = st.sidebar.radio(
+        "Year", ["Latest (2022)", "All years"]
+    )
+    selected_year = 2022 if year_mode == "Latest (2022)" else None
+else:
+    selected_year = available_years[0]
+
+# Primary country for single-country charts
+primary_country = selected_countries[0]
 
 # ── Main panel ────────────────────────────────────────────────────────────────
-st.title("PISA Dashboard – Score Distributions")
-st.markdown(f"Showing **{subject}** results for **{country}**")
+st.title("PISA Score Distribution Dashboard")
+st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
+           f"{len(all_countries)} countries  |  "
+           f"{len(df):,} students")
 
-# Map group_by selection to actual column + values
-GROUP_MAP = {
-    "None":               (None, None),
-    "Gender":             ("ST004D01T", {1.0: "Female", 2.0: "Male"}),
-    "Immigration status": ("IMMIG", {1.0: "Native", 2.0: "2nd-gen", 3.0: "1st-gen"}),
-    # Added placeholder for SES quartile using the ESCS index
-    "SES quartile":       ("ESCS", {1.0: "Q1 (Lowest)", 4.0: "Q4 (Highest)"})
-}
-
-group_col, group_vals = GROUP_MAP.get(group_by, (None, None))
-
-# Compute and plot
-subset = df[df["CNT"] == country]
-# PERCS = [10, 25, 50, 75, 90]
-
-# fig, ax = plt.subplots(figsize=(9, 5))
-
-# if group_col and group_vals:
-#     for code, label in group_vals.items():
-#         g_data = subset[subset[group_col] == code]
-#         if len(g_data) < 30:
-#             continue
-#         percs = weighted_percentiles_pv(g_data, subject, PERCS)
-#         ax.plot(PERCS, percs, lw=2.5, marker="o", ms=5, label=label)
-# else:
-#     percs = weighted_percentiles_pv(subset, subject, PERCS)
-#     ax.plot(PERCS, percs, lw=2.5, marker="o",
-#             ms=5, color="#185FA5", label=country)
-
-
-# ax.set_xticks(PERCS)
-# ax.set_xlabel("Percentile")
-# ax.set_ylabel("Score")
-# ax.legend()
-# st.pyplot(fig)
-
-if group_by == "None":
+if chart_type == "Score distribution":
     fig = plot_country_distributions(
-        df=df,
-        subject=subject,
-        countries=[country],
-        show_oecd=True
+        df, subject, selected_countries, year=selected_year
     )
+    st.pyplot(fig)
+    st.markdown(country_distribution_text(
+        df, subject, selected_countries, year=selected_year
+    ))
 
-elif group_by == "SES quartile":
-    fig = plot_escs_gap(
-        df=df,
-        subject=subject,
-        cnt=country
+elif chart_type == "Gender gap":
+    if len(selected_countries) > 1:
+        st.info(
+            f"Gender gap shows one country at a time — displaying {primary_country}.")
+    fig = plot_gender_percentile_line(
+        df, subject, primary_country, year=selected_year)
+    st.pyplot(fig)
+    st.markdown(gender_gap_text(
+        df, subject, primary_country, year=selected_year))
+    st.info("The x-axis shows Female scores as the reference group. "
+            "Where the Male line sits above the diagonal, males score higher "
+            "at that point in the distribution.")
+
+elif chart_type == "SES gap":
+    if len(selected_countries) > 1:
+        st.info(
+            f"SES gap shows one country at a time — displaying {primary_country}.")
+    fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
+    st.pyplot(fig)
+    st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
+    st.info("Students are split into four equal groups by socioeconomic status "
+            "(ESCS index). Q1 = lowest SES, Q4 = highest.")
+
+elif chart_type == "Group comparison":
+    group_name = st.sidebar.selectbox(
+        "Break down by", list(GROUP_OPTIONS.keys())
     )
+    group_col, group_vals = GROUP_OPTIONS[group_name]
 
-else:
-    group_col, group_vals = GROUP_MAP[group_by]
+    if len(selected_countries) > 1:
+        st.info(
+            f"Group comparison shows one country at a time — displaying {primary_country}.")
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-    subset = df[df["CNT"] == country]
-    PERCS = [10, 25, 50, 75, 90]
+    warns = check_group_sizes(df, group_col, group_vals,
+                              primary_country, year=selected_year)
+    for w in warns:
+        st.warning(w)
 
-    for code, label in group_vals.items():
-        g_data = subset[subset[group_col] == code]
-        if len(g_data) < 30:
-            continue
+    fig = plot_group_comparison(
+        df, subject, group_col, group_vals,
+        cnt=primary_country, year=selected_year,
+        title=f"{SUBJECTS[subject]} by {group_name} — {primary_country}"
+    )
+    st.pyplot(fig)
+    st.info(
+        f"Score distribution broken down by {group_name} for {primary_country}.")
 
-        percs = weighted_percentiles_pv(g_data, subject, PERCS)
-        ax.plot(PERCS, percs, lw=2.5, marker="o", ms=5, label=label)
+elif chart_type == "Change over time":
+    if len(available_years) < 2:
+        st.warning(
+            "Only one year of data loaded. Run `make data` to add more years.")
+    else:
+        if len(selected_countries) > 1:
+            st.info(
+                f"Time comparison shows one country at a time — displaying {primary_country}.")
+        fig = plot_naep_time_comparison(
+            df,
+            subject=subject,
+            cnt=primary_country,
+            reference_year=max(available_years),
+            comparison_years=[
+                y for y in available_years if y != max(available_years)]
+        )
+        st.pyplot(fig)
+        st.info(
+            f"X-axis shows {max(available_years)} scores as the reference. "
+            "Points above the diagonal indicate improvement relative to the reference year. "
+            "Points below indicate decline."
+        )
 
-    ax.set_xticks(PERCS)
-    ax.set_xlabel("Percentile")
-    ax.set_ylabel("Score")
-    ax.legend()
-
-st.pyplot(fig)
-
-
-# Dynamic text below the chart
-# mean_score = weighted_mean_pv(subset, subject)
-
-# # Handle the case where the group is too small and returns NaN
-# if np.isnan(mean_score):
-#     mean_text = "unavailable due to insufficient data"
-# else:
-#     mean_text = f"**{mean_score:.0f}**"
-
-# st.markdown(f"""
-# **How to read this chart:** Each point shows the score at that percentile 
-# for students in **{country}**. The weighted mean score is {mean_text}.
-# """)
-st.markdown(country_distribution_text(df, subject, [country]))
