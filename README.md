@@ -40,7 +40,14 @@ This runs three steps in order:
 ## Run the App
 ![running app example](data/images/running_app.png)
 
-The app skeleton could be opened by using 
+The Streamlit App could be opened by using:
 ```bash
-PYTHONPATH=. streamlit run src/app.py
+streamlit run src/app.py
 ```
+
+Run it in dev mode for showing memory savings:
+```bash
+PISA_PROFILE_MEMORY=1 streamlit run app.py
+```
+
+This app would use data for all processed years located in the `data/processed` folder. Otherwise, it would use the sample data that contains only Canada and United States data.
