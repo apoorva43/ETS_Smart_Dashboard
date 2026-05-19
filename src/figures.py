@@ -15,6 +15,15 @@ pv_scie_cols = [f"PV{i}SCIE" for i in range(1, 11)]
 weight_col   = "W_FSTUWT"
 np.random.seed(42)
 
+# Okabe-Ito colour palette
+_OI_BLUE       = "#0072B2"
+_OI_VERMILLION = "#D55E00"
+_OI_ORANGE     = "#E69F00"
+_OI_SKY_BLUE   = "#56B4E9"
+_OI_GREEN      = "#009E73"
+_OI_PINK       = "#CC79A7"
+
+
 def weighted_pv_mean(sub_df, weight_col, pv_cols):
     means = []
     for pv in pv_cols:
@@ -65,8 +74,8 @@ for country in ["CAN", "USA"]:
         "scores": avg_pv_scores(sub, pv_math_cols)
     }
 
-pct_colors = {"p25": "#7570b3", "p75": "#d4890a"}
-mean_color = "#e24b4a"
+pct_colors = {"p25": _OI_BLUE, "p75": _OI_ORANGE}
+mean_color = _OI_VERMILLION
 country_labels = {"CAN": "Canada", "USA": "United States"}
 
 fig, axes = plt.subplots(2, 1, figsize=(11, 6),
@@ -82,7 +91,7 @@ for ax, country in zip(axes, ["CAN", "USA"]):
 
     counts, bins, _ = ax.hist(
         scores, bins=50, density=True,
-        color="#5b9bd5", alpha=0.75,
+        color=_OI_SKY_BLUE, alpha=0.75,
         edgecolor="white", linewidth=0.4
     )
     bin_width = bins[1] - bins[0]
@@ -148,9 +157,9 @@ subjects = {
     "Science": pv_scie_cols
 }
 country_styles = {
-    "CAN": {"color": "#2166ac", "linestyle": "-",
+    "CAN": {"color": _OI_BLUE,       "linestyle": "-",
             "marker": "o", "label": "CAN"},
-    "USA": {"color": "#d6604d", "linestyle": "--",
+    "USA": {"color": _OI_VERMILLION, "linestyle": "--",
             "marker": "o", "label": "USA"}
 }
 
@@ -198,7 +207,7 @@ plt.savefig("data/images/fig2_gender_gap.png", dpi=150,
 plt.close()
 print("Figure 2 saved.")
 
-# Figure 3: ESCS KDE 
+# Figure 3: ESCS KDE
 df["ESCS_quartile"] = df.groupby("CNT")["ESCS"].transform(
     lambda x: pd.qcut(
         x, q=4,
@@ -208,10 +217,10 @@ df["ESCS_quartile"] = df.groupby("CNT")["ESCS"].transform(
 )
 
 quartile_colors = {
-    "Q1 (Low ESCS)":  "#d73027",
-    "Q2": "#fc8d59",
-    "Q3": "#91bfdb",
-    "Q4 (High ESCS)": "#2166ac"
+    "Q1 (Low ESCS)":  _OI_VERMILLION, 
+    "Q2":             _OI_ORANGE,      
+    "Q3":             _OI_SKY_BLUE,    
+    "Q4 (High ESCS)": _OI_BLUE,         
 }
 x_range = np.linspace(100, 850, 400)
 
