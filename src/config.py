@@ -39,8 +39,34 @@ GROUP_OPTIONS = {
     "School type":        ("SCHLTYPE",   SCHLTYPE_MAP),
 }
 
-COUNTRY_COLORS = {"CAN": "#185FA5", "USA": "#D85A30"}
-YEAR_COLORS    = {2015: "#888780",  2018: "#BA7517", 2022: "#185FA5"}
-PALETTE        = ["#D85A30", "#BA7517", "#1D9E75", "#185FA5"]
+# Okabe-Ito colour palette for deuteranopia, protanopia, and tritanopia.
+OKABE_ITO = {
+    "orange":     "#E69F00",
+    "sky_blue":   "#56B4E9",
+    "green":      "#009E73",
+    "yellow":     "#F0E442",
+    "blue":       "#0072B2",
+    "vermillion": "#D55E00",
+    "pink":       "#CC79A7",
+    "black":      "#000000",
+}
+
+COUNTRY_COLORS = {
+    "CAN": OKABE_ITO["blue"],      
+    "USA": OKABE_ITO["vermillion"], 
+}
+
+YEAR_COLORS = {
+    2015: "#888780",                 
+    2018: OKABE_ITO["sky_blue"],     
+    2022: OKABE_ITO["blue"],        
+}
+
+PALETTE = [
+    OKABE_ITO["vermillion"], 
+    OKABE_ITO["orange"],      
+    OKABE_ITO["sky_blue"],   
+    OKABE_ITO["blue"],      
+]
 
 MIN_GROUP_N = 30  # minimum rows to compute a stat; below this return NaN
