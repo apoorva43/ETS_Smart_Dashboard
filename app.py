@@ -23,7 +23,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pathlib import Path
-from src.data_loader import load_all_years, load_sample_csv
+from src.data_loader import (load_all_years, 
+                             load_all_years_s3,
+                             load_sample_csv)
 
 from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from src.config import SUBJECTS, GROUP_OPTIONS
@@ -49,19 +51,30 @@ def get_data():
     pandas.DataFrame
         PISA data loaded from processed parquet files or sample CSV.
     """
-
+    # Try local parquet files first
     available = [
         y for y in [2015, 2018, 2022]
         if Path(f"data/processed/pisa_{y}.parquet").exists()
     ]
-
-    if not available:
-        st.warning("No parquet files found -- using sample CSV")
-        return load_sample_csv("data/raw/sampledat.csv")
-
     # Set PISA_PROFILE_MEMORY=1 in your shell to see memory savings on load
-    profile = os.environ.get("PISA_PROFILE_MEMORY", "0") == "1"
-    return load_all_years(optimize_memory=True, profile_memory=profile)
+    if available:
+        profile = os.environ.get("PISA_PROFILE_MEMORY", "0") == "1"
+        return load_all_years(optimize_memory=True, profile_memory=profile)
+
+    # Try public S3 (Posit Cloud)
+    try:
+        return load_all_years_s3()
+    except RuntimeError:
+        pass 
+
+    # Last resort: local sample CSV
+    local_sample = Path("data/raw/sampledat.csv")
+    if local_sample.exists():
+        st.warning("No parquet files found -- using sample CSV")
+        return load_sample_csv(local_sample)
+
+    st.error("No data source available. Upload parquets to S3 or add sampledat.csv.")
+    st.stop()
 
 
 def check_group_sizes(df, group_col, group_vals, cnt, year=None):
