@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pathlib import Path
-from src.data_loader import (load_all_years, 
+from src.data_loader import (load_all_years,
                              load_all_years_s3,
                              load_sample_csv)
 
@@ -40,6 +40,14 @@ from src.text_generator import (country_distribution_text,
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
+CHART_TYPES = [
+    "Score distribution",
+    "Gender gap",
+    "SES gap",
+    "Group comparison",
+    "Change over time",
+]
+
 # Helper function to load data with caching
 @st.cache_data
 def get_data():
@@ -51,6 +59,7 @@ def get_data():
     pandas.DataFrame
         PISA data loaded from processed parquet files or sample CSV.
     """
+
     # Try local parquet files first
     available = [
         y for y in [2015, 2018, 2022]
@@ -65,7 +74,7 @@ def get_data():
     try:
         return load_all_years_s3(years=[2022])
     except RuntimeError:
-        pass 
+        pass
 
     # Last resort: local sample CSV
     local_sample = Path("data/raw/sampledat.csv")
@@ -115,7 +124,124 @@ def check_group_sizes(df, group_col, group_vals, cnt, year=None):
     return warnings
 
 
-# ── Load data and derive country lists ────────────────────────────────────────
+def render_chart(df, chart_type, subject, selected_countries,
+                 selected_year, available_years,
+                 primary_country, ref_year=None, comp_year=None,
+                 group_key=None):
+    """
+    Render a single chart panel and its accompanying text/info blocks.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+    chart_type : str
+        One of the CHART_TYPES values.
+    subject : str
+    selected_countries : list of str
+    selected_year : int or None
+        Year filter for single-year views. None means all years.
+    available_years : list of int
+    primary_country : str
+    ref_year : int, optional
+        Reference year for "Compare two years" mode.
+    comp_year : int, optional
+        Comparison year for "Compare two years" mode.
+    group_key : str, optional
+        Pre-selected group breakdown key (used in side-by-side mode to
+        avoid a second sidebar selectbox collision).
+    """
+    if chart_type == "Score distribution":
+        fig = plot_country_distributions(
+            df, subject, selected_countries, year=selected_year
+        )
+        st.pyplot(fig)
+        st.markdown(country_distribution_text(
+            df, subject, selected_countries, year=selected_year
+        ))
+
+    elif chart_type == "Gender gap":
+        if len(selected_countries) > 1:
+            st.info(
+                f"Gender gap shows one country at a time — displaying {primary_country}.")
+        fig = plot_gender_percentile_line(
+            df, subject, primary_country, year=selected_year)
+        st.pyplot(fig)
+        st.markdown(gender_gap_text(
+            df, subject, primary_country, year=selected_year))
+        st.info("The x-axis shows Female scores as the reference group. "
+                "Where the Male line sits above the diagonal, males score higher "
+                "at that point in the distribution.")
+
+    elif chart_type == "SES gap":
+        if len(selected_countries) > 1:
+            st.info(
+                f"SES gap shows one country at a time — displaying {primary_country}.")
+        fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
+        st.pyplot(fig)
+        st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
+        st.info("Students are split into four equal groups by socioeconomic status "
+                "(ESCS index). Q1 = lowest SES, Q4 = highest.")
+
+    elif chart_type == "Group comparison":
+        if group_key is None:
+            group_key = st.sidebar.selectbox(
+                "Break down by", list(GROUP_OPTIONS.keys())
+            )
+        group_col, group_vals = GROUP_OPTIONS[group_key]
+
+        if len(selected_countries) > 1:
+            st.info(
+                f"Group comparison shows one country at a time — displaying {primary_country}.")
+
+        warns = check_group_sizes(df, group_col, group_vals,
+                                  primary_country, year=selected_year)
+        for w in warns:
+            st.warning(w)
+
+        fig = plot_group_comparison(
+            df, subject, group_col, group_vals,
+            cnt=primary_country, year=selected_year,
+            title=f"{SUBJECTS[subject]} by {group_key} — {primary_country}"
+        )
+        st.pyplot(fig)
+        st.info(
+            f"Score distribution broken down by {group_key} for {primary_country}.")
+
+    elif chart_type == "Change over time":
+        if len(available_years) < 2:
+            st.warning(
+                "Only one year of data loaded. Run `make data` to add more years.")
+            return
+
+        if len(selected_countries) > 1:
+            st.info(
+                f"Time comparison shows one country at a time — displaying {primary_country}.")
+
+        # If two specific years were selected, use those; otherwise default
+        # to all available years with the latest as reference.
+        if ref_year is not None and comp_year is not None:
+            reference_year    = ref_year
+            comparison_years  = [comp_year]
+        else:
+            reference_year    = max(available_years)
+            comparison_years  = [y for y in available_years if y != max(available_years)]
+
+        fig = plot_naep_time_comparison(
+            df,
+            subject=subject,
+            cnt=primary_country,
+            reference_year=reference_year,
+            comparison_years=comparison_years,
+        )
+        st.pyplot(fig)
+        st.info(
+            f"X-axis shows {reference_year} scores as the reference. "
+            "Points above the diagonal indicate improvement relative to the reference year. "
+            "Points below indicate decline."
+        )
+
+
+# Load data and derive country lists
 df = get_data()
 
 available_years = sorted(df["YEAR"].unique().tolist())
@@ -123,7 +249,7 @@ all_countries = sorted(df["CNT"].unique().tolist())
 oecd_countries = sorted(df[df["OECD"] == 1]["CNT"].unique().tolist())
 partner_countries = sorted(df[df["OECD"] == 0]["CNT"].unique().tolist())
 
-# ── Sidebar controls ──────────────────────────────────────────────────────────
+# Sidebar controls
 st.sidebar.header("Filters")
 
 country_group = st.sidebar.radio(
@@ -141,7 +267,6 @@ selected_countries = st.sidebar.multiselect(
     default=country_pool[:2]
 )
 
-# prevent multiselect from returning empty list if user clears it
 if not selected_countries:
     st.warning("Please select at least one country.")
     st.stop()
@@ -151,107 +276,98 @@ subject = st.sidebar.selectbox(
     format_func=lambda x: SUBJECTS[x]
 )
 
-# Chart type selector
-chart_type = st.sidebar.radio(
-    "View",
-    ["Score distribution", "Gender gap", "SES gap",
-     "Group comparison", "Change over time"]
-)
+st.sidebar.markdown("---")
+side_by_side = st.sidebar.toggle("Compare two views side by side", value=False)
 
-# Year selector -- only relevant for single-country charts
+if side_by_side:
+    st.sidebar.markdown("**Left panel**")
+    chart_type_left = st.sidebar.selectbox(
+        "Left chart", CHART_TYPES, key="chart_left"
+    )
+    st.sidebar.markdown("**Right panel**")
+    chart_type_right = st.sidebar.selectbox(
+        "Right chart", CHART_TYPES, key="chart_right",
+        index=1 
+    )
+    
+    group_key_left = None
+    group_key_right = None
+    if chart_type_left == "Group comparison":
+        group_key_left = st.sidebar.selectbox(
+            "Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left"
+        )
+    if chart_type_right == "Group comparison":
+        group_key_right = st.sidebar.selectbox(
+            "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
+        )
+else:
+    chart_type = st.sidebar.radio("View", CHART_TYPES)
+
+st.sidebar.markdown("---")
+ref_year = None
+comp_year = None
+
 if len(available_years) > 1:
     year_mode = st.sidebar.radio(
-        "Year", ["Latest (2022)", "All years"]
+        "Year",
+        ["Latest (2022)", "All years", "Compare two years"]
     )
-    selected_year = 2022 if year_mode == "Latest (2022)" else None
+    if year_mode == "Latest (2022)":
+        selected_year = 2022
+    elif year_mode == "All years":
+        selected_year = None
+    else:
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            ref_year = st.selectbox(
+                "Reference year",
+                available_years[:-1],          
+                index=0,
+                key="ref_year"
+            )
+        with col2:
+            later_years = [y for y in available_years if y > ref_year]
+            comp_year = st.selectbox(
+                "Compare to",
+                later_years,
+                index=len(later_years) - 1,
+                key="comp_year"
+            )
+        selected_year = None   
+        st.sidebar.caption(
+            f"Reference: {ref_year} (x-axis) → Compare: {comp_year}"
+        )
 else:
     selected_year = available_years[0]
 
-# Primary country for single-country charts
 primary_country = selected_countries[0]
 
-# ── Main panel ────────────────────────────────────────────────────────────────
 st.title("PISA Score Distribution Dashboard")
 st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
            f"{len(all_countries)} countries  |  "
            f"{len(df):,} students")
 
-if chart_type == "Score distribution":
-    fig = plot_country_distributions(
-        df, subject, selected_countries, year=selected_year
-    )
-    st.pyplot(fig)
-    st.markdown(country_distribution_text(
-        df, subject, selected_countries, year=selected_year
-    ))
-
-elif chart_type == "Gender gap":
-    if len(selected_countries) > 1:
-        st.info(
-            f"Gender gap shows one country at a time — displaying {primary_country}.")
-    fig = plot_gender_percentile_line(
-        df, subject, primary_country, year=selected_year)
-    st.pyplot(fig)
-    st.markdown(gender_gap_text(
-        df, subject, primary_country, year=selected_year))
-    st.info("The x-axis shows Female scores as the reference group. "
-            "Where the Male line sits above the diagonal, males score higher "
-            "at that point in the distribution.")
-
-elif chart_type == "SES gap":
-    if len(selected_countries) > 1:
-        st.info(
-            f"SES gap shows one country at a time — displaying {primary_country}.")
-    fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
-    st.pyplot(fig)
-    st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
-    st.info("Students are split into four equal groups by socioeconomic status "
-            "(ESCS index). Q1 = lowest SES, Q4 = highest.")
-
-elif chart_type == "Group comparison":
-    group_name = st.sidebar.selectbox(
-        "Break down by", list(GROUP_OPTIONS.keys())
-    )
-    group_col, group_vals = GROUP_OPTIONS[group_name]
-
-    if len(selected_countries) > 1:
-        st.info(
-            f"Group comparison shows one country at a time — displaying {primary_country}.")
-
-    warns = check_group_sizes(df, group_col, group_vals,
-                              primary_country, year=selected_year)
-    for w in warns:
-        st.warning(w)
-
-    fig = plot_group_comparison(
-        df, subject, group_col, group_vals,
-        cnt=primary_country, year=selected_year,
-        title=f"{SUBJECTS[subject]} by {group_name} — {primary_country}"
-    )
-    st.pyplot(fig)
-    st.info(
-        f"Score distribution broken down by {group_name} for {primary_country}.")
-
-elif chart_type == "Change over time":
-    if len(available_years) < 2:
-        st.warning(
-            "Only one year of data loaded. Run `make data` to add more years.")
-    else:
-        if len(selected_countries) > 1:
-            st.info(
-                f"Time comparison shows one country at a time — displaying {primary_country}.")
-        fig = plot_naep_time_comparison(
-            df,
-            subject=subject,
-            cnt=primary_country,
-            reference_year=max(available_years),
-            comparison_years=[
-                y for y in available_years if y != max(available_years)]
+if side_by_side:
+    left_col, right_col = st.columns(2)
+    with left_col:
+        st.subheader(chart_type_left)
+        render_chart(
+            df, chart_type_left, subject, selected_countries,
+            selected_year, available_years, primary_country,
+            ref_year=ref_year, comp_year=comp_year,
+            group_key=group_key_left,
         )
-        st.pyplot(fig)
-        st.info(
-            f"X-axis shows {max(available_years)} scores as the reference. "
-            "Points above the diagonal indicate improvement relative to the reference year. "
-            "Points below indicate decline."
+    with right_col:
+        st.subheader(chart_type_right)
+        render_chart(
+            df, chart_type_right, subject, selected_countries,
+            selected_year, available_years, primary_country,
+            ref_year=ref_year, comp_year=comp_year,
+            group_key=group_key_right,
         )
-
+else:
+    render_chart(
+        df, chart_type, subject, selected_countries,
+        selected_year, available_years, primary_country,
+        ref_year=ref_year, comp_year=comp_year,
+    )
