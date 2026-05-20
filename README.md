@@ -37,9 +37,17 @@ This runs three steps in order:
 2. `python src/figures.py` - generates all three report figures and saves to `data/images`
 3. `quarto render reports/proposal/proposal_report.qmd --to pdf` - renders the final PDF report
 
+---
+
 ## Run the App
 ![running app example](data/images/running_app.png)
 
+### Live Demo
+A hosted version of the app (2022 data only) is available on [Posit Cloud](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/).
+
+> NOTE: This deployment runs on the `dev` branch and is limited to 2022 data due to memory constraints. For full multi-year data, run the app locally.
+
+### Run Locally
 The Streamlit App could be opened by using:
 ```bash
 streamlit run app.py
