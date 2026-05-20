@@ -63,7 +63,7 @@ def get_data():
 
     # Try public S3 (Posit Cloud)
     try:
-        return load_all_years_s3(years=[2015, 2018])
+        return load_all_years_s3(years=[2022])
     except RuntimeError:
         pass 
 
