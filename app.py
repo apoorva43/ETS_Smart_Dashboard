@@ -62,11 +62,10 @@ def get_data():
         return load_all_years(optimize_memory=True, profile_memory=profile)
 
     # Try public S3 (Posit Cloud)
-    with st.spinner("Loading PISA data from S3..."):
-        try:
-            return load_all_years_s3(years=[2015])
-        except RuntimeError:
-            pass 
+    try:
+        return load_all_years_s3(years=[2015, 2018])
+    except RuntimeError:
+        pass 
 
     # Last resort: local sample CSV
     local_sample = Path("data/raw/sampledat.csv")

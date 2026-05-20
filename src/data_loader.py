@@ -372,7 +372,6 @@ def load_all_years_s3(base_url: str = S3_BASE_URL,
     for year in years:
         url = f"{base_url}/pisa_{year}.parquet"
         try:
-            print(f"Loading {year} data...")
             df_year = pd.read_parquet(url)
             df_year["YEAR"] = year
             frames.append(df_year)
