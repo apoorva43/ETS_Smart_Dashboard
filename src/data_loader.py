@@ -378,6 +378,7 @@ def load_all_years_s3(base_url: str = S3_BASE_URL,
             df_year = pd.read_parquet(io.BytesIO(response.content))
             df_year["YEAR"] = year
             frames.append(df_year)
+            print(f"Loaded {year} from S3")
         except requests.exceptions.HTTPError as e:
             print(f" Warning: could not load {year} from S3 - {e}")
         except Exception as e:
@@ -393,7 +394,7 @@ def load_all_years_s3(base_url: str = S3_BASE_URL,
 
     if optimize_memory:
         for col in df.select_dtypes(include=["object"]).columns:
-            if df[col].nunique < 100:
+            if df[col].nunique() < 100:
                 df[col] = df[col].astype("category")
 
     return df
