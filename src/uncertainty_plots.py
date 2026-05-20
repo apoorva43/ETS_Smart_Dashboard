@@ -175,14 +175,6 @@ def plot_quantile_dotplot(df: pd.DataFrame, subject: str,
         ax.legend(fontsize=8.5, loc="upper left")
         ax.spines["left"].set_visible(False)
 
-        # Annotation explaining dots
-        ax.text(0.98, 0.04,
-                f"Each dot = 1 of {n_dots}\nequally-likely outcomes",
-                transform=ax.transAxes, fontsize=7.5,
-                ha="right", va="bottom", color="#666666",
-                bbox=dict(boxstyle="round,pad=0.3",
-                          facecolor="white", edgecolor="#dddddd", alpha=0.8))
-
     year_str = str(year) if year else "all years"
     fig.suptitle(
         f"How certain are we about mean {subject} scores? ({year_str})\n"
