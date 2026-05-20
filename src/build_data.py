@@ -3,7 +3,8 @@ PISA Data Processing CLI.
 
 This script acts as the command-line interface for the end-to-end data pipeline,
 orchestrating the downloading, unzipping, and Parquet conversion of PISA student 
-questionnaire datasets. It is designed to be triggered via modular Makefile commands.
+and school questionnaire datasets. It is designed to be triggered via modular 
+Makefile commands.
 """
 
 import sys
