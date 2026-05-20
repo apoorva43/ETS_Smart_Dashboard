@@ -364,7 +364,6 @@ def load_all_years_s3(base_url: str = S3_BASE_URL,
         If no parquet files could be loaded from any of the target years.
     """
     import io
-    import requests
 
     if years is None:
         years = [2015, 2018, 2022]
@@ -373,14 +372,10 @@ def load_all_years_s3(base_url: str = S3_BASE_URL,
     for year in years:
         url = f"{base_url}/pisa_{year}.parquet"
         try:
-            response = requests.get(url, timeout=120)
-            response.raise_for_status()
-            df_year = pd.read_parquet(io.BytesIO(response.content))
+            print(f"Loading {url}")
+            df_year = pd.read_parquet(url)
             df_year["YEAR"] = year
             frames.append(df_year)
-            print(f"Loaded {year} from S3")
-        except requests.exceptions.HTTPError as e:
-            print(f" Warning: could not load {year} from S3 - {e}")
         except Exception as e:
             print(f" Warning: unexpected error loading {year} - {e}")
 

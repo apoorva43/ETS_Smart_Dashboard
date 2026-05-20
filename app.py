@@ -63,7 +63,8 @@ def get_data():
 
     # Try public S3 (Posit Cloud)
     try:
-        return load_all_years_s3()
+        st.info("Loading parquet files from S3...")
+        return load_all_years_s3(optimize_memory=True)
     except RuntimeError:
         pass 
 
