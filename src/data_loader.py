@@ -65,17 +65,16 @@ def validate_url(url: str, year: int) -> bool:
     return False
 
 
-def download_pisa_zip(year: int, raw_dir: Union[str, Path] = "data/raw") -> Path:
+def download_pisa_zip(year: int, dataset_type: str = "student", raw_dir: Union[str, Path] = "data/raw") -> Path:
     """
-    Downloads the PISA zip archive, skipping if a complete file already exists.
-
-    Checks local files based on the expected content length from the server to 
-    prevent re-downloading existing data.
+    Downloads the PISA zip archive for either student or school data.
 
     Parameters
     ----------
     year : int
         The PISA cycle year to download (e.g., 2022, 2018).
+    dataset_type : str, optional
+        Either 'student' or 'school'. Defaults to 'student'.
     raw_dir : Union[str, Path], optional
         The root directory where raw data should be stored. Defaults to "data/raw".
 
@@ -83,21 +82,21 @@ def download_pisa_zip(year: int, raw_dir: Union[str, Path] = "data/raw") -> Path
     -------
     Path
         The file path to the downloaded zip archive.
-
-    Raises
-    ------
-    ValueError
-        If the requested year is not found in the PISA_URLS dictionary.
-    RuntimeError
-        If the download times out or encounters a network failure.
     """
-    url = PISA_URLS.get(year)
-    if url is None:
-        raise ValueError(f"Year {year} not found in PISA_URLS.")
+    if dataset_type == "school":
+        url = PISA_SCHOOL_URLS.get(year)
+        filename = f"pisa_school_{year}.zip"
+    else:
+        url = PISA_URLS.get(year)
+        filename = f"pisa_{year}.zip"
 
-    dest_dir = Path(raw_dir) / str(year)
+    if url is None:
+        raise ValueError(f"Year {year} not found for {dataset_type} URLs.")
+
+    # Isolate student and school data into separate subdirectories
+    dest_dir = Path(raw_dir) / str(year) / dataset_type
     dest_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = dest_dir / f"pisa_{year}.zip"
+    zip_path = dest_dir / filename
 
     if zip_path.exists():
         actual_size = zip_path.stat().st_size
@@ -110,20 +109,18 @@ def download_pisa_zip(year: int, raw_dir: Union[str, Path] = "data/raw") -> Path
             expected_size = 0
 
         if expected_size and actual_size >= expected_size * 0.99:
-            print(f" {year}: complete zip already exists ({actual_size/1e6:.0f} MB), skipping.")
+            print(f" {year} ({dataset_type}): complete zip already exists, skipping.")
             return zip_path
         
-        print(f" {year}: incomplete zip ({actual_size/1e6:.0f} MB), re-downloading...")
+        print(f" {year} ({dataset_type}): incomplete zip, re-downloading...")
         zip_path.unlink()
 
-    print(f" Downloading {year} from {url}...")
+    print(f" Downloading {year} {dataset_type} data from {url}...")
     try:
         r = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT)
         r.raise_for_status()
-    except requests.exceptions.Timeout:
-        raise RuntimeError(f"Download timed out after {DOWNLOAD_TIMEOUT}s for year {year}.")
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Download failed for year {year}: {e}")
+        raise RuntimeError(f"Download failed for {dataset_type} {year}: {e}")
 
     total = int(r.headers.get("content-length", 0))
     downloaded = 0
@@ -136,7 +133,7 @@ def download_pisa_zip(year: int, raw_dir: Union[str, Path] = "data/raw") -> Path
                 pct = downloaded / total * 100
                 print(f"\r {pct:.1f}% ({downloaded/1e6:.0f} / {total/1e6:.0f} MB)", end="", flush=True)
                 
-    print("\n Download complete.")
+    print(f"\n {dataset_type.capitalize()} download complete.")
     return zip_path
 
 def unzip_pisa_data(zip_path: Union[str, Path]) -> Path:
@@ -205,7 +202,7 @@ def sav_to_parquet(
     _, student_meta = pyreadstat.read_sav(str(student_sav), row_limit=0)
     
     # We exclude school columns from the student extraction to prevent merge collisions
-    student_target_cols = [c for c in keep_cols if c not in school_target_cols]
+    student_target_cols = [c for c in keep_cols if c not in SCHOOL_COLS]
     avail_student = [c for c in student_target_cols if c in student_meta.column_names]
     
     print(f" Loading student data (this may take several minutes)...")
