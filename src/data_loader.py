@@ -23,6 +23,7 @@ PISA_SCHOOL_URLS = {
 HEAD_TIMEOUT = 10
 DOWNLOAD_TIMEOUT = 60 * 30      # 30 minutes for large files
 CHUNK_SIZE = 1024 * 1024        # 1 MB chunks
+S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 def validate_url(url: str, year: int) -> bool:
     """
@@ -331,5 +332,68 @@ def load_all_years(processed_dir: Union[str, Path] = "data/processed",
             after_mb = df.memory_usage(deep=True).sum() / 1e6
             print(f"Memory optimization: {before_mb:.0f} MB to {after_mb:.0f} MB "
                   f"(saved {before_mb - after_mb:.0f} MB)")
+
+    return df
+
+def load_all_years_s3(base_url: str = S3_BASE_URL,
+    years: list = None,
+    optimize_memory: bool = True        
+) -> pd.DataFrame:
+    """
+    Load and concatenate PISA parquet files from public S3 URLs.
+
+    No credentials required - bucket must be publically readable.
+
+    Parameters
+    ----------
+    base_url : str
+        Base HTTPS URL of the S3 bucket, without trailing slash.
+    years : list, optional
+        PISA cycle years to load. Defaults to [2015, 2018, 2022].
+    optimize_memory : bool, optional
+        Convert low-cardinality string columns to categoricals. Defaults to True.
+
+    Returns
+    -------
+    pd.DataFrame
+        Concatenated dataframe for all available years.
+
+    Raises
+    ------
+    Runtime Error
+        If no parquet files could be loaded from any of the target years.
+    """
+    import io
+    import requests
+
+    if years is None:
+        years = [2015, 2018, 2022]
+
+    frames = []
+    for year in years:
+        url = f"{base_url}/pisa_{year}.parquet"
+        try:
+            response = requests.get(url, timeout=120)
+            response.raise_for_status()
+            df_year = pd.read_parquet(io.BytesIO(response.content))
+            df_year["YEAR"] = year
+            frames.append(df_year)
+        except requests.exceptions.HTTPError as e:
+            print(f" Warning: could not load {year} from S3 - {e}")
+        except Exception as e:
+            print(f" Warning: unexpected error loading {year} - {e}")
+
+    if not frames:
+        raise RuntimeError(
+            f"No parquet files loaded from {base_url}."
+            "Check the bucket URL and that files are publically accessible."
+        )
+    
+    df = pd.concat(frames, ignore_index=True)
+
+    if optimize_memory:
+        for col in df.select_dtypes(include=["object"]).columns:
+            if df[col].nunique < 100:
+                df[col] = df[col].astype("category")
 
     return df
