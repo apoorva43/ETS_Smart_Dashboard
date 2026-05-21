@@ -449,6 +449,111 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
     return fig
 
 
+def plot_year_diff_percentile(df, subject: str, cnt: str,
+                               reference_year: int,
+                               comparison_year: int,
+                               group_col: str = None,
+                               group_val: float = None,
+                               group_label: str = "All students") -> plt.Figure:
+    """
+    Plot score changes between two years across the score distribution.
+
+    The function computes weighted score percentiles for a reference year and
+    a comparison year, then plots the difference between them at each
+    percentile. Positive values indicate that the comparison year score is
+    higher than the reference year score, while negative values indicate a
+    decline.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing country identifiers, year, weights, and
+        plausible value score columns.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    reference_year : int
+        Baseline PISA cycle year.
+    comparison_year : int
+        Year to compare against the reference year.
+    group_col : str, optional
+        Optional subgroup column, such as gender or immigration status.
+    group_val : float, optional
+        Optional subgroup value used for filtering.
+    group_label : str, optional
+        Human-readable label for the subgroup shown in the title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Matplotlib figure showing score differences by percentile.
+    """
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    def get_subset(year):
+        subset = df[(df["CNT"] == cnt) & (df["YEAR"] == year)]
+        if group_col is not None and group_val is not None:
+            subset = subset[subset[group_col] == group_val]
+        return subset
+
+    ref_subset = get_subset(reference_year)
+    comp_subset = get_subset(comparison_year)
+
+    ref_percs = weighted_percentiles_pv(
+        ref_subset,
+        subject,
+        PERCENTILES_FINE
+    )
+
+    comp_percs = weighted_percentiles_pv(
+        comp_subset,
+        subject,
+        PERCENTILES_FINE
+    )
+
+    if np.isnan(ref_percs).all() or np.isnan(comp_percs).all():
+        ax.text(
+            0.5, 0.5,
+            "Insufficient data to compute year-over-year score differences.",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=11
+        )
+        return fig
+
+    delta = comp_percs - ref_percs
+
+    ax.plot(
+        PERCENTILES_FINE,
+        delta,
+        color=COUNTRY_COLORS.get(cnt, "#185FA5"),
+        lw=2.5,
+        marker="o",
+        ms=3,
+        label=f"{comparison_year} − {reference_year}"
+    )
+
+    ax.axhline(0, color="#777777", lw=1.2, ls="--")
+
+    ax.set_xlabel("Percentile", fontsize=10)
+    ax.set_ylabel(f"Score difference ({comparison_year} − {reference_year})",
+                  fontsize=10)
+
+    ax.set_title(
+        f"Score change across the distribution – {subject} – {cnt}\n"
+        f"{comparison_year} minus {reference_year} – {group_label}",
+        fontsize=12,
+        fontweight="500"
+    )
+
+    ax.legend(fontsize=9)
+    plt.tight_layout()
+    return fig
+
+
 def plot_weighted_interval_distribution(df, subject: str,
                                         countries: list,
                                         year: int = None,

@@ -34,6 +34,7 @@ from src.plotting import (plot_country_distributions,
                           plot_gender_percentile_line,
                           plot_escs_gap,
                           plot_naep_time_comparison,
+                          plot_year_diff_percentile,
                           plot_weighted_interval_distribution,
                           plot_gender_diff_percentile,
                           plot_belonging_by_immigration,
@@ -310,17 +311,24 @@ def render_chart(df, chart_type, subject, selected_countries,
         if ref_year is not None and comp_year is not None:
             reference_year    = ref_year
             comparison_years  = [comp_year]
+            fig = plot_year_diff_percentile(
+                df=df,
+                subject=subject,
+                cnt=primary_country,
+                reference_year=reference_year,
+                comparison_year=comp_year,
+            )
         else:
             reference_year    = max(available_years)
             comparison_years  = [y for y in available_years if y != max(available_years)]
 
-        fig = plot_naep_time_comparison(
-            df,
-            subject=subject,
-            cnt=primary_country,
-            reference_year=reference_year,
-            comparison_years=comparison_years,
-        )
+            fig = plot_naep_time_comparison(
+                df=df,
+                subject=subject,
+                cnt=primary_country,
+                reference_year=reference_year,
+                comparison_years=comparison_years,
+            )
         st.pyplot(fig)
         st.info(
             f"X-axis shows {reference_year} scores as the reference. "
