@@ -33,7 +33,11 @@ from src.plotting import (plot_country_distributions,
                           plot_group_comparison,
                           plot_gender_percentile_line,
                           plot_escs_gap,
-                          plot_naep_time_comparison)
+                          plot_naep_time_comparison,
+                          plot_weighted_interval_distribution,
+                          plot_gender_diff_percentile,
+                          plot_belonging_by_immigration,
+                          plot_immigration_score_distribution)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
                                 gender_gap_text)
@@ -46,6 +50,10 @@ CHART_TYPES = [
     "SES gap",
     "Group comparison",
     "Change over time",
+    "Interval distribution", 
+    "Gender gap (difference)", 
+    "Belonging by Immigration",
+    "Immigration status"
 ]
 
 # Helper function to load data with caching
@@ -244,7 +252,40 @@ def render_chart(df, chart_type, subject, selected_countries,
             "Points above the diagonal indicate improvement relative to the reference year. "
             "Points below indicate decline."
         )
+        
+    # adding new charts
+    elif chart_type == "Interval distribution":
+        fig = plot_weighted_interval_distribution(
+            df, subject, selected_countries, year=selected_year)
+        st.pyplot(fig)
+        st.info("Weighted proportion of students per 20-point score interval, "
+                "averaged across all 10 plausible values.")
 
+    elif chart_type == "Gender gap (difference)":
+        if len(selected_countries) > 1:
+            st.info(f"Showing {primary_country} only.")
+        fig = plot_gender_diff_percentile(
+            df, subject, primary_country, year=selected_year)
+        st.pyplot(fig)
+        st.info("Y-axis shows Male − Female score difference at each percentile. "
+                "Above zero = males score higher; below zero = females score higher.")
+
+    elif chart_type == "Belonging by Immigration":
+        if len(selected_countries) > 1:
+            st.info(f"Showing {primary_country} only.")
+        fig = plot_belonging_by_immigration(
+            df=df, countries=selected_countries, year=selected_year)
+        st.pyplot(fig)
+        st.info("Distribution of school belonging index by immigration status.")
+
+    
+    elif chart_type == "Immigration status":
+        if len(selected_countries) > 1:
+            st.info(f"Showing {primary_country} only.")
+        fig = plot_immigration_score_distribution(
+            df, subject=subject, cnt=primary_country, year=selected_year)
+        st.pyplot(fig)
+        st.info("Weighted score interval distributions by immigration status.")
 
 # Load data and derive country lists
 df = get_data()
@@ -292,7 +333,7 @@ if side_by_side:
     st.sidebar.markdown("**Right panel**")
     chart_type_right = st.sidebar.selectbox(
         "Right chart", CHART_TYPES, key="chart_right",
-        index=1 
+        index=1
     )
     
     group_key_left = None
