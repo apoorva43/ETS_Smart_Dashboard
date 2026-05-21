@@ -16,11 +16,15 @@ import pandas as pd
 from src.config import (
     PERCENTILES_COARSE,
     PERCENTILES_FINE,
-    COUNTRY_COLORS, 
+    COUNTRY_COLORS,
     PALETTE,
     YEAR_COLORS,
-    LOC_MAP
-    )
+    LOC_MAP,
+    IMMIG_MAP,
+    SCHLTYPE_MAP,
+    MIN_GROUP_N,
+    OKABE_ITO,
+)
 from src.pisa_stats import (
     weighted_percentiles_pv,
     compute_escs_quartile_percentiles,
@@ -119,8 +123,6 @@ def plot_country_distributions(df, subject: str,
         Matplotlib figure containing the percentile line plot.
     """
     fig, ax = plt.subplots(figsize=(9, 5))
-    color_cycle = list(COUNTRY_COLORS.values()) + \
-        ["#1D9E75", "#BA7517", "#888780"]
 
     for i, cnt in enumerate(countries):
         subset = df[df["CNT"] == cnt]
@@ -129,7 +131,7 @@ def plot_country_distributions(df, subject: str,
         percs = weighted_percentiles_pv(subset, subject, PERCENTILES_COARSE)
         if np.isnan(percs).all():
             continue
-        color = COUNTRY_COLORS.get(cnt, color_cycle[i % len(color_cycle)])
+        color = COUNTRY_COLORS.get(cnt, PALETTE[i % len(PALETTE)])
         ax.plot(PERCENTILES_COARSE, percs,
                 color=color, lw=2.5, marker="o", ms=5, label=cnt)
 
@@ -599,7 +601,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str,
                     label="Male advantage")
     ax.fill_between(female_percs, diff, 0,
                     where=(diff < 0), alpha=0.15,
-                    color="#e377c2",
+                    color=OKABE_ITO["pink"],
                     label="Female advantage")
 
     ax.plot(female_percs, diff,
@@ -792,24 +794,18 @@ def plot_belonging_by_immigration(df,
     # ------------------------------------------------------------------
     ax = axes[1]
 
-    immig_codes = {
-        1.0: "Native",
-        2.0: "2nd-gen",
-        3.0: "1st-gen"
-    }
-
     required_bel_cols = [belonging_col, immig_col, "CNT", weight_col]
     if all(c in subset.columns for c in required_bel_cols):
         df_bel = subset.dropna(
             subset=[belonging_col, immig_col, weight_col]
         ).copy()
 
-        x = np.arange(len(immig_codes))
+        x = np.arange(len(IMMIG_MAP))
 
         for i, cnt in enumerate(countries):
             means = []
 
-            for code in immig_codes:
+            for code in IMMIG_MAP:
                 sub = df_bel[
                     (df_bel[immig_col] == code) &
                     (df_bel["CNT"] == cnt)
@@ -838,7 +834,7 @@ def plot_belonging_by_immigration(df,
             ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8)
 
         ax.set_xticks(x)
-        ax.set_xticklabels(list(immig_codes.values()), fontsize=9)
+        ax.set_xticklabels(list(IMMIG_MAP.values()), fontsize=9)
         ax.set_ylabel("Weighted mean BELONG index", fontsize=10)
         ax.set_title(
             "School belonging by immigration status\n"
@@ -907,11 +903,6 @@ def plot_immigration_score_distribution(df, subject: str,
                      interval_width)
     midpoints = (bins[:-1] + bins[1:]) / 2
 
-    immig_map = {
-        1.0: "Native",
-        2.0: "2nd-gen immigrant",
-        3.0: "1st-gen immigrant"
-    }
 
     fig, ax = plt.subplots(figsize=(10, 5))
 
@@ -946,7 +937,7 @@ def plot_immigration_score_distribution(df, subject: str,
 
         return np.mean(pv_props, axis=0)
 
-    for color, (code, label) in zip(PALETTE, immig_map.items()):
+    for color, (code, label) in zip(PALETTE, IMMIG_MAP.items()):
         group_df = subset[subset["IMMIG"] == code]
         props = _group_proportions(group_df)
 
@@ -1144,11 +1135,6 @@ def plot_school_type_distribution(df,
         Matplotlib figure containing weighted score distribution curves by
         school type.
     """
-    school_type_map = {
-        1.0: "Private independent",
-        2.0: "Private government-dependent",
-        3.0: "Public",
-    }
 
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11)]
     pv_cols = [c for c in pv_cols if c in df.columns]
@@ -1207,7 +1193,7 @@ def plot_school_type_distribution(df,
 
         return np.mean(pv_props, axis=0)
 
-    for color, (code, label) in zip(PALETTE, school_type_map.items()):
+    for color, (code, label) in zip(PALETTE, SCHLTYPE_MAP.items()):
         group = subset[subset[school_type_col] == code]
         props = _group_proportions(group)
 
