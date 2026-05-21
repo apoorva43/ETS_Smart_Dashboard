@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 import requests
+import zipfile
 from pathlib import Path
 from typing import Union
-from src.config import KEEP_COLS
+from src.config import KEEP_COLS, SCHOOL_COLS
 
 # Student questionnaire files (SPSS format).
 # NOTE: Update here if OECD changes hosting.
@@ -64,44 +65,38 @@ def validate_url(url: str, year: int) -> bool:
     return False
 
 
-def download_pisa_year(year: int, raw_dir: Union[str, Path] = "data/raw") -> Path:
+def download_pisa_zip(year: int, dataset_type: str = "student", raw_dir: Union[str, Path] = "data/raw") -> Path:
     """
-    Download and unzip the PISA student questionnaire zip for a given year.
-    
-    Checks local files to skip the download if a complete zip already exists 
-    based on the expected content length from the server.
+    Downloads the PISA zip archive for either student or school data.
 
     Parameters
     ----------
     year : int
         The PISA cycle year to download (e.g., 2022, 2018).
+    dataset_type : str, optional
+        Either 'student' or 'school'. Defaults to 'student'.
     raw_dir : Union[str, Path], optional
         The root directory where raw data should be stored. Defaults to "data/raw".
 
     Returns
     -------
     Path
-        The path to the directory containing the unzipped files.
-
-    Raises
-    ------
-    ValueError
-        If the requested year is not found in the PISA_URLS dictionary.
-    RuntimeError
-        If the download times out or encounters a network failure.
+        The file path to the downloaded zip archive.
     """
-    import zipfile
+    if dataset_type == "school":
+        url = PISA_SCHOOL_URLS.get(year)
+        filename = f"pisa_school_{year}.zip"
+    else:
+        url = PISA_URLS.get(year)
+        filename = f"pisa_{year}.zip"
 
-    url = PISA_URLS.get(year)
     if url is None:
-        raise ValueError(
-            f"Year {year} not found in PISA_URLS. "
-            f"Available years: {list(PISA_URLS.keys())}"
-        )
+        raise ValueError(f"Year {year} not found for {dataset_type} URLs.")
 
-    dest_dir = Path(raw_dir) / str(year)
+    # Isolate student and school data into separate subdirectories
+    dest_dir = Path(raw_dir) / str(year) / dataset_type
     dest_dir.mkdir(parents=True, exist_ok=True)
-    zip_path = dest_dir / f"pisa_{year}.zip"
+    zip_path = dest_dir / filename
 
     if zip_path.exists():
         actual_size = zip_path.stat().st_size
@@ -114,22 +109,18 @@ def download_pisa_year(year: int, raw_dir: Union[str, Path] = "data/raw") -> Pat
             expected_size = 0
 
         if expected_size and actual_size >= expected_size * 0.99:
-            print(f" {year}: already downloaded ({actual_size/1e6:.0f} MB), skipping")
-            return dest_dir
-        print(f" {year}: incomplete download ({actual_size/1e6:.0f} MB), re-downloading")
+            print(f" {year} ({dataset_type}): complete zip already exists, skipping.")
+            return zip_path
+        
+        print(f" {year} ({dataset_type}): incomplete zip, re-downloading...")
         zip_path.unlink()
 
-    print(f" Downloading {year} from {url}...")
+    print(f" Downloading {year} {dataset_type} data from {url}...")
     try:
         r = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT)
         r.raise_for_status()
-    except requests.exceptions.Timeout:
-        raise RuntimeError(
-            f"Download timed out after {DOWNLOAD_TIMEOUT}s for year {year}. "
-            "Try again or increase DOWNLOAD_TIMEOUT."
-        )
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Download failed for year {year}: {e}")
+        raise RuntimeError(f"Download failed for {dataset_type} {year}: {e}")
 
     total = int(r.headers.get("content-length", 0))
     downloaded = 0
@@ -140,68 +131,95 @@ def download_pisa_year(year: int, raw_dir: Union[str, Path] = "data/raw") -> Pat
             downloaded += len(chunk)
             if total:
                 pct = downloaded / total * 100
-                mb_done = downloaded / 1_000_000
-                mb_total = total / 1_000_000
-                print(f"\r {pct:.1f}% ({mb_done:.0f} / {mb_total:.0f} MB)",
-                      end="", flush=True)
-    print()
+                print(f"\r {pct:.1f}% ({downloaded/1e6:.0f} / {total/1e6:.0f} MB)", end="", flush=True)
+                
+    print(f"\n {dataset_type.capitalize()} download complete.")
+    return zip_path
 
-    print(f" Unzipping...")
-    with zipfile.ZipFile(zip_path, "r") as z:
-        z.extractall(dest_dir)
-
-    print(f" Done: {dest_dir}")
-    return dest_dir
-
-def sav_to_parquet(sav_path: Union[str, Path],
-    parquet_path: Union[str, Path],
-    year: int,
-    keep_cols: list = KEEP_COLS,
-) -> None:
+def unzip_pisa_data(zip_path: Union[str, Path]) -> Path:
     """
-    Converts a PISA SPSS (.sav) file to a filtered Parquet file.
-
-    Reads column metadata first to avoid loading the full dataset into memory. 
-    Only columns present in the `keep_cols` list are loaded; expected columns 
-    missing from the source file are populated with NaN to ensure schema consistency.
+    Unzips a downloaded PISA archive into its parent directory.
 
     Parameters
     ----------
-    sav_path : Union[str, Path]
-        The file path to the input raw SPSS (.sav) file.
-    parquet_path : Union[str, Path]
-        The destination file path for the output Parquet file.
-    year : int
-        The PISA cycle year associated with the dataset, appended as a new column.
-    keep_cols : list, optional
-        The list of exact column names to extract. Defaults to the global KEEP_COLS.
+    zip_path : Union[str, Path]
+        The file path to the target zip archive.
 
     Returns
     -------
-    None
-        Saves the processed data directly to disk.
+    Path
+        The directory containing the unzipped files.
+    """
+    zip_path = Path(zip_path)
+    dest_dir = zip_path.parent
+    
+    print(f" Unzipping {zip_path.name} into {dest_dir}...")
+    with zipfile.ZipFile(zip_path, "r") as z:
+        z.extractall(dest_dir)
+        
+    print(f" Unzip complete.")
+    return dest_dir
+
+def sav_to_parquet(
+    student_sav:  Union[str, Path],
+    school_sav:   Union[str, Path],
+    parquet_path: Union[str, Path],
+    year:         int,
+    keep_cols:    list = KEEP_COLS,
+) -> None:
+    """
+    Merges student and school SPSS files and converts them to an optimized Parquet file.
+
+    Parameters
+    ----------
+    student_sav : Union[str, Path]
+        File path to the raw student SPSS (.sav) file.
+    school_sav : Union[str, Path]
+        File path to the raw school SPSS (.sav) file.
+    parquet_path : Union[str, Path]
+        Destination file path for the output Parquet file.
+    year : int
+        The PISA cycle year.
+    keep_cols : list, optional
+        The exact columns to extract and retain. Defaults to KEEP_COLS.
     """
     import pyreadstat
 
-    sav_path = Path(sav_path)
+    student_sav = Path(student_sav)
+    school_sav = Path(school_sav)
     parquet_path = Path(parquet_path)
 
-    print(f" Reading column list from {sav_path.name}...")
-    _, meta = pyreadstat.read_sav(str(sav_path), row_limit=0)
-    available = [c for c in keep_cols if c in meta.column_names]
-    missing = [c for c in keep_cols if c not in meta.column_names]
+    # 1. Process School Data
+    print(f" Reading school metadata from {school_sav.name}...")
+    _, school_meta = pyreadstat.read_sav(str(school_sav), row_limit=0)
+    
+    school_target_cols = ["CNTSCHID"] + SCHOOL_COLS
+    avail_school = [c for c in school_target_cols if c in school_meta.column_names]
+    df_school, _ = pyreadstat.read_sav(str(school_sav), usecols=avail_school)
 
-    if missing:
-        print(f" {len(missing)} expected columns not in file: "
-              f"{missing[:5]}{'...' if len(missing) > 5 else ''}")
+    # 2. Process Student Data
+    print(f" Reading student metadata from {student_sav.name}...")
+    _, student_meta = pyreadstat.read_sav(str(student_sav), row_limit=0)
+    
+    # We exclude school columns from the student extraction to prevent merge collisions
+    student_target_cols = [c for c in keep_cols if c not in SCHOOL_COLS]
+    avail_student = [c for c in student_target_cols if c in student_meta.column_names]
+    
+    print(f" Loading student data (this may take several minutes)...")
+    df_student, _ = pyreadstat.read_sav(str(student_sav), usecols=avail_student)
+    df_student["YEAR"] = year
 
-    print(f" Loading {len(available)} columns from {len(meta.column_names)} total "
-          f"({sav_path.name})...")
-    print(f" This may take several minutes for a large file...")
+    # 3. Merge Datasets
+    print(f"  Merging school data on CNTSCHID...")
+    # Some older SPSS files store CNTSCHID as string or float; ensure matching types before merge
+    if "CNTSCHID" in df_student.columns and "CNTSCHID" in df_school.columns:
+        df_student["CNTSCHID"] = df_student["CNTSCHID"].astype(float)
+        df_school["CNTSCHID"] = df_school["CNTSCHID"].astype(float)
+        
+    df = df_student.merge(df_school, on="CNTSCHID", how="left")
 
-    df, _ = pyreadstat.read_sav(str(sav_path), usecols=available)
-    df["YEAR"] = year
-
+    # 4. Fill completely missing columns to maintain strictly consistent schema across years
+    missing = [c for c in keep_cols if c not in df.columns]
     if missing:
         df[missing] = np.nan
 

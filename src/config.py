@@ -26,9 +26,13 @@ PERCENTILES_FINE   = list(range(5, 96, 5))
 
 GENDER_MAP  = {1.0: "Female", 2.0: "Male"}
 IMMIG_MAP   = {1.0: "Native", 2.0: "2nd-gen immigrant", 3.0: "1st-gen immigrant"}
-LOC_MAP     = {
-    1.0: "Village (<3k)", 2.0: "Small town (3-15k)", 3.0: "Town (15-100k)",
-    4.0: "City (100k-1M)", 5.0: "Large city (>1M)",
+LOC_MAP = {
+    1.0: "Village (<3k)", 
+    2.0: "Small town (3-15k)", 
+    3.0: "Town (15-100k)",
+    4.0: "City (100k-1M)", 
+    5.0: "Large city (>1M)",
+    6.0: "Megacity (>10M)"
 }
 SCHLTYPE_MAP = {1: "Public", 2: "Govt-dep. private", 3: "Independent private"}
 

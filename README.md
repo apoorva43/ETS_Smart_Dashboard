@@ -24,9 +24,19 @@ and place it in: `data/raw/sampledat.csv`
 ```bash
 conda env create -f environment.yml
 conda activate ets_capstone
+pip install -e .
 ```
 
-### 4. Run the full pipeline
+### 4. Download the Data
+
+The repository includes a pipeline that automatically downloads, merges, and optimizes PISA student and school data.
+To build the full multi-year dataset (2015, 2018, 2022):
+
+```bash
+make data
+```
+
+### 5. Run the full pipeline for report generation
 
 ```bash
 make

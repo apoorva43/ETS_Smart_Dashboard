@@ -1,73 +1,92 @@
 """
-PISA Data Processing Orchestrator.
+PISA Data Processing CLI.
 
-This script manages the end-to-end data pipeline for the PISA student 
-questionnaire datasets across specified cycle years. It handles URL validation, 
-downloading, unarchiving, identifying the primary SPSS (.sav) data file 
-amongst supplementary files, and triggering the conversion to an optimized 
-Parquet format.
-
-Notes
------
-This script modifies the system path (`sys.path`) at runtime to ensure 
-that internal modules from the `src` directory can be imported successfully, 
-regardless of the directory from which the script is executed.
+This script acts as the command-line interface for the end-to-end data pipeline,
+orchestrating the downloading, unzipping, and Parquet conversion of PISA student 
+and school questionnaire datasets. It is designed to be triggered via modular 
+Makefile commands.
 """
 
 import sys
+import click
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.data_loader import download_pisa_year, sav_to_parquet, validate_url, PISA_URLS
+from src.data_loader import (
+    download_pisa_zip, 
+    unzip_pisa_data, 
+    sav_to_parquet, 
+    validate_url, 
+    PISA_URLS,
+    PISA_SCHOOL_URLS
+)
 
-TARGET_YEARS = [2022, 2018, 2015]
+@click.group()
+def cli():
+    """PISA Data ETL Pipeline CLI."""
+    pass
 
+@cli.command()
+@click.option("--year", type=int, required=True, help="PISA cycle year.")
+@click.option("--dataset", type=click.Choice(["student", "school"]), default="student")
+def download(year, dataset):
+    """Step 1: Download the raw zip archive."""
+    url_dict = PISA_SCHOOL_URLS if dataset == "school" else PISA_URLS
+    if not validate_url(url_dict.get(year, ""), year):
+        click.secho(f"URL validation failed for {year} {dataset}", fg="red")
+        sys.exit(1)
+        
+    try:
+        download_pisa_zip(year, dataset_type=dataset)
+    except Exception as e:
+        click.secho(f"Download failed: {e}", fg="red")
+        sys.exit(1)
 
-def main():
-    for year in TARGET_YEARS:
-        parquet_path = Path(f"data/processed/pisa_{year}.parquet")
+@cli.command()
+@click.option("--year", type=int, required=True, help="PISA cycle year.")
+@click.option("--dataset", type=click.Choice(["student", "school"]), default="student")
+def unzip(year, dataset):
+    """Step 2: Extract the downloaded archive."""
+    prefix = "pisa_school" if dataset == "school" else "pisa"
+    zip_path = Path(f"data/raw/{year}/{dataset}/{prefix}_{year}.zip")
+    
+    if not zip_path.exists():
+        click.secho(f"Zip file not found: {zip_path}. Run download step first.", fg="red")
+        sys.exit(1)
+        
+    try:
+        unzip_pisa_data(zip_path)
+    except Exception as e:
+        click.secho(f"Unzip failed: {e}", fg="red")
+        sys.exit(1)
 
-        if parquet_path.exists():
-            print(f" {year}: parquet already exists, skipping")
-            continue
+@cli.command()
+@click.option("--year", type=int, required=True, help="PISA cycle year.")
+def convert(year):
+    """Step 3: Merge and convert to Parquet."""
+    student_dir = Path(f"data/raw/{year}/student")
+    school_dir  = Path(f"data/raw/{year}/school")
+    parquet_path = Path(f"data/processed/pisa_{year}.parquet")
+    
+    stu_savs = list(student_dir.rglob("*.sav")) + list(student_dir.rglob("*.SAV"))
+    sch_savs = list(school_dir.rglob("*.sav")) + list(school_dir.rglob("*.SAV"))
+    
+    if not stu_savs or not sch_savs:
+        click.secho("Missing .sav files. Ensure both student and school data are unzipped.", fg="red")
+        sys.exit(1)
 
-        if not validate_url(PISA_URLS.get(year, ""), year):
-            continue
-
-        try:
-            raw_dir = download_pisa_year(year)
-            sav_files = list(raw_dir.rglob("*.sav")) + list(raw_dir.rglob("*.SAV"))
-
-            if not sav_files:
-                print(f" No .sav file found anywhere under {raw_dir}. Contents:")
-                for f in raw_dir.rglob("*"):
-                    if f.is_file():
-                        print(f" {f.relative_to(raw_dir)}  "
-                              f"({f.stat().st_size / 1e6:.0f} MB)")
-                raise FileNotFoundError(
-                    f"Could not find .sav file under {raw_dir}"
-                )
-
-            # NOTE: Use the largest .sav, since it the main student file.
-            # Supplementary files should not be concatenated.
-            sav_file = max(sav_files, key=lambda f: f.stat().st_size)
-
-            if len(sav_files) > 1:
-                others = [f.name for f in sav_files if f != sav_file]
-                print(f" Found {len(sav_files)} .sav files -- "
-                      f"using largest, ignoring: {others}")
-
-            print(f" Using: {sav_file.relative_to(raw_dir)}  "
-                  f"({sav_file.stat().st_size / 1e6:.0f} MB)")
-            sav_to_parquet(sav_file, parquet_path, year)
-
-        except FileNotFoundError as e:
-            print(f" {year}: file not found -- {e} -- skipping")
-        except RuntimeError as e:
-            print(f" {year}: download failed -- {e} -- skipping")
-        except Exception as e:
-            print(f" {year}: unexpected error -- {e} -- skipping")
-
+    # Extract largest files to ignore supplementary questionnaires
+    stu_sav = max(stu_savs, key=lambda f: f.stat().st_size)
+    sch_sav = max(sch_savs, key=lambda f: f.stat().st_size)
+    
+    click.echo(f"  Student File: {stu_sav.name}")
+    click.echo(f"  School File:  {sch_sav.name}")
+    
+    try:
+        sav_to_parquet(stu_sav, sch_sav, parquet_path, year)
+    except Exception as e:
+        click.secho(f"Conversion failed: {e}", fg="red")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    cli()

@@ -179,4 +179,5 @@ Thumbs.db
 
 # Ignore raw data files, but keep the folder structure
 data/raw/*
+data/processed/*
 !data/raw/.gitkeep
