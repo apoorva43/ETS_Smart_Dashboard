@@ -34,7 +34,7 @@ LOC_MAP = {
     5.0: "Large city (>1M)",
     6.0: "Megacity (>10M)"
 }
-SCHLTYPE_MAP = {1: "Public", 2: "Govt-dep. private", 3: "Independent private"}
+SCHLTYPE_MAP = {1: "Independent private", 2: "Govt-dep. private", 3: "Public"}
 
 GROUP_OPTIONS = {
     "Gender":             ("ST004D01T",  GENDER_MAP),
