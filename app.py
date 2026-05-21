@@ -158,6 +158,11 @@ def render_chart(df, chart_type, subject, selected_countries,
         st.markdown(country_distribution_text(
             df, subject, selected_countries, year=selected_year
         ))
+        st.info(
+        "Each curve shows weighted score percentiles (P10–P90) for a country. "
+        "The dashed black line is the OECD average. "
+        "A steeper curve indicates greater inequality within that country."
+    )
 
     elif chart_type == "Gender gap":
         if len(selected_countries) > 1:
