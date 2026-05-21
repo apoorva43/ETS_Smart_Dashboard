@@ -18,7 +18,8 @@ from src.config import (
     PERCENTILES_FINE,
     COUNTRY_COLORS, 
     PALETTE,
-    YEAR_COLORS
+    YEAR_COLORS,
+    LOC_MAP
     )
 from src.pisa_stats import (
     weighted_percentiles_pv,
@@ -911,5 +912,270 @@ def plot_immigration_score_distribution(df, subject: str,
         fontweight="500"
     )
     ax.legend(title="Immigration status", fontsize=9)
+    plt.tight_layout()
+    return fig
+
+
+def plot_school_location_boxplot(df,
+                                 subject: str,
+                                 cnt: str,
+                                 year: int = None,
+                                 location_col: str = "SC001Q01TA",
+                                 min_group_n: int = 30) -> plt.Figure:
+    """
+    Plot weighted score distribution by school location/community type.
+
+    This function creates a weighted boxplot-style chart using weighted
+    percentiles averaged across all plausible values. For each school location
+    group, the box shows P25 to P75, the center line shows the median, and the
+    whiskers show P10 to P90.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing country identifiers, school location,
+        sampling weights, and plausible value score columns.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are used.
+    location_col : str, optional
+        Column describing school community/location type. Defaults to
+        ``"SC001Q01TA"``.
+    min_group_n : int, optional
+        Minimum number of observations required to show a group.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Matplotlib figure containing weighted boxplots by school location.
+    """
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    required_cols = [location_col, "CNT", "W_FSTUWT"]
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11)]
+    pv_cols = [c for c in pv_cols if c in df.columns]
+
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing or not pv_cols:
+        ax.text(
+            0.5, 0.5,
+            f"Missing required column(s): {', '.join(missing)}",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return fig
+
+    subset = df[df["CNT"] == cnt].copy()
+
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    stats = []
+    colors = []
+
+    for i, (code, label) in enumerate(LOC_MAP.items()):
+        group = subset[subset[location_col] == code]
+
+        if len(group.dropna(subset=["W_FSTUWT"])) < min_group_n:
+            continue
+
+        percs = weighted_percentiles_pv(
+            group,
+            subject,
+            [10, 25, 50, 75, 90]
+        )
+
+        if np.isnan(percs).all():
+            continue
+
+        stats.append({
+            "label": label,
+            "whislo": percs[0],
+            "q1": percs[1],
+            "med": percs[2],
+            "q3": percs[3],
+            "whishi": percs[4],
+            "fliers": [],
+        })
+
+        colors.append(PALETTE[i % len(PALETTE)])
+
+    if not stats:
+        ax.text(
+            0.5, 0.5,
+            "Insufficient data to plot school location groups.",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return fig
+
+    box = ax.bxp(
+        stats,
+        showfliers=False,
+        patch_artist=True,
+        widths=0.55
+    )
+
+    for patch, color in zip(box["boxes"], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.65)
+
+    for median in box["medians"]:
+        median.set_color("black")
+        median.set_linewidth(1.8)
+
+    ax.set_ylabel(f"{subject} score", fontsize=10)
+    ax.set_xlabel("School community type", fontsize=10)
+    ax.set_title(
+        f"Score distribution by school location – {subject} – {cnt}\n"
+        "(weighted P10–P90, averaged across 10 plausible values)",
+        fontsize=12,
+        fontweight="500"
+    )
+
+    ax.tick_params(axis="x", labelsize=8)
+    plt.tight_layout()
+    return fig
+
+
+def plot_school_type_distribution(df,
+                                  subject: str,
+                                  cnt: str,
+                                  year: int = None,
+                                  school_type_col: str = "SCHLTYPE",
+                                  interval_width: int = 20,
+                                  score_range: tuple = (0, 1000),
+                                  min_group_n: int = 30) -> plt.Figure:
+    """
+    Plot weighted score distributions by school type.
+
+    Students are grouped by school type. For each group and each plausible
+    value, students are binned into equal score intervals. The weighted
+    proportion of students in each interval is computed and then averaged
+    across all ten plausible values.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing country identifiers, school type, sampling
+        weights, and plausible value score columns.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are used.
+    school_type_col : str, optional
+        Column describing school type. Defaults to ``"SCHLTYPE"``.
+    interval_width : int, optional
+        Width of each score interval.
+    score_range : tuple of (int, int), optional
+        Minimum and maximum score values used to define score intervals.
+    min_group_n : int, optional
+        Minimum number of observations required to show a group.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Matplotlib figure containing weighted score distribution curves by
+        school type.
+    """
+    school_type_map = {
+        1.0: "Private independent",
+        2.0: "Private government-dependent",
+        3.0: "Public",
+    }
+
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11)]
+    pv_cols = [c for c in pv_cols if c in df.columns]
+
+    bins = np.arange(
+        score_range[0],
+        score_range[1] + interval_width,
+        interval_width
+    )
+    midpoints = (bins[:-1] + bins[1:]) / 2
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    required_cols = [school_type_col, "CNT", "W_FSTUWT"]
+    missing = [c for c in required_cols if c not in df.columns]
+
+    if missing or not pv_cols:
+        ax.text(
+            0.5, 0.5,
+            f"Missing required column(s): {', '.join(missing)}",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        return fig
+
+    subset = df[df["CNT"] == cnt].copy()
+
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    def _group_proportions(group_df):
+        group_df = group_df.dropna(subset=pv_cols + ["W_FSTUWT"])
+
+        if len(group_df) < min_group_n:
+            return np.full(len(midpoints), np.nan)
+
+        weights = group_df["W_FSTUWT"].to_numpy()
+        total_weight = weights.sum()
+
+        if total_weight == 0:
+            return np.full(len(midpoints), np.nan)
+
+        pv_props = []
+
+        for pv in pv_cols:
+            scores = group_df[pv].to_numpy()
+
+            props = np.array([
+                weights[(scores >= bins[i]) & (scores < bins[i + 1])].sum()
+                / total_weight
+                for i in range(len(bins) - 1)
+            ])
+
+            pv_props.append(props)
+
+        return np.mean(pv_props, axis=0)
+
+    for color, (code, label) in zip(PALETTE, school_type_map.items()):
+        group = subset[subset[school_type_col] == code]
+        props = _group_proportions(group)
+
+        if np.isnan(props).all():
+            continue
+
+        ax.plot(
+            midpoints,
+            props,
+            color=color,
+            lw=2.5,
+            marker="o",
+            ms=4,
+            label=label,
+        )
+
+    ax.set_xlabel(f"{subject} score", fontsize=10)
+    ax.set_ylabel("Weighted proportion of students", fontsize=10)
+    ax.set_title(
+        f"Score distribution by school type – {subject} – {cnt}\n"
+        "(weighted intervals, averaged across 10 plausible values)",
+        fontsize=12,
+        fontweight="500"
+    )
+
+    ax.legend(title="School type", fontsize=9)
     plt.tight_layout()
     return fig
