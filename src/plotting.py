@@ -63,6 +63,30 @@ def _base_percentile_ax(ax, percentiles=PERCENTILES_COARSE):
     ax.set_ylabel("Score", fontsize=10)
 
 
+def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient data"):
+    """
+    Helper function to validate data sufficiency before plotting.
+    
+    Drops NaNs for the required columns (plus the survey weight column) and 
+    checks if the remaining sample size meets the minimum threshold.
+    
+    Returns a tuple of (valid_data, error_fig).
+    If data is sufficient, error_fig is None. 
+    If data is insufficient, valid_data is None and error_fig contains a warning plot.
+    """
+    cols_to_check = list(set(target_cols + ["W_FSTUWT"]))
+    valid_data = df.dropna(subset=cols_to_check)
+    
+    if len(valid_data) < min_n:
+        fig, ax = plt.subplots(figsize=(9, 5))
+        ax.text(0.5, 0.5, msg, 
+                ha='center', va='center', fontsize=12, color='gray')
+        ax.axis('off')
+        return None, fig
+        
+    return valid_data, None
+
+
 def plot_country_distributions(df, subject: str,
                                countries: list,
                                year: int = None,
@@ -87,6 +111,7 @@ def plot_country_distributions(df, subject: str,
         PISA cycle year to filter by. If ``None``, all available years are used.
     show_oecd : bool, optional
         Whether to include an OECD average percentile curve as a reference line.
+        Defaults to True.
 
     Returns
     -------
@@ -122,18 +147,18 @@ def plot_country_distributions(df, subject: str,
     return fig
 
 
-def plot_escs_gap(df, subject: str, cnt: str,
-                  year: int = None) -> plt.Figure:
+def plot_escs_gap(df, subject, cnt, year=None):
     """
-    The function splits students into socioeconomic status quartiles using the
-    ESCS index within the selected country and year, then plots weighted score
-    percentile curves for each quartile.
+    Create a socioeconomic status (ESCS) gap comparison plot across score percentiles.
+    
+    Splits the student population of a given country into four equal quartiles
+    based on their ESCS index, and plots the score distribution for each.
 
     Parameters
     ----------
     df : pandas.DataFrame
-        PISA dataset containing ESCS, country identifiers, weights, and
-        plausible value score columns.
+        PISA dataset containing the ESCS index, weights, plausible value 
+        score columns, and optionally a year column.
     subject : str
         Subject code used to select plausible value columns. Expected values
         include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
@@ -145,13 +170,25 @@ def plot_escs_gap(df, subject: str, cnt: str,
     Returns
     -------
     matplotlib.figure.Figure
-        Matplotlib figure containing ESCS quartile percentile curves.
+        Matplotlib figure containing the ESCS quartile comparison curves.
     """
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None:
+        subset = subset[subset["YEAR"] == year]
+        
+    valid_data, error_fig = _check_sufficient_data(
+        subset, ["ESCS"], cnt, 
+        msg=f"Insufficient ESCS data for {cnt}"
+    )
+    if error_fig is not None:
+        return error_fig
+
     fig, ax = plt.subplots(figsize=(9, 5))
 
-    curves = compute_escs_quartile_percentiles(df, subject,
+    curves = compute_escs_quartile_percentiles(valid_data, subject,
                                                PERCENTILES_COARSE,
                                                cnt=cnt, year=year)
+                                               
     for color, (label, percs) in zip(PALETTE, curves.items()):
         if np.isnan(percs).all():
             continue
@@ -196,14 +233,21 @@ def plot_gender_percentile_line(df, subject: str, cnt: str,
     matplotlib.figure.Figure
         Matplotlib figure containing the gender percentile comparison plot.
     """
-    fig, ax = plt.subplots(figsize=(9, 5))
-
-    subset = df[df["CNT"] == cnt]
+    subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in df.columns:
         subset = subset[subset["YEAR"] == year]
 
-    female = subset[subset["ST004D01T"] == 1.0]
-    male   = subset[subset["ST004D01T"] == 2.0]
+    valid_data, error_fig = _check_sufficient_data(
+        subset, ["ST004D01T"], cnt, 
+        msg=f"Insufficient gender data for {cnt}"
+    )
+    if error_fig is not None:
+        return error_fig
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    female = valid_data[valid_data["ST004D01T"] == 1.0]
+    male   = valid_data[valid_data["ST004D01T"] == 2.0]
 
     female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
     male_percs   = weighted_percentiles_pv(male,   subject, PERCENTILES_FINE)
@@ -278,9 +322,22 @@ def plot_group_comparison(df, subject: str, group_col: str,
     matplotlib.figure.Figure
         Matplotlib figure containing percentile comparison curves by group.
     """
+    subset = df.copy()
+    if cnt is not None:
+        subset = subset[subset["CNT"] == cnt]
+    if year is not None:
+        subset = subset[subset["YEAR"] == year]
+
+    valid_data, error_fig = _check_sufficient_data(
+        subset, [group_col], cnt, 
+        msg=f"Insufficient data to group by {group_col} for {cnt}"
+    )
+    if error_fig is not None:
+        return error_fig
+
     fig, ax = plt.subplots(figsize=(9, 5))
 
-    curves = compute_group_percentiles(df, subject, group_col,
+    curves = compute_group_percentiles(valid_data, subject, group_col,
                                         group_vals, PERCENTILES_COARSE,
                                         cnt=cnt, year=year)
     for color, (label, percs) in zip(PALETTE, curves.items()):
