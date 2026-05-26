@@ -72,8 +72,24 @@ PV_BY_SUBJ = {"MATH": PV_MATH, "READ": PV_READ, "SCIE": PV_SCIE}
 
 # Helper function to load data with caching
 @st.cache_data(ttl=3600)
-def get_meta():
-    """Load tiny country-stats file for sidebar ~0.05 MB."""
+def get_meta() -> pd.DataFrame:
+    """
+    Load the pre-aggregated country-year statistics file for sidebar populaton.
+
+    Reads from a local parquet file when available, falling back to the 
+    public S3 copy on deployed environments. This file contains one row 
+    per country-year combination with weighted mean scores and equity
+    indicators - it is used exclusively to populate sidebar filters 
+    (country lists, OECD membership, available years) and never passed to
+    plotting functions.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per country-year. Columns include ``CNT``, ``YEAR``,
+        ``OECD``, ``score_math``, ``score_read``, ``score_scie``, and
+        weighted means for equity indicators such as ``ESCS`` and ``BELONG``.
+    """
     local = Path("data/processed/pisa_country_stats.parquet")
     if local.exists():
         return pd.read_parquet(local)
@@ -81,10 +97,46 @@ def get_meta():
     
 
 @st.cache_data(ttl=3600, show_spinner="Fetching data...")
-def fetch(countries: tuple, year, cols: tuple) -> pd.DataFrame:
+def fetch(countries: tuple[str, ...], 
+          year: int | None, 
+          cols: tuple[str, ...]) -> pd.DataFrame:
     """
-    Cached DuckDB query - pulls only the rows/cols needed for one chart.
-    Returns from cache instantly if same arguments seen before.
+    Cached wrapper around ``query_pisa`` for Streamlit chart rendering.
+
+    Calls ``query_pisa`` with the given filters and caches the result for
+    one hour. On a cache hit (same countries, year, and columns as a 
+    previous call), the DataFrame is returned instantly from memory without
+    re-querying the parquet file.
+
+    Arguments are typed as tuples rather than lists because
+    ``st.cache_data`` requires all arguments to be hashable. Convert to 
+    lists before passing to ``query_pisa``, which accepts lists.
+
+    Parameters
+    ----------
+    countries : tuple of str
+        PISA country codes to include, e.g. ("CAN", "USA").
+    year : int or None
+        PISA cycle year to filter by (2015, 2018 or 2022).
+        Pass ``None`` to return all available years, which is required 
+        for the "Change over time" chart type.
+    cols : tuple of str
+        Columns to select from the parquet file. Should always include
+        "CNT", "YEAR", "W_FSTUWT", plus whichever plausible value and
+        equity columns the calling chart needs. Selecting only 
+        necessary columns keeps each query small.
+    
+    Returns
+    -------
+    pd.DataFrame
+        Filtered student-level PISA data. 
+
+    Examples
+    --------
+    Fetch mathematics plausible values and weights for Canada in 2022:
+
+    >>> pv_cols = tuple(f"PV{i}MATH" for i in range(1, 11))
+    >>> df = fetch(("CAN",), 2022, ("CNT", "YEAR", "W_FSTUWT") + pv_cols)
     """
     return query_pisa(list(countries), year=year, cols=list(cols))
 
