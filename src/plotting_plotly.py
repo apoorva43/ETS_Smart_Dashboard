@@ -88,7 +88,6 @@ def plot_country_distributions(df, subject: str,
                                show_oecd: bool = True) -> go.Figure:
     fig = go.Figure()
     
-    # THE FIX: Use the accessibility palette as the fallback color list
     color_list = list(OKABE_ITO.values())
 
     for i, cnt in enumerate(countries):
@@ -120,7 +119,7 @@ def plot_country_distributions(df, subject: str,
                 hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
-    fig.update_layout(**_base_layout(title=f"Score distribution – {SUBJECTS[subject]}"))
+    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -150,7 +149,7 @@ def plot_escs_gap(df, subject, cnt, year=None):
             marker=dict(size=6)
         ))
 
-    fig.update_layout(**_base_layout(title=f"SES gap – {SUBJECTS[subject]} – {cnt}"))
+    fig.update_layout(**_base_layout(title=f"SES Gap | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -195,7 +194,7 @@ def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) ->
     ))
 
     fig.update_layout(**_base_layout(
-        title=f"Gender gap – {SUBJECTS[subject]} – {cnt}<br><sup>(above diagonal = males score higher)</sup>"
+        title=f"Gender Gap | {SUBJECTS[subject]} | {cnt}<br><sup>(above diagonal = males score higher)</sup>"
     ))
     fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
     fig.update_yaxes(title="Male Score")
@@ -229,7 +228,7 @@ def plot_group_comparison(df, subject: str, group_col: str,
             line=dict(color=color, width=2.5)
         ))
 
-    fig.update_layout(**_base_layout(title=title or f"{SUBJECTS[subject]} by group – {cnt}"))
+    fig.update_layout(**_base_layout(title=title or f"{SUBJECTS[subject]} by Group | {cnt}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -279,7 +278,7 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
         ))
 
     fig.update_layout(**_base_layout(
-        title=f"Score change over time – {SUBJECTS[subject]} – {cnt} – {group_label}<br><sup>(above diagonal = improvement)</sup>"
+        title=f"Score Change Over Time | {SUBJECTS[subject]} | {cnt} | {group_label}<br><sup>(above diagonal = improvement)</sup>"
     ))
     fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)")
     fig.update_yaxes(title="Score")
@@ -310,16 +309,16 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
 
     fig.add_trace(go.Scatter(
         x=PERCENTILES_FINE, y=delta,
-        mode="lines", name=f"{comparison_year} − {reference_year}",
+        mode="lines", name=f"{comparison_year} - {reference_year}",
         line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
         hovertemplate="Percentile: %{x}<br>Score Diff: %{y:.1f}<extra></extra>"
     ))
 
     fig.update_layout(**_base_layout(
-        title=f"Score change across distribution – {SUBJECTS[subject]} – {cnt}<br><sup>{comparison_year} minus {reference_year}</sup>"
+        title=f"Score Change Across Distribution | {SUBJECTS[subject]} | {cnt}<br><sup>({comparison_year} vs {reference_year})</sup>"
     ))
     fig.update_xaxes(title="Percentile")
-    fig.update_yaxes(title=f"Score difference ({comparison_year} − {reference_year})")
+    fig.update_yaxes(title=f"Score Difference ({comparison_year} - {reference_year})")
     return fig
 
 
@@ -373,7 +372,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
                 line=dict(color="black", width=2, dash="dash")
             ))
 
-    fig.update_layout(**_base_layout(title=f"Score distribution – {SUBJECTS[subject]}<br><sup>(averaged across 10 PVs)</sup>"))
+    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}<br><sup>(averaged across 10 PVs)</sup>"))
     fig.update_xaxes(title="Score")
     fig.update_yaxes(title="Weighted proportion of students")
     return fig
@@ -411,10 +410,10 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     ))
 
     fig.update_layout(**_base_layout(
-        title=f"Gender gap – {SUBJECTS[subject]} – {cnt}<br><sup>(above zero = males score higher)</sup>"
+        title=f"Gender Gap | {SUBJECTS[subject]} | {cnt}<br><sup>(above zero = males score higher)</sup>"
     ))
     fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
-    fig.update_yaxes(title="Score difference (Male − Female)")
+    fig.update_yaxes(title="Score Difference (Male - Female)")
     return fig
 
 
@@ -517,7 +516,7 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
             line=dict(color=color, width=2.5)
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by immigration status – {SUBJECTS[subject]} – {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Score")
     fig.update_yaxes(title="Weighted proportion")
     return fig
@@ -552,7 +551,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             boxpoints=False
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score distribution by school location – {SUBJECTS[subject]} – {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score Distribution by School Location | {SUBJECTS[subject]} | {cnt}"))
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
 
@@ -593,7 +592,7 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
             marker=dict(size=4)
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by school type – {SUBJECTS[subject]} – {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by School Type | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Score")
     fig.update_yaxes(title="Weighted proportion")
     return fig

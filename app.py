@@ -131,7 +131,7 @@ def check_group_sizes(df, group_col, group_vals, cnt, year=None):
     for code, label in group_vals.items():
         n = len(subset[subset[group_col] == code].dropna(subset=["W_FSTUWT"]))
         if n < 30:
-            warnings.append(f"{label}: only {n} students — results suppressed")
+            warnings.append(f"Results suppressed for {label} (only {n} students)")
     return warnings
 
 
@@ -290,7 +290,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 group_vals=group_vals,
                 cnt=primary_country,
                 year=selected_year,
-                title=f"{SUBJECTS[subject]} by {group_key} — {primary_country}",
+                title=f"{SUBJECTS[subject]} by {group_key} | {primary_country}",
             )
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
