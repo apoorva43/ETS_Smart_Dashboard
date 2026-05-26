@@ -29,7 +29,7 @@ from src.data_loader import (load_all_years,
 
 from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from src.config import SUBJECTS, GROUP_OPTIONS
-from src.plotting import (plot_country_distributions,
+from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
                           plot_gender_percentile_line,
                           plot_escs_gap,
@@ -163,7 +163,7 @@ def render_chart(df, chart_type, subject, selected_countries,
         fig = plot_country_distributions(
             df, subject, selected_countries, year=selected_year
         )
-        st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown(country_distribution_text(
             df, subject, selected_countries, year=selected_year
         ))
@@ -179,7 +179,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 f"Gender gap shows one country at a time — displaying {primary_country}.")
         fig = plot_gender_percentile_line(
             df, subject, primary_country, year=selected_year)
-        st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown(gender_gap_text(
             df, subject, primary_country, year=selected_year))
         st.info("The x-axis shows Female scores as the reference group. "
@@ -191,7 +191,7 @@ def render_chart(df, chart_type, subject, selected_countries,
             st.info(
                 f"SES gap shows one country at a time — displaying {primary_country}.")
         fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
-        st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
         st.info("Students are split into four equal groups by socioeconomic status "
                 "(ESCS index). Q1 = lowest SES, Q4 = highest.")
@@ -231,7 +231,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
                 "This chart shows the gender score difference across the distribution. "
                 "Y-axis shows Male − Female score difference. Values above zero mean "
@@ -246,7 +246,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
                 "Each curve shows the weighted score distribution for one immigration "
                 "status group, using score intervals averaged across all 10 plausible values."
@@ -260,7 +260,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
                 "Each box shows the weighted score distribution for one school location group. "
                 "The box spans P25–P75, the center line is the median, and whiskers show P10–P90."
@@ -274,7 +274,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
                 "Each curve shows the weighted score distribution for one school type, "
                 "using score intervals averaged across all 10 plausible values."
@@ -291,7 +291,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 title=f"{SUBJECTS[subject]} by {group_key} — {primary_country}",
             )
 
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
                 f"Score distribution broken down by {group_key} for {primary_country}."
             )
@@ -329,7 +329,7 @@ def render_chart(df, chart_type, subject, selected_countries,
                 reference_year=reference_year,
                 comparison_years=comparison_years,
             )
-        st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.info(
             f"X-axis shows {reference_year} scores as the reference. "
             "Points above the diagonal indicate improvement relative to the reference year. "
@@ -340,7 +340,7 @@ def render_chart(df, chart_type, subject, selected_countries,
     elif chart_type == "Interval distribution":
         fig = plot_weighted_interval_distribution(
             df, subject, selected_countries, year=selected_year)
-        st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.info("Weighted proportion of students per 20-point score interval, "
                 "averaged across all 10 plausible values.")
 
@@ -350,7 +350,7 @@ def render_chart(df, chart_type, subject, selected_countries,
             st.info(f"Showing {primary_country} only.")
         fig = plot_belonging_by_immigration(
             df=df, countries=selected_countries, year=selected_year)
-        st.pyplot(fig)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.info("Distribution of school belonging index by immigration status.")
 
 # Load data and derive country lists
