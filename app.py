@@ -40,7 +40,8 @@ from src.plotting_plotly import (plot_country_distributions,
                           plot_belonging_by_immigration,
                           plot_immigration_score_distribution,
                           plot_school_location_boxplot,
-                          plot_school_type_distribution)
+                          plot_school_type_distribution,
+                          plot_resource_scatter)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
                                 gender_gap_text)
@@ -54,7 +55,8 @@ CHART_TYPES = [
     "Gender gap",
     "SES gap",
     "Belonging by Immigration",
-    "Group comparison"
+    "Group comparison",
+    "Country Scatterplot"
 ]
 
 # Helper function to load data with caching
@@ -352,6 +354,38 @@ def render_chart(df, chart_type, subject, selected_countries,
             df=df, countries=selected_countries, year=selected_year)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.info("Distribution of school belonging index by immigration status.")
+
+    elif chart_type == "Country Scatterplot":
+        # Let the user pick which resource to compare against scores
+        resource_options = {
+            "Socioeconomic Status (ESCS)": "ESCS",
+            "School Belonging Index": "BELONG",
+            "Math Motivation Index": "MATHMOT"
+        }
+        
+        selected_resource_label = st.selectbox(
+            "Select X-Axis Variable:", 
+            list(resource_options.keys()), 
+            key=f"scatter_select_{group_key}" # Keep key unique if side-by-side
+        )
+        selected_col = resource_options[selected_resource_label]
+        
+        fig = plot_resource_scatter(
+            df=df,
+            subject=subject,
+            resource_col=selected_col,
+            resource_label=selected_resource_label,
+            year=selected_year,
+            highlight_countries=selected_countries # The ones picked in the sidebar
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
+        st.info(
+            "This scatterplot compares country-level averages. The countries you "
+            "selected in the sidebar are highlighted in orange. Hover over any dot "
+            "to see the specific data for that country."
+        )
 
 # Load data and derive country lists
 df = get_data()
