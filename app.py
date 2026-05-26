@@ -44,7 +44,8 @@ from src.plotting_plotly import (plot_country_distributions,
                           plot_resource_scatter)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
-                                gender_gap_text)
+                                gender_gap_text,
+                                scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
@@ -382,11 +383,14 @@ def render_chart(df, chart_type, subject, selected_countries,
         
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        st.info(
-            "This scatterplot compares country-level averages. The countries you "
-            "selected in the sidebar are highlighted in orange. Hover over any dot "
-            "to see the specific data for that country."
-        )
+        st.markdown(scatter_correlation_text(
+            df=df, 
+            subject=subject, 
+            resource_col=selected_col, 
+            resource_label=selected_resource_label, 
+            year=selected_year,
+            highlight_countries=selected_countries  # <-- Add this new argument!
+        ))
 
 # Load data and derive country lists
 df = get_data()
@@ -399,6 +403,20 @@ partner_countries = sorted(df[df["OECD"] == 0]["CNT"].unique().tolist())
 # Sidebar controls
 st.sidebar.header("Filters")
 
+# 1. Ask for Chart Type FIRST
+side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
+
+if side_by_side:
+    st.sidebar.markdown("**Left panel**")
+    chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
+    st.sidebar.markdown("**Right panel**")
+    chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
+else:
+    chart_type = st.sidebar.radio("View", CHART_TYPES)
+
+st.sidebar.markdown("---")
+
+# 2. Country Group Filter
 country_group = st.sidebar.radio(
     "Country group", ["All", "OECD members", "Partner countries"]
 )
@@ -409,32 +427,32 @@ elif country_group == "Partner countries":
 else:
     country_pool = all_countries
 
-selected_countries = st.sidebar.multiselect(
-    "Countries", country_pool,
-    default=country_pool[:2]
-)
+# 3. Dynamically Render Country Selector
+SINGLE_COUNTRY_CHARTS = ["Change over time", "Gender gap", "SES gap", "Group comparison"]
+
+if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
+    # Show a single selectbox for strict 1-country charts
+    selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
+    selected_countries = [selected_country]  # Wrap in list so downstream code doesn't break
+else:
+    # Show the standard multiselect for global charts or Side-by-Side mode
+    label = "Countries (Pool)" if side_by_side else "Countries"
+    selected_countries = st.sidebar.multiselect(
+        label, country_pool, default=country_pool[:2]
+    )
 
 if not selected_countries:
     st.warning("Please select at least one country.")
     st.stop()
 
-subject = st.sidebar.selectbox(
-    "Subject", list(SUBJECTS.keys()),
-    format_func=lambda x: SUBJECTS[x]
-)
-
-st.sidebar.markdown("---")
-side_by_side = st.sidebar.toggle("Compare two views side by side", value=False)
-
+# 4. Handle Side-by-Side Specific Overrides
 if side_by_side:
-    st.sidebar.markdown("**Left panel**")
-    chart_type_left = st.sidebar.selectbox(
-        "Left chart", CHART_TYPES, key="chart_left"
+    country_left = st.sidebar.selectbox(
+        "Left country", selected_countries, key="cnt_left"
     )
-    st.sidebar.markdown("**Right panel**")
-    chart_type_right = st.sidebar.selectbox(
-        "Right chart", CHART_TYPES, key="chart_right",
-        index=1
+    right_idx = 1 if len(selected_countries) > 1 else 0
+    country_right = st.sidebar.selectbox(
+        "Right country", selected_countries, index=right_idx, key="cnt_right"
     )
     
     group_key_left = None
@@ -447,8 +465,13 @@ if side_by_side:
         group_key_right = st.sidebar.selectbox(
             "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
         )
-else:
-    chart_type = st.sidebar.radio("View", CHART_TYPES)
+
+st.sidebar.markdown("---")
+
+subject = st.sidebar.selectbox(
+    "Subject", list(SUBJECTS.keys()),
+    format_func=lambda x: SUBJECTS[x]
+)
 
 st.sidebar.markdown("---")
 ref_year = None
@@ -500,7 +523,8 @@ if side_by_side:
         st.subheader(chart_type_left)
         render_chart(
             df, chart_type_left, subject, selected_countries,
-            selected_year, available_years, primary_country,
+            selected_year, available_years, 
+            primary_country=country_left,
             ref_year=ref_year, comp_year=comp_year,
             group_key=group_key_left,
         )
@@ -508,11 +532,13 @@ if side_by_side:
         st.subheader(chart_type_right)
         render_chart(
             df, chart_type_right, subject, selected_countries,
-            selected_year, available_years, primary_country,
+            selected_year, available_years, 
+            primary_country=country_right,
             ref_year=ref_year, comp_year=comp_year,
             group_key=group_key_right,
         )
 else:
+    # If not side-by-side, it just uses the default global primary_country
     render_chart(
         df, chart_type, subject, selected_countries,
         selected_year, available_years, primary_country,
