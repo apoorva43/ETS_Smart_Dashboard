@@ -389,7 +389,7 @@ def render_chart(df, chart_type, subject, selected_countries,
             resource_col=selected_col, 
             resource_label=selected_resource_label, 
             year=selected_year,
-            highlight_countries=selected_countries  # <-- Add this new argument!
+            highlight_countries=selected_countries
         ))
 
 # Load data and derive country lists

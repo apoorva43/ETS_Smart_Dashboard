@@ -397,8 +397,6 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
 
     fig.add_hline(y=0, line_dash="dash", line_color="#cccccc", line_width=1.5, annotation_text="No gap")
 
-    # THE FIX: If the gap favors males (positive), use the default color. 
-    # If it favors females (negative) overall, use the accessible Okabe-Ito Pink.
     line_color = COUNTRY_COLORS.get(cnt, "#185FA5") if diff.mean() >= 0 else OKABE_ITO.get("pink", "#CC79A7")
 
     fig.add_trace(go.Scatter(
@@ -436,7 +434,6 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
         valid = np.isfinite(values) & np.isfinite(weights)
         return np.average(values[valid], weights=weights[valid]) if valid.sum() > 0 else np.nan
 
-    # THE FIX: Create a dynamic color map to ensure unique colors
     color_map = {}
     for i, cnt in enumerate(countries):
         color_map[cnt] = COUNTRY_COLORS.get(cnt, PALETTE[i % len(PALETTE)])
@@ -457,7 +454,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
             
             fig.add_trace(go.Bar(
                 x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=cnt, 
-                marker_color=color_map[cnt], # Use the dynamic map here
+                marker_color=color_map[cnt],
                 texttemplate="%{y:.1f}%", textposition="outside"
             ), row=1, col=1)
 
@@ -473,7 +470,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 
             fig.add_trace(go.Bar(
                 x=list(IMMIG_MAP.values()), y=means, name=cnt, 
-                marker_color=color_map[cnt], # Use the dynamic map here
+                marker_color=color_map[cnt],
                 showlegend=False, 
                 texttemplate="%{y:.2f}", textposition="outside"
             ), row=1, col=2)
@@ -539,7 +536,6 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
         if np.isnan(percs).all():
             continue
 
-        # Plotly allows drawing boxplots from pre-calculated statistics
         fig.add_trace(go.Box(
             name=label,
             lowerfence=[percs[0]],
