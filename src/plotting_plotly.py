@@ -32,17 +32,17 @@ def _base_layout(title: str = "", height: int = 480) -> dict:
     return dict(
         title=title,
         height=height,
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
         font=dict(family="sans-serif", size=12),
         xaxis=dict(
-            gridcolor="#eeeeee", 
-            linecolor="#cccccc",
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            linecolor="rgba(128, 128, 128, 0.4)",
             zeroline=False
         ),
         yaxis=dict(
-            gridcolor="#eeeeee", 
-            linecolor="#cccccc",
+            gridcolor="rgba(128, 128, 128, 0.2)",
+            linecolor="rgba(128, 128, 128, 0.4)",
             zeroline=False
         ),
         legend=dict(
@@ -115,7 +115,7 @@ def plot_country_distributions(df, subject: str,
             fig.add_trace(go.Scatter(
                 x=PERCENTILES_COARSE, y=oecd,
                 mode="lines", name="OECD avg",
-                line=dict(color="black", width=2, dash="dash"),
+                line=dict(color="#777777", width=2, dash="dash"),
                 hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
@@ -369,7 +369,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             fig.add_trace(go.Scatter(
                 x=midpoints, y=oecd_props,
                 mode="lines", name="OECD avg",
-                line=dict(color="black", width=2, dash="dash")
+                line=dict(color="#777777", width=2, dash="dash")
             ))
 
     fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}<br><sup>(averaged across 10 PVs)</sup>"))
@@ -547,10 +547,11 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             name=label,
             marker_color=PALETTE[i % len(PALETTE)],
             boxpoints='all',
-            jitter=0.4,
-            pointpos=-1.5,
+            jitter=0.5,
+            pointpos=0,
+            fillcolor='rgba(0,0,0,0)',
             opacity=0.8,
-            marker=dict(size=3, opacity=0.3, line=dict(width=0)),
+            marker=dict(size=4, opacity=0.4, line=dict(width=0)), 
             line=dict(width=2),
             hovertemplate=f"Student Score ({pv_col}): %{{y:.0f}}<extra></extra>"
         ))
