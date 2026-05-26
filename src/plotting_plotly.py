@@ -23,7 +23,8 @@ from src.pisa_stats import (
     weighted_percentiles_pv,
     compute_escs_quartile_percentiles,
     compute_group_percentiles,
-    get_oecd_percentiles
+    get_oecd_percentiles,
+    weighted_mean_pv
 )
 
 def _base_layout(title: str = "", height: int = 480) -> dict:
@@ -595,4 +596,84 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
     fig.update_layout(**_base_layout(title=f"Score by school type – {SUBJECTS[subject]} – {cnt}"))
     fig.update_xaxes(title="Score")
     fig.update_yaxes(title="Weighted proportion")
+    return fig
+
+def plot_resource_scatter(df, subject: str, resource_col: str,
+                           resource_label: str, year: int = None,
+                           highlight_countries: list = None) -> go.Figure:
+    """
+    Plotly Scatterplot: country-level resource variable vs mean score.
+    """
+    subset = df.copy()
+    if year and "YEAR" in df.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    rows = []
+    for cnt in subset["CNT"].unique():
+        cnt_data = subset[subset["CNT"] == cnt]
+        mean_score    = weighted_mean_pv(cnt_data, subject)
+        mean_resource = cnt_data[resource_col].mean()  
+        oecd_flag     = cnt_data["OECD"].iloc[0] if "OECD" in cnt_data.columns else 0
+        
+        if not np.isnan(mean_score) and not np.isnan(mean_resource):
+            rows.append({"CNT": cnt, "score": mean_score,
+                          "resource": mean_resource, "OECD": oecd_flag})
+
+    plot_df = pd.DataFrame(rows)
+    if plot_df.empty:
+         return _check_sufficient_data(pd.DataFrame(), [], "", msg="Insufficient data for scatter")[1]
+
+    fig = go.Figure()
+
+    # Separate data into groups to control legend and colors
+    highlights = highlight_countries or []
+    oecd = plot_df[~plot_df["CNT"].isin(highlights) & (plot_df["OECD"] == 1)]
+    partner = plot_df[~plot_df["CNT"].isin(highlights) & (plot_df["OECD"] == 0)]
+    hi = plot_df[plot_df["CNT"].isin(highlights)]
+
+    # Standardize the hover tooltip
+    htemp = (
+        "<b>%{customdata[0]}</b><br>" + 
+        f"{resource_label}: %{{x:.2f}}<br>" + 
+        f"Mean {SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
+    )
+
+    if not partner.empty:
+        fig.add_trace(go.Scatter(
+            x=partner["resource"], y=partner["score"],
+            mode="markers", name="Partner countries",
+            marker=dict(color="#cccccc", size=10, opacity=0.7),
+            customdata=partner[["CNT"]], hovertemplate=htemp
+        ))
+
+    if not oecd.empty:
+        fig.add_trace(go.Scatter(
+            x=oecd["resource"], y=oecd["score"],
+            mode="markers", name="OECD members",
+            marker=dict(color="#185FA5", size=10, opacity=0.8),
+            customdata=oecd[["CNT"]], hovertemplate=htemp
+        ))
+
+    if not hi.empty:
+        # Highlighting adds a border and text label directly to the plot
+        fig.add_trace(go.Scatter(
+            x=hi["resource"], y=hi["score"],
+            mode="markers+text", name="Selected",
+            marker=dict(
+                color=OKABE_ITO.get("vermillion", "#D85A30"), 
+                size=14, 
+                line=dict(width=2, color="white")
+            ),
+            text=hi["CNT"], 
+            textposition="top center", 
+            textfont=dict(size=11, color=OKABE_ITO.get("vermillion", "#D85A30")),
+            customdata=hi[["CNT"]], hovertemplate=htemp
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"{resource_label} vs {SUBJECTS[subject]} performance<br><sup>(each point = one country)</sup>"
+    ))
+    fig.update_xaxes(title=resource_label)
+    fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
+
     return fig
