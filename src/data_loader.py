@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import duckdb
 import requests
 import zipfile
 from pathlib import Path
@@ -543,3 +544,65 @@ def build_country_stats(processed_dir: Union[str, Path] = "data/processed") -> P
     size_mb = out_path.stat().st_size / 1e6
     print(f"Saved: {out_path} ({stats.shape}, {size_mb:.2f} MB on disk)")
     return out_path
+
+
+def query_pisa(
+    countries: list[str],
+    year: int | None = None,
+    cols: list[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Query the merged parquet file using DuckDB.
+
+    Reads directly from a local parquet file when available, falling back
+    to the public S3 copy for deployed environments. Only the requested
+    rows and columns are materialised into memory - the full 1.7 M-row
+    dataset is never loaded.
+
+    Parameters
+    ----------
+    countries : list of str
+        Country codes to include, e.g. ["CAN", "USA"].
+        Must match the `CNT` column values in the parquet file.
+    year : int, optional
+        PISA cycle year to filter by (2015, 2018, or 2022).
+        If `None`, all available years are returned for the selected
+        countries.
+    cols : list of str, optional
+        Columns to select. If `None`, all columns are returned.
+        Passing only the columns needed for a given chart keeps each
+        query as small as possible.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered slice of the PISA dataset. 
+
+    Raises
+    ------
+    duckdb.IOException
+        If neither the local file nor the S3 URL is reachable.
+
+    Examples
+    --------
+    Load mathematics plausible values and weights for Canada and the US
+    in 2022:
+
+    >>> pv_cols = [f"PV{i}MATH" for i in range(1, 11)]
+    >>> df = query_pisa(["CAN", "USA"], year=2022,
+    ...                 cols=["CNT", "YEAR", "W_FSTUWT"] + pv_cols)
+    >>> df.shape
+    (26000, 13)
+    """
+    local = Path("data/processed/pisa_all.parquet")
+    source = f"'{local}'" if local.exists() else f"'{S3_BASE_URL}/pisa_all.parquet'"
+
+    col_clause = ", ".join(cols) if cols else "*"
+    country_list = ", ".join(f"'{c}'" for c in countries)
+    where = f"CNT IN ({country_list})"
+
+    if year is not None:
+        where += f" AND YEAR = {year}"
+
+    query = f"SELECT {col_clause} FROM read_parquet({source}) WHERE {where}"
+    return duckdb.query(query).df()
