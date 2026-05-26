@@ -135,6 +135,68 @@ def check_group_sizes(df, group_col, group_vals, cnt, year=None):
             warnings.append(f"Results suppressed for {label} (only {n} students)")
     return warnings
 
+def check_missing_countries(df, required_cols, countries, year=None, min_n=30):
+    """
+    Checks which countries lack sufficient data for specific columns 
+    and returns a list of the missing country codes.
+    """
+    missing = []
+    for cnt in countries:
+        subset = df[df["CNT"] == cnt]
+        if year is not None and "YEAR" in df.columns:
+            subset = subset[subset["YEAR"] == year]
+        
+        # Check if there are enough valid rows after dropping NaNs
+        if len(subset.dropna(subset=required_cols + ["W_FSTUWT"])) < min_n:
+            missing.append(cnt)
+    return missing
+
+CHART_HELP_TEXT = {
+    "Score distribution": """
+**How to read this chart:**
+* **The Curves:** Each line represents the full range of student scores for a country. 
+* **The X-Axis (Percentiles):** Shows the ranking of students from lowest performing (P10) to highest performing (P90).
+* **The Slope:** A steeper, wider curve means there is a larger gap between the lowest and highest achievers (higher inequality).
+    """,
+    "Box Plot": """
+**How to read this box plot:**
+* **The Box (Middle 50%):** The colored rectangle represents the core of the student population. The bottom edge is the 25th percentile and the top edge is the 75th percentile.
+* **The Center Line (Median):** Half the students scored above this thick line, and half scored below.
+* **The Whiskers (The Tails):** The lines extending from the box show the 10th and 90th percentiles.
+* **The Dots (Jitter):** A weighted sample of up to 1,000 students, showing exactly how individual scores are clustered.
+    """,
+    "Gender gap": """
+**How to read this gap chart:**
+* **The Diagonal Line:** This represents perfect equality. If boys and girls scored exactly the same, the colored line would sit perfectly on this dotted line.
+* **Above the Line:** If the colored curve goes *above* the dotted line, Male students are scoring higher at that specific percentile.
+* **Below the Line:** If the colored curve dips *below*, Female students are scoring higher.
+    """,
+    "Country Scatterplot": """
+**How to read this scatterplot:**
+* **The Dots:** Each dot represents an entire country's national average.
+* **The Trend:** If the dots generally slope upwards from left to right, it means higher levels of the resource (like Belonging or SES) correlate with higher test scores globally.
+    """
+}
+
+def render_chart_help(chart_type, group_key=None):
+    """Renders a collapsible help section above complex charts."""
+    
+    # Determine which help text to grab
+    help_key = None
+    if chart_type == "Score distribution":
+        help_key = "Score distribution"
+    elif chart_type == "Gender gap":
+        help_key = "Gender gap"
+    elif chart_type == "Country Scatterplot":
+        help_key = "Country Scatterplot"
+    elif chart_type == "Group comparison" and group_key == "School location":
+        help_key = "Box Plot"
+
+    # Render it if it exists
+    if help_key and help_key in CHART_HELP_TEXT:
+        with st.expander(f"How to read the {chart_type.lower()} chart"):
+            st.markdown(CHART_HELP_TEXT[help_key])
+
 
 def render_chart(df, chart_type, subject, selected_countries,
                  selected_year, available_years,
@@ -163,20 +225,27 @@ def render_chart(df, chart_type, subject, selected_countries,
         avoid a second sidebar selectbox collision).
     """
     if chart_type == "Score distribution":
-        fig = plot_country_distributions(
-            df, subject, selected_countries, year=selected_year
+        missing_cnts = check_missing_countries(
+            df, required_cols=[f"PV1{subject}"], 
+            countries=selected_countries, year=selected_year
         )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown(country_distribution_text(
-            df, subject, selected_countries, year=selected_year
-        ))
-        st.info(
-        "Each curve shows weighted score percentiles (P10–P90) for a country. "
-        "The dashed black line is the OECD average. "
-        "A steeper curve indicates greater inequality within that country."
-    )
+        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+        
+        if missing_cnts:
+            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
+            
+        if valid_countries:
+            render_chart_help(chart_type)
+            fig = plot_country_distributions(
+                df, subject, valid_countries, year=selected_year
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.markdown(country_distribution_text(
+                df, subject, valid_countries, year=selected_year
+            ))
 
     elif chart_type == "Gender gap":
+        render_chart_help(chart_type, group_key)
         if len(selected_countries) > 1:
             st.info(
                 f"Gender gap shows one country at a time — displaying {primary_country}.")
@@ -256,18 +325,11 @@ def render_chart(df, chart_type, subject, selected_countries,
             )
 
         elif group_key == "School location":
+            render_chart_help(chart_type, group_key)
             fig = plot_school_location_boxplot(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                year=selected_year,
+                df=df, subject=subject, cnt=primary_country, year=selected_year,
             )
-
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(
-                "Each box shows the weighted score distribution for one school location group. "
-                "The box spans P25–P75, the center line is the median, and whiskers show P10–P90."
-            )
 
         elif group_key == "School type":
             fig = plot_school_type_distribution(
@@ -339,32 +401,53 @@ def render_chart(df, chart_type, subject, selected_countries,
             "Points below indicate decline."
         )
         
-    # adding new charts
     elif chart_type == "Interval distribution":
-        fig = plot_weighted_interval_distribution(
-            df, subject, selected_countries, year=selected_year)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.info("Weighted proportion of students per 20-point score interval, "
-                "averaged across all 10 plausible values.")
+        missing_cnts = check_missing_countries(
+            df, required_cols=[f"PV1{subject}"], 
+            countries=selected_countries, year=selected_year
+        )
+        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+
+        if missing_cnts:
+            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
+            
+        if valid_countries:
+            fig = plot_weighted_interval_distribution(
+                df, subject, valid_countries, year=selected_year
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.info("Weighted proportion of students per 20-point score interval, averaged across all 10 plausible values.")
 
 
     elif chart_type == "Belonging by Immigration":
-        if len(selected_countries) > 1:
-            st.info(f"Showing {primary_country} only.")
-        fig = plot_belonging_by_immigration(
-            df=df, countries=selected_countries, year=selected_year)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.info("Distribution of school belonging index by immigration status.")
+        missing_cnts = check_missing_countries(
+            df, required_cols=["BELONG", "IMMIG", "REPEAT", "ESCS"], 
+            countries=selected_countries, year=selected_year
+        )
+        
+        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+        
+        if missing_cnts:
+            st.warning(
+                f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** "
+                f"due to missing student context data."
+            )
+
+        if valid_countries:
+            fig = plot_belonging_by_immigration(
+                df=df, countries=valid_countries, year=selected_year
+            )
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.info("Distribution of school belonging index by immigration status.")
 
     elif chart_type == "Country Scatterplot":
         resource_options = {
             "Socioeconomic Status (ESCS)": "ESCS",
             "School Belonging Index": "BELONG",
         }
-        
         if subject == "MATH":
             resource_options["Math Motivation Index"] = "MATHMOT"
-        
+            
         selected_resource_label = st.selectbox(
             "Select X-Axis Variable:", 
             list(resource_options.keys()), 
@@ -372,24 +455,32 @@ def render_chart(df, chart_type, subject, selected_countries,
         )
         selected_col = resource_options[selected_resource_label]
         
+        # Check if they are missing the specific resource they just selected
+        missing_cnts = check_missing_countries(
+            df, required_cols=[f"PV1{subject}", selected_col], 
+            countries=selected_countries, year=selected_year
+        )
+        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+
+        if missing_cnts:
+            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(missing_cnts)}** (missing {selected_col} data).")
+        
+        render_chart_help(chart_type)
         fig = plot_resource_scatter(
             df=df,
             subject=subject,
             resource_col=selected_col,
             resource_label=selected_resource_label,
             year=selected_year,
-            highlight_countries=selected_countries 
+            highlight_countries=valid_countries
         )
         
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
         st.markdown(scatter_correlation_text(
-            df=df, 
-            subject=subject, 
-            resource_col=selected_col, 
-            resource_label=selected_resource_label, 
-            year=selected_year,
-            highlight_countries=selected_countries
+            df=df, subject=subject, resource_col=selected_col, 
+            resource_label=selected_resource_label, year=selected_year,
+            highlight_countries=valid_countries
         ))
 
 # Load data and derive country lists

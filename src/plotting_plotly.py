@@ -518,37 +518,49 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
     fig.update_yaxes(title="Weighted proportion")
     return fig
 
-
 def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
                                  location_col: str = "SC001Q01TA", min_group_n: int = 30) -> go.Figure:
+    """
+    Creates a 'Jitter Quantile Plot' (Raincloud Plot) using a weighted 
+    sample of students to prevent browser crashing.
+    """
     subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
     fig = go.Figure()
+    
+    # For raw point clouds, psychometric standard is to use the first Plausible Value
+    pv_col = f"PV1{subject}" 
 
     for i, (code, label) in enumerate(LOC_MAP.items()):
-        group = subset[subset[location_col] == code]
-        if len(group.dropna(subset=["W_FSTUWT"])) < min_group_n:
+        group = subset[subset[location_col] == code].dropna(subset=[pv_col, "W_FSTUWT"])
+        if len(group) < min_group_n:
             continue
 
-        percs = weighted_percentiles_pv(group, subject, [10, 25, 50, 75, 90])
-        if np.isnan(percs).all():
-            continue
+        # Take a weighted sample of up to 1000 students for the jitter cloud
+        sample_size = min(1000, len(group))
+        sampled = group.sample(n=sample_size, weights="W_FSTUWT", random_state=42)
 
         fig.add_trace(go.Box(
+            y=sampled[pv_col],
             name=label,
-            lowerfence=[percs[0]],
-            q1=[percs[1]],
-            median=[percs[2]],
-            q3=[percs[3]],
-            upperfence=[percs[4]],
             marker_color=PALETTE[i % len(PALETTE)],
-            boxpoints=False
+            boxpoints='all',
+            jitter=0.4,
+            pointpos=-1.5,
+            opacity=0.8,
+            marker=dict(size=3, opacity=0.3, line=dict(width=0)),
+            line=dict(width=2),
+            hovertemplate=f"Student Score ({pv_col}): %{{y:.0f}}<extra></extra>"
         ))
 
     fig.update_layout(**_base_layout(title=f"Score Distribution by School Location | {SUBJECTS[subject]} | {cnt}"))
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
+    
+    # Hide the legend since the x-axis already labels the groups perfectly
+    fig.update_layout(showlegend=False) 
+    
     return fig
 
 
