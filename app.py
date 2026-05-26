@@ -356,17 +356,18 @@ def render_chart(df, chart_type, subject, selected_countries,
         st.info("Distribution of school belonging index by immigration status.")
 
     elif chart_type == "Country Scatterplot":
-        # Let the user pick which resource to compare against scores
         resource_options = {
             "Socioeconomic Status (ESCS)": "ESCS",
             "School Belonging Index": "BELONG",
-            "Math Motivation Index": "MATHMOT"
         }
+        
+        if subject == "MATH":
+            resource_options["Math Motivation Index"] = "MATHMOT"
         
         selected_resource_label = st.selectbox(
             "Select X-Axis Variable:", 
             list(resource_options.keys()), 
-            key=f"scatter_select_{group_key}" # Keep key unique if side-by-side
+            key=f"scatter_select_{group_key}" 
         )
         selected_col = resource_options[selected_resource_label]
         
@@ -376,7 +377,7 @@ def render_chart(df, chart_type, subject, selected_countries,
             resource_col=selected_col,
             resource_label=selected_resource_label,
             year=selected_year,
-            highlight_countries=selected_countries # The ones picked in the sidebar
+            highlight_countries=selected_countries 
         )
         
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
