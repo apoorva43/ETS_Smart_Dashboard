@@ -761,7 +761,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             hovertemplate=f"Student Score ({pv_col}): %{{y:.0f}}<extra></extra>"
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score Distribution by School Location | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {cnt}"))
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     
     # Hide the legend since the x-axis already labels the groups perfectly

@@ -239,12 +239,51 @@ def render_chart_help(chart_type, group_key=None):
     if help_key and help_key in CHART_HELP_TEXT:
         with st.expander(f"How to read the {chart_type.lower()} chart"):
             st.markdown(CHART_HELP_TEXT[help_key])
+            
+
+def apply_compact_plotly_layout(fig, hide_legend=False):
+    """
+    Make Plotly charts fit better inside narrow columns.
+    Used for side-by-side mode and story tab two-column sections.
+    """
+    fig.update_layout(
+        title=dict(
+            font=dict(size=14),
+            x=0,
+            xanchor="left",
+            y=0.96,
+        ),
+        margin=dict(t=90, b=50, l=60, r=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.08,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=9),
+        ),
+    )
+
+    fig.update_xaxes(
+        title_font=dict(size=11),
+        tickfont=dict(size=10),
+    )
+
+    fig.update_yaxes(
+        title_font=dict(size=11),
+        tickfont=dict(size=10),
+    )
+
+    if hide_legend:
+        fig.update_layout(showlegend=False)
+
+    return fig
 
 
 def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
-                 group_key=None):
+                 group_key=None,  compact=False):
     """
     Render a single chart panel and its accompanying text/info blocks.
 
@@ -1041,6 +1080,10 @@ elif app_mode == "🔍 Explore":
 
     primary_country = selected_countries[0]
 
+    st.title("PISA Score Distribution Dashboard")
+    st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
+               f"{len(all_countries)} countries")
+
     # Draw the main area for Explore
     if side_by_side:
         left_col, right_col = st.columns(2)
@@ -1052,6 +1095,7 @@ elif app_mode == "🔍 Explore":
                 primary_country=country_left,
                 ref_year=ref_year, comp_year=comp_year,
                 group_key=group_key_left,
+                compact=True,
             )
         with right_col:
             st.subheader(chart_type_right)
@@ -1061,6 +1105,7 @@ elif app_mode == "🔍 Explore":
                 primary_country=country_right,
                 ref_year=ref_year, comp_year=comp_year,
                 group_key=group_key_right,
+                compact=True,
             )
     else:
         render_chart(
@@ -1068,4 +1113,5 @@ elif app_mode == "🔍 Explore":
             selected_year, available_years, primary_country,
             ref_year=ref_year, comp_year=comp_year,
             group_key=group_key,
+            compact=False,
         )
