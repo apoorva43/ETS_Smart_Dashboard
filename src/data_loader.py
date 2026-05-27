@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import duckdb
 import requests
 import zipfile
 from pathlib import Path
@@ -353,6 +354,7 @@ def load_all_years(processed_dir: Union[str, Path] = "data/processed",
 
     return df
 
+
 def load_all_years_s3(base_url: str = S3_BASE_URL,
     years: list = None,
     optimize_memory: bool = True        
@@ -410,3 +412,197 @@ def load_all_years_s3(base_url: str = S3_BASE_URL,
                 df[col] = df[col].astype("category")
 
     return df
+
+
+def merge_parquets(processed_dir: Union[str, Path] = "data/processed",
+                   years: list = None
+                   ) -> Path:
+    """
+    Function to merge individual yearly parquets into one optimized pisa_all.parquet.
+    Applies float32 downcasting and categorical encoding before saving.
+
+    Parameters
+    ----------
+    processed_dir : Union[str, Path], optional
+        The directory containing the processed Parquet files. Defaults to "data/processed".
+    years: list, optional
+        The specific PISA cycle years to load. Defaults to [2015, 2018, 2022].
+
+    Returns
+    -------
+    Path
+        Path to the merged output file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no Parquet files are found for any of the target years in the specified directory.
+    """
+    if years is None:
+        years = [2015, 2018, 2022]
+
+    processed_dir = Path(processed_dir)
+    frames = []
+
+    for year in years:
+        path = processed_dir / f"pisa_{year}.parquet"
+        if not path.exists():
+            print(f"Warning: {path} not found, skipping {year}")
+            continue
+        df = pd.read_parquet(path)
+        df["YEAR"] = year
+        # Downcast floats before concat to reduce peak memory
+        f64 = df.select_dtypes("float64").columns
+        df[f64] = df[f64].astype("float32")
+        frames.append(df)
+        print(f"Loaded {year}: {df.shape}")
+
+    if not frames:
+        raise FileNotFoundError(f"No parquets found in {processed_dir}")
+
+    print("Concatenating...")
+    combined = pd.concat(frames, ignore_index=True)
+    del frames
+
+    # Categorical encoding for low-cardinality string columns
+    for col in combined.select_dtypes("object").columns:
+        if combined[col].nunique() < 3000:
+            combined[col] = combined[col].astype("category")
+
+    # YEAR as int16
+    combined["YEAR"] = combined["YEAR"].astype("int16")
+
+    out_path = processed_dir / "pisa_all.parquet"
+    combined.to_parquet(out_path, compression="zstd", index=False)
+    size_mb = out_path.stat().st_size / 1e6
+    print(f"Saved: {out_path} ({combined.shape}, {size_mb:.0f} MB on disk)")
+    return out_path
+
+
+def build_country_stats(processed_dir: Union[str, Path] = "data/processed") -> Path:
+    """
+    Function to build a tiny country-year aggregated parquet from pisa_all.parquet.
+    Used by the dashboard sidebar and get_meta() - loads in milliseconds.
+
+    Parameters
+    ----------
+    processed_dir : Union[str, Path], optional
+        The directory containing the processed Parquet files. Defaults to "data/processed".
+
+    Returns
+    -------
+    Path
+        Path to the country stats output file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no merged Parquet files are found.
+    """
+    processed_dir = Path(processed_dir)
+    source = processed_dir / "pisa_all.parquet"
+
+    if not source.exists():
+        raise FileNotFoundError(f"{source} not found. Run merge first.")
+
+    print(f"Loading {source}...")
+    df = pd.read_parquet(source)
+    records = []
+
+    for (cnt, year), grp in df.groupby(["CNT", "YEAR"], observed=True):
+        w = grp["W_FSTUWT"]
+        row = {"CNT": str(cnt), "YEAR": int(year), "n": len(grp)}
+
+        for subj, prefix in [("math","MATH"), ("read","READ"), ("scie","SCIE")]:
+            pv_cols = [f"PV{i}{prefix}" for i in range(1, 11)
+                       if f"PV{i}{prefix}" in grp.columns]
+            if pv_cols:
+                pv_means = grp[pv_cols].multiply(w, axis=0).sum() / w.sum()
+                row[f"score_{subj}"]    = round(float(pv_means.mean()), 2)
+                row[f"score_{subj}_se"] = round(float(pv_means.std()), 4)
+
+        for col in ["ESCS","HISEI","PAREDINT","HOMEPOS",
+                    "BELONG","MATHMOT","AGE","GRADE"]:
+            if col in grp.columns:
+                valid = grp[col].notna()
+                row[col] = round(float(
+                    np.average(grp.loc[valid, col], weights=w[valid])
+                ), 4) if valid.any() else None
+
+        if "REPEAT" in grp.columns:
+            row["repeat_rate"] = round(float((grp["REPEAT"] == 1).mean()), 4)
+        if "IMMIG" in grp.columns:
+            row["immig_rate"] = round(float((grp["IMMIG"] == 1).mean()), 4)
+        if "OECD" in grp.columns:
+            row["OECD"] = int(grp["OECD"].iloc[0])
+
+        records.append(row)
+
+    stats = pd.DataFrame(records)
+    out_path = processed_dir / "pisa_country_stats.parquet"
+    stats.to_parquet(out_path, compression="zstd", index=False)
+    size_mb = out_path.stat().st_size / 1e6
+    print(f"Saved: {out_path} ({stats.shape}, {size_mb:.2f} MB on disk)")
+    return out_path
+
+
+def query_pisa(
+    countries: list[str],
+    year: int | None = None,
+    cols: list[str] | None = None,
+) -> pd.DataFrame:
+    """
+    Query the merged parquet file using DuckDB.
+
+    Reads directly from a local parquet file when available, falling back
+    to the public S3 copy for deployed environments. Only the requested
+    rows and columns are materialised into memory - the full 1.7 M-row
+    dataset is never loaded.
+
+    Parameters
+    ----------
+    countries : list of str
+        Country codes to include, e.g. ["CAN", "USA"].
+        Must match the `CNT` column values in the parquet file.
+    year : int, optional
+        PISA cycle year to filter by (2015, 2018, or 2022).
+        If `None`, all available years are returned for the selected
+        countries.
+    cols : list of str, optional
+        Columns to select. If `None`, all columns are returned.
+        Passing only the columns needed for a given chart keeps each
+        query as small as possible.
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered slice of the PISA dataset. 
+
+    Raises
+    ------
+    duckdb.IOException
+        If neither the local file nor the S3 URL is reachable.
+
+    Examples
+    --------
+    Load mathematics plausible values and weights for Canada and the US
+    in 2022:
+
+    >>> pv_cols = [f"PV{i}MATH" for i in range(1, 11)]
+    >>> df = query_pisa(["CAN", "USA"], year=2022,
+    ...                 cols=["CNT", "YEAR", "W_FSTUWT"] + pv_cols)
+    >>> df.shape
+    (26000, 13)
+    """
+    local = Path("data/processed/pisa_all.parquet")
+    source = f"'{local}'" if local.exists() else f"'{S3_BASE_URL}/pisa_all.parquet'"
+
+    col_clause = ", ".join(cols) if cols else "*"
+    country_list = ", ".join(f"'{c}'" for c in countries)
+    where = f"CNT IN ({country_list})"
+
+    if year is not None:
+        where += f" AND YEAR = {year}"
+
+    query = f"SELECT {col_clause} FROM read_parquet({source}) WHERE {where}"
+    return duckdb.query(query).df()

@@ -17,6 +17,8 @@ from src.data_loader import (
     unzip_pisa_data, 
     sav_to_parquet, 
     validate_url, 
+    merge_parquets,
+    build_country_stats,
     PISA_URLS,
     PISA_SCHOOL_URLS
 )
@@ -86,6 +88,33 @@ def convert(year):
         sav_to_parquet(stu_sav, sch_sav, parquet_path, year)
     except Exception as e:
         click.secho(f"Conversion failed: {e}", fg="red")
+        sys.exit(1)
+
+@cli.command()
+@click.option("--years", default="2015,2018,2022",
+              help="Comma-separated years to merge. Default: 2015, 2018, 2022")
+@click.option("--processed-dir", default="data/processed",
+              help="Directory containing yearly parquets.")
+def merge(years, processed_dir):
+    """Step 4: Merge yearly parquets into one optimized pisa_all.parquet."""
+    year_list = [int(y.strip()) for y in years.split(",")]
+    click.echo(f"Merging years: {year_list}")
+    try:
+        out = merge_parquets(processed_dir=processed_dir, years=year_list)
+    except Exception as e:
+        click.secho(f"Merge failed: {e}", fg="red")
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--processed-dir", default="data/processed",
+              help="Directory containing pisa_all.parquet.")
+def country_stats(processed_dir):
+    """Step 5: Build country-year aggregated stats parquet for the dashboard sidebar."""
+    try:
+        out = build_country_stats(processed_dir=processed_dir)
+    except Exception as e:
+        click.secho(f"Country stats failed: {e}", fg="red")
         sys.exit(1)
 
 if __name__ == "__main__":
