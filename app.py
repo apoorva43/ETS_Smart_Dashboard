@@ -23,10 +23,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 from pathlib import Path
-from src.data_loader import (load_all_years,
-                             load_all_years_s3,
-                             load_sample_csv)
 
+from src.data_loader import query_pisa
 from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from src.config import SUBJECTS, GROUP_OPTIONS
 from src.plotting import (plot_country_distributions,
@@ -47,6 +45,8 @@ from src.text_generator import (country_distribution_text,
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
+S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
+
 CHART_TYPES = [
     "Score distribution",
     "Interval distribution",
@@ -57,42 +57,88 @@ CHART_TYPES = [
     "Group comparison"
 ]
 
+# Column sets - each chart only pulls what it needs
+BASE_COLS  = ["CNT", "YEAR", "OECD", "W_FSTUWT"]
+PV_MATH    = [f"PV{i}MATH" for i in range(1, 11)]
+PV_READ    = [f"PV{i}READ" for i in range(1, 11)]
+PV_SCIE    = [f"PV{i}SCIE" for i in range(1, 11)]
+PV_ALL     = PV_MATH + PV_READ + PV_SCIE
+EQUITY_COLS = ["ESCS", "HISEI", "PAREDINT", "HOMEPOS",
+               "BELONG", "MATHMOT", "REPEAT", "IMMIG",
+               "ST004D01T", "LANGN", "GRADE", "AGE",
+               "SC001Q01TA", "SCHLTYPE", "STRATUM", "CNTSCHID", "CNTSTUID"]
+
+PV_BY_SUBJ = {"MATH": PV_MATH, "READ": PV_READ, "SCIE": PV_SCIE}
+
 # Helper function to load data with caching
-@st.cache_data
-def get_data():
+@st.cache_data(ttl=3600)
+def get_meta() -> pd.DataFrame:
     """
-    Load all processed PISA years if available; otherwise use sample CSV.
+    Load the pre-aggregated country-year statistics file for sidebar populaton.
+
+    Reads from a local parquet file when available, falling back to the 
+    public S3 copy on deployed environments. This file contains one row 
+    per country-year combination with weighted mean scores and equity
+    indicators - it is used exclusively to populate sidebar filters 
+    (country lists, OECD membership, available years) and never passed to
+    plotting functions.
 
     Returns
     -------
-    pandas.DataFrame
-        PISA data loaded from processed parquet files or sample CSV.
+    pd.DataFrame
+        One row per country-year. Columns include ``CNT``, ``YEAR``,
+        ``OECD``, ``score_math``, ``score_read``, ``score_scie``, and
+        weighted means for equity indicators such as ``ESCS`` and ``BELONG``.
     """
+    local = Path("data/processed/pisa_country_stats.parquet")
+    if local.exists():
+        return pd.read_parquet(local)
+    return pd.read_parquet(f"{S3_BASE}/pisa_country_stats.parquet")
+    
 
-    # Try local parquet files first
-    available = [
-        y for y in [2015, 2018, 2022]
-        if Path(f"data/processed/pisa_{y}.parquet").exists()
-    ]
-    # Set PISA_PROFILE_MEMORY=1 in your shell to see memory savings on load
-    if available:
-        profile = os.environ.get("PISA_PROFILE_MEMORY", "0") == "1"
-        return load_all_years(optimize_memory=True, profile_memory=profile)
+@st.cache_data(ttl=3600, show_spinner="Fetching data...")
+def fetch(countries: tuple[str, ...], 
+          year: int | None, 
+          cols: tuple[str, ...]) -> pd.DataFrame:
+    """
+    Cached wrapper around ``query_pisa`` for Streamlit chart rendering.
 
-    # Try public S3 (Posit Cloud)
-    try:
-        return load_all_years_s3(years=[2022])
-    except RuntimeError:
-        pass
+    Calls ``query_pisa`` with the given filters and caches the result for
+    one hour. On a cache hit (same countries, year, and columns as a 
+    previous call), the DataFrame is returned instantly from memory without
+    re-querying the parquet file.
 
-    # Last resort: local sample CSV
-    local_sample = Path("data/raw/sampledat.csv")
-    if local_sample.exists():
-        st.warning("No parquet files found -- using sample CSV")
-        return load_sample_csv(local_sample)
+    Arguments are typed as tuples rather than lists because
+    ``st.cache_data`` requires all arguments to be hashable. Convert to 
+    lists before passing to ``query_pisa``, which accepts lists.
 
-    st.error("No data source available. Upload parquets to S3 or add sampledat.csv.")
-    st.stop()
+    Parameters
+    ----------
+    countries : tuple of str
+        PISA country codes to include, e.g. ("CAN", "USA").
+    year : int or None
+        PISA cycle year to filter by (2015, 2018 or 2022).
+        Pass ``None`` to return all available years, which is required 
+        for the "Change over time" chart type.
+    cols : tuple of str
+        Columns to select from the parquet file. Should always include
+        "CNT", "YEAR", "W_FSTUWT", plus whichever plausible value and
+        equity columns the calling chart needs. Selecting only 
+        necessary columns keeps each query small.
+    
+    Returns
+    -------
+    pd.DataFrame
+        Filtered student-level PISA data. 
+
+    Examples
+    --------
+    Fetch mathematics plausible values and weights for Canada in 2022:
+
+    >>> pv_cols = tuple(f"PV{i}MATH" for i in range(1, 11))
+    >>> df = fetch(("CAN",), 2022, ("CNT", "YEAR", "W_FSTUWT") + pv_cols)
+    """
+    return query_pisa(list(countries), year=year, cols=list(cols))
 
 
 def check_group_sizes(df, group_col, group_vals, cnt, year=None):
@@ -133,7 +179,7 @@ def check_group_sizes(df, group_col, group_vals, cnt, year=None):
     return warnings
 
 
-def render_chart(df, chart_type, subject, selected_countries,
+def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
                  group_key=None):
@@ -142,7 +188,6 @@ def render_chart(df, chart_type, subject, selected_countries,
 
     Parameters
     ----------
-    df : pandas.DataFrame
     chart_type : str
         One of the CHART_TYPES values.
     subject : str
@@ -159,7 +204,11 @@ def render_chart(df, chart_type, subject, selected_countries,
         Pre-selected group breakdown key (used in side-by-side mode to
         avoid a second sidebar selectbox collision).
     """
+    pv_cols = PV_BY_SUBJ[subject]
+
     if chart_type == "Score distribution":
+        df = fetch(tuple(selected_countries), selected_year,
+                   tuple(BASE_COLS + pv_cols))
         fig = plot_country_distributions(
             df, subject, selected_countries, year=selected_year
         )
@@ -177,6 +226,8 @@ def render_chart(df, chart_type, subject, selected_countries,
         if len(selected_countries) > 1:
             st.info(
                 f"Gender gap shows one country at a time — displaying {primary_country}.")
+        df = fetch((primary_country,), selected_year,
+                   tuple(BASE_COLS + pv_cols + ["ST004D01T"]))
         fig = plot_gender_percentile_line(
             df, subject, primary_country, year=selected_year)
         st.pyplot(fig)
@@ -190,6 +241,8 @@ def render_chart(df, chart_type, subject, selected_countries,
         if len(selected_countries) > 1:
             st.info(
                 f"SES gap shows one country at a time — displaying {primary_country}.")
+        df = fetch((primary_country,), selected_year,
+                   tuple(BASE_COLS + pv_cols + ["ESCS"]))
         fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
         st.pyplot(fig)
         st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
@@ -212,6 +265,9 @@ def render_chart(df, chart_type, subject, selected_countries,
                 f"Group comparison shows one country at a time — displaying {primary_country}."
             )
 
+        df = fetch((primary_country,), selected_year,
+                   tuple(BASE_COLS + pv_cols + [group_col]))
+        
         warns = check_group_sizes(
             df,
             group_col,
@@ -239,6 +295,8 @@ def render_chart(df, chart_type, subject, selected_countries,
             )
 
         elif group_key == "Immigration status":
+            df = fetch((primary_country,), selected_year,
+                       tuple(BASE_COLS + pv_cols + ["IMMIG"]))
             fig = plot_immigration_score_distribution(
                 df=df,
                 subject=subject,
@@ -253,6 +311,8 @@ def render_chart(df, chart_type, subject, selected_countries,
             )
 
         elif group_key == "School location":
+            df = fetch((primary_country,), selected_year,
+                       tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
             fig = plot_school_location_boxplot(
                 df=df,
                 subject=subject,
@@ -267,6 +327,8 @@ def render_chart(df, chart_type, subject, selected_countries,
             )
 
         elif group_key == "School type":
+            df = fetch((primary_country,), selected_year,
+                       tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
             fig = plot_school_type_distribution(
                 df=df,
                 subject=subject,
@@ -306,6 +368,7 @@ def render_chart(df, chart_type, subject, selected_countries,
             st.info(
                 f"Time comparison shows one country at a time — displaying {primary_country}.")
 
+        df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         # If two specific years were selected, use those; otherwise default
         # to all available years with the latest as reference.
         if ref_year is not None and comp_year is not None:
@@ -338,6 +401,8 @@ def render_chart(df, chart_type, subject, selected_countries,
         
     # adding new charts
     elif chart_type == "Interval distribution":
+        df = fetch(tuple(selected_countries), selected_year,
+                   tuple(BASE_COLS + pv_cols))
         fig = plot_weighted_interval_distribution(
             df, subject, selected_countries, year=selected_year)
         st.pyplot(fig)
@@ -348,18 +413,21 @@ def render_chart(df, chart_type, subject, selected_countries,
     elif chart_type == "Belonging by Immigration":
         if len(selected_countries) > 1:
             st.info(f"Showing {primary_country} only.")
+        extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
+        df = fetch(tuple(selected_countries), selected_year,
+                   tuple(BASE_COLS + extra))
         fig = plot_belonging_by_immigration(
             df=df, countries=selected_countries, year=selected_year)
         st.pyplot(fig)
         st.info("Distribution of school belonging index by immigration status.")
 
 # Load data and derive country lists
-df = get_data()
+meta = get_meta()
 
-available_years = sorted(df["YEAR"].unique().tolist())
-all_countries = sorted(df["CNT"].unique().tolist())
-oecd_countries = sorted(df[df["OECD"] == 1]["CNT"].unique().tolist())
-partner_countries = sorted(df[df["OECD"] == 0]["CNT"].unique().tolist())
+available_years = sorted(meta["YEAR"].unique().tolist())
+all_countries = sorted(meta["CNT"].unique().tolist())
+oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist())
+partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist())
 
 # Sidebar controls
 st.sidebar.header("Filters")
@@ -456,15 +524,14 @@ primary_country = selected_countries[0]
 
 st.title("PISA Score Distribution Dashboard")
 st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
-           f"{len(all_countries)} countries  |  "
-           f"{len(df):,} students")
+           f"{len(all_countries)} countries")
 
 if side_by_side:
     left_col, right_col = st.columns(2)
     with left_col:
         st.subheader(chart_type_left)
         render_chart(
-            df, chart_type_left, subject, selected_countries,
+            chart_type_left, subject, selected_countries,
             selected_year, available_years, primary_country,
             ref_year=ref_year, comp_year=comp_year,
             group_key=group_key_left,
@@ -472,14 +539,14 @@ if side_by_side:
     with right_col:
         st.subheader(chart_type_right)
         render_chart(
-            df, chart_type_right, subject, selected_countries,
+            chart_type_right, subject, selected_countries,
             selected_year, available_years, primary_country,
             ref_year=ref_year, comp_year=comp_year,
             group_key=group_key_right,
         )
 else:
     render_chart(
-        df, chart_type, subject, selected_countries,
+        chart_type, subject, selected_countries,
         selected_year, available_years, primary_country,
         ref_year=ref_year, comp_year=comp_year,
     )

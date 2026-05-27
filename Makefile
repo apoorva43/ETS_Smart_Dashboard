@@ -9,7 +9,8 @@ PARQUETS = $(foreach y,$(YEARS),$(PROCESSED_DIR)/pisa_$(y).parquet)
 # Default target - runs full pipeline
 all: stats figures report
 
-data: $(PARQUETS)
+# Data pipeline (Steps 1-5)
+data: $(PARQUETS) $(PROCESSED_DIR)/pisa_all.parquet $(PROCESSED_DIR)/pisa_country_stats.parquet
 
 # Step 1: Download Rules
 $(RAW_DIR)/%/student/pisa_%.zip:
@@ -36,6 +37,17 @@ $(PROCESSED_DIR)/pisa_%.parquet: $(RAW_DIR)/%/student/.unzipped $(RAW_DIR)/%/sch
 	@echo "\n--- Merging & Converting PISA $* to Parquet ---"
 	python src/build_data.py convert --year $*
 
+# Step 4: Merge yearly parquets into one
+$(PROCESSED_DIR)/pisa_all.parquet: $(PARQUETS)
+	@echo "\n--- Merging all years into pisa_all.parquet ---"
+	python src/build_data.py merge --years 2015,2018,2022
+
+# Step 5: Build country-level stats parquet
+$(PROCESSED_DIR)/pisa_country_stats.parquet: $(PROCESSED_DIR)/pisa_all.parquet
+	@echo "\n--- Building country stats parquet ---"
+	python src/build_data.py country-stats
+
+# Report pipeline (Steps 1-3)
 # Step 1: Compute inline statistics
 stats: data/processed/stats.json
 
@@ -64,6 +76,7 @@ reports/proposal/proposal_report.pdf: \
 	data/images/fig3_escs_dist.png
 	cd reports/proposal && quarto render proposal_report.qmd --to pdf
 
+# Utilities
 # Remove all generated files
 clean:
 	rm -f data/processed/stats.json 
