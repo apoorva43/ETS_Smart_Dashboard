@@ -41,6 +41,7 @@ GROUP_OPTIONS = {
     "Immigration status": ("IMMIG",      IMMIG_MAP),
     "School location":    ("SC001Q01TA", LOC_MAP),
     "School type":        ("SCHLTYPE",   SCHLTYPE_MAP),
+    "Socioeconomic status": ("ESCS",       None),
 }
 
 # Okabe-Ito colour palette for deuteranopia, protanopia, and tritanopia.

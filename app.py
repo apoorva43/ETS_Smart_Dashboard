@@ -50,11 +50,9 @@ st.set_page_config(page_title="PISA Dashboard", layout="wide")
 S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 CHART_TYPES = [
+    "Percentile score profile",
     "Score distribution",
-    "Interval distribution",
     "Change over time",
-    "Gender gap",
-    "SES gap",
     "Belonging by Immigration",
     "Group comparison",
     "Country Scatterplot"
@@ -271,7 +269,7 @@ def render_chart(chart_type, subject, selected_countries,
     """
     pv_cols = PV_BY_SUBJ[subject]
 
-    if chart_type == "Score distribution":
+    if chart_type == "Percentile score profile":
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
@@ -293,34 +291,6 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             ))
 
-    elif chart_type == "Gender gap":
-        render_chart_help(chart_type, group_key)
-        if len(selected_countries) > 1:
-            st.info(
-                f"Gender gap shows one country at a time — displaying {primary_country}.")
-        df = fetch((primary_country,), selected_year,
-                   tuple(BASE_COLS + pv_cols + ["ST004D01T"]))
-        fig = plot_gender_percentile_line(
-            df, subject, primary_country, year=selected_year)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown(gender_gap_text(
-            df, subject, primary_country, year=selected_year))
-        st.info("The x-axis shows Female scores as the reference group. "
-                "Where the Male line sits above the diagonal, males score higher "
-                "at that point in the distribution.")
-
-    elif chart_type == "SES gap":
-        if len(selected_countries) > 1:
-            st.info(
-                f"SES gap shows one country at a time — displaying {primary_country}.")
-        df = fetch((primary_country,), selected_year,
-                   tuple(BASE_COLS + pv_cols + ["ESCS"]))
-        fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
-        st.info("Students are split into four equal groups by socioeconomic status "
-                "(ESCS index). Q1 = lowest SES, Q4 = highest.")
-
 
     # Group comparison
     elif chart_type == "Group comparison":
@@ -340,18 +310,20 @@ def render_chart(chart_type, subject, selected_countries,
         df = fetch((primary_country,), selected_year,
                    tuple(BASE_COLS + pv_cols + [group_col]))
         
-        warns = check_group_sizes(
-            df,
-            group_col,
-            group_vals,
-            primary_country,
-            year=selected_year
-        )
+        
+        if group_key != "Socioeconomic status":
+            warns = check_group_sizes(
+                df,
+                group_col,
+                group_vals,
+                primary_country,
+                year=selected_year
+            )
 
-        for w in warns:
-            st.warning(w)
+            for w in warns:
+                st.warning(w)
 
-        if group_key == "Gender":
+        if group_key == "Score by gender":
             fig = plot_gender_diff_percentile(
                 df=df,
                 subject=subject,
@@ -364,6 +336,40 @@ def render_chart(chart_type, subject, selected_countries,
                 "This chart shows the gender score difference across the distribution. "
                 "Y-axis shows Male − Female score difference. Values above zero mean "
                 "males score higher; values below zero mean females score higher."
+            )
+            
+        elif group_key == "Socioeconomic status":
+            df = fetch(
+                (primary_country,),
+                selected_year,
+                tuple(BASE_COLS + pv_cols + ["ESCS"])
+            )
+
+            fig = plot_escs_gap(
+                df=df,
+                subject=subject,
+                cnt=primary_country,
+                year=selected_year,
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                config={"displayModeBar": False}
+            )
+
+            st.markdown(
+                ses_gap_text(
+                    df,
+                    subject,
+                    primary_country,
+                    year=selected_year
+                )
+            )
+
+            st.info(
+                "Students are split into four equal groups by socioeconomic status "
+                "(ESCS index). Q1 = lowest SES, Q4 = highest."
             )
 
         elif group_key == "Immigration status":
@@ -464,7 +470,7 @@ def render_chart(chart_type, subject, selected_countries,
             "Points below indicate decline."
         )
         
-    elif chart_type == "Interval distribution":
+    elif chart_type == "Score distribution":
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
@@ -882,7 +888,7 @@ else:
     country_pool = all_countries
 
 # 3. Dynamically Render Country Selector
-SINGLE_COUNTRY_CHARTS = ["Change over time", "Gender gap", "SES gap", "Group comparison"]
+SINGLE_COUNTRY_CHARTS = ["Change over time", "Group comparison"]
 
 if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
     # Show a single selectbox for strict 1-country charts

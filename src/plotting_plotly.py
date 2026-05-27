@@ -119,7 +119,7 @@ def plot_country_distributions(df, subject: str,
                 hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
-    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
+    fig.update_layout(**_base_layout(title=f"Percentile Score Profile | {SUBJECTS[subject]}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -149,7 +149,7 @@ def plot_escs_gap(df, subject, cnt, year=None):
             marker=dict(size=6)
         ))
 
-    fig.update_layout(**_base_layout(title=f"SES Gap | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by Socioeconomic Status | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
