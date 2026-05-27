@@ -393,11 +393,11 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
                 customdata=[[p, x0, comp0, d0]],
                 hovertemplate=(
                     f"Year: {comp_year}<br>"
-                    "Percentile: %{{customdata[0]}<br>"
+                    "Percentile: %{customdata[0]}<br>"
                     f"{reference_year} score: %{{customdata[1]:.0f}}<br>"
                     f"{comp_year} score: %{{customdata[2]:.0f}}<br>"
-                    "Change: %{{customdata[3]:+.1f}}<extra></extra>"
-                ),
+                    "Change: %{customdata[3]:+.1f}<extra></extra>"
+                ), 
             ))
 
     fig.update_layout(**_base_layout(
@@ -570,6 +570,14 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
         hoverinfo="skip",
     ))
 
+    customdata = np.column_stack([
+        PERCENTILES_FINE,
+        female_percs,
+        male_percs,
+        diff
+    ])
+
+
     fig.add_trace(go.Scatter(
         x=female_percs,
         y=diff,
@@ -583,11 +591,12 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
             size=5,
             color=main_line,
         ),
-        customdata=PERCENTILES_FINE,
+        customdata=customdata,
         hovertemplate=(
-            "Percentile: %{customdata}<br>"
-            "Female reference score: %{x:.0f}<br>"
-            "Male − Female difference: %{y:.1f}<extra></extra>"
+            "Percentile: %{customdata[0]}<br>"
+            "Female score: %{customdata[1]:.0f}<br>"
+            "Male score: %{customdata[2]:.0f}<br>"
+            "Male − Female difference: %{customdata[3]:+.1f}<extra></extra>"
         ),
     ))
 
