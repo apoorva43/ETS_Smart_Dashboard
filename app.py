@@ -602,7 +602,7 @@ def _insight_box(text):
     )
 
 
-def render_story_tab(available_years, all_countries, oecd_countries, partner_countries):
+def render_story_tab(available_years, story_country, story_subject, comparison_countries):
     """
     Render the full Data Story tab content.
 
@@ -611,34 +611,6 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     Intro → Section 1: Global standing → Section 2: Change over time
           → Section 3: Equity gaps     → Section 4: School context
     """
-    st.sidebar.markdown("### 📖 Story Controls")
-
-    story_country_group = st.sidebar.radio(
-        "Country group",
-        ["All", "OECD members", "Partner countries"],
-        key="story_country_group"
-    )
-    if story_country_group == "OECD members":
-        story_pool = oecd_countries
-    elif story_country_group == "Partner countries":
-        story_pool = partner_countries
-    else:
-        story_pool = all_countries
-
-    story_country = st.sidebar.selectbox("Focus country", story_pool, key="story_country")
-    story_subject = st.sidebar.selectbox(
-        "Subject", list(SUBJECTS.keys()),
-        format_func=lambda x: SUBJECTS[x],
-        key="story_subject"
-    )
-    comparison_countries = st.sidebar.multiselect(
-        "Compare with (optional)",
-        [c for c in story_pool if c != story_country],
-        default=[],
-        max_selections=3,
-        key="story_compare_countries"
-    )
-
     story_year        = 2022 if 2022 in available_years else max(available_years)
     subject_label     = SUBJECTS[story_subject]
     display_countries = [story_country] + comparison_countries
@@ -891,130 +863,162 @@ all_countries = sorted(meta["CNT"].unique().tolist())
 oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist())
 partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist())
 
-# Sidebar controls
-st.sidebar.header("Filters")
+# ==========================================
+# SIDEBAR NAVIGATION & ROUTING
+# ==========================================
 
-# 1. Ask for Chart Type FIRST
-side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
-
-if side_by_side:
-    st.sidebar.markdown("**Left panel**")
-    chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
-    st.sidebar.markdown("**Right panel**")
-    chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
-else:
-    chart_type = st.sidebar.radio("View", CHART_TYPES)
-
+# 1. The Main App Router
+app_mode = st.sidebar.radio(
+    "Navigation", 
+    ["📖 Data Story", "🔍 Explore"],
+    label_visibility="collapsed" # Hides the word "Navigation" for a cleaner look
+)
 st.sidebar.markdown("---")
 
-# 2. Country Group Filter
-country_group = st.sidebar.radio(
-    "Country group", ["All", "OECD members", "Partner countries"]
-)
-if country_group == "OECD members":
-    country_pool = oecd_countries
-elif country_group == "Partner countries":
-    country_pool = partner_countries
-else:
-    country_pool = all_countries
+# ==========================================
+# MODE 1: DATA STORY
+# ==========================================
+if app_mode == "📖 Data Story":
+    st.sidebar.header("📖 Story Controls")
 
-# 3. Dynamically Render Country Selector
-SINGLE_COUNTRY_CHARTS = ["Change over time", "Gender gap", "SES gap", "Group comparison"]
-
-if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
-    # Show a single selectbox for strict 1-country charts
-    selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
-    selected_countries = [selected_country]  # Wrap in list so downstream code doesn't break
-else:
-    # Show the standard multiselect for global charts or Side-by-Side mode
-    label = "Countries (Pool)" if side_by_side else "Countries"
-    selected_countries = st.sidebar.multiselect(
-        label, country_pool, default=country_pool[:2]
+    story_country_group = st.sidebar.radio(
+        "Country group",
+        ["All", "OECD members", "Partner countries"],
+        key="story_country_group"
     )
+    if story_country_group == "OECD members":
+        story_pool = oecd_countries
+    elif story_country_group == "Partner countries":
+        story_pool = partner_countries
+    else:
+        story_pool = all_countries
 
-if not selected_countries:
-    st.warning("Please select at least one country.")
-    st.stop()
-
-# 4. Handle Side-by-Side Specific Overrides
-if side_by_side:
-    country_left = st.sidebar.selectbox(
-        "Left country", selected_countries, key="cnt_left"
+    story_country = st.sidebar.selectbox("Focus country", story_pool, key="story_country")
+    story_subject = st.sidebar.selectbox(
+        "Subject", list(SUBJECTS.keys()),
+        format_func=lambda x: SUBJECTS[x],
+        key="story_subject"
     )
-    right_idx = 1 if len(selected_countries) > 1 else 0
-    country_right = st.sidebar.selectbox(
-        "Right country", selected_countries, index=right_idx, key="cnt_right"
+    comparison_countries = st.sidebar.multiselect(
+        "Compare with (optional)",
+        [c for c in story_pool if c != story_country],
+        default=[],
+        max_selections=3,
+        key="story_compare_countries"
     )
     
-    group_key_left = None
-    group_key_right = None
-    if chart_type_left == "Group comparison":
-        group_key_left = st.sidebar.selectbox(
-            "Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left"
-        )
-    if chart_type_right == "Group comparison":
-        group_key_right = st.sidebar.selectbox(
-            "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
-        )
+    # Draw the main area
+    render_story_tab(available_years, story_country, story_subject, comparison_countries)
 
-st.sidebar.markdown("---")
 
-subject = st.sidebar.selectbox(
-    "Subject", list(SUBJECTS.keys()),
-    format_func=lambda x: SUBJECTS[x]
-)
+# ==========================================
+# MODE 2: EXPLORE
+# ==========================================
+elif app_mode == "🔍 Explore":
+    st.sidebar.header("🔍 Explore Filters")
 
-st.sidebar.markdown("---")
-ref_year = None
-comp_year = None
+    side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
 
-if len(available_years) > 1:
-    year_mode = st.sidebar.radio(
-        "Year",
-        ["Latest (2022)", "All years", "Compare two years"]
-    )
-    if year_mode == "Latest (2022)":
-        selected_year = 2022
-    elif year_mode == "All years":
-        selected_year = None
+    if side_by_side:
+        st.sidebar.markdown("**Left panel**")
+        chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
+        st.sidebar.markdown("**Right panel**")
+        chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
     else:
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            ref_year = st.selectbox(
-                "Reference year",
-                available_years[:-1],          
-                index=0,
-                key="ref_year"
-            )
-        with col2:
-            later_years = [y for y in available_years if y > ref_year]
-            comp_year = st.selectbox(
-                "Compare to",
-                later_years,
-                index=len(later_years) - 1,
-                key="comp_year"
-            )
-        selected_year = None   
-        st.sidebar.caption(
-            f"Reference: {ref_year} (x-axis) → Compare: {comp_year}"
+        chart_type = st.sidebar.radio("View", CHART_TYPES)
+
+    st.sidebar.markdown("---")
+
+    country_group = st.sidebar.radio(
+        "Country group", ["All", "OECD members", "Partner countries"]
+    )
+    if country_group == "OECD members":
+        country_pool = oecd_countries
+    elif country_group == "Partner countries":
+        country_pool = partner_countries
+    else:
+        country_pool = all_countries
+
+    SINGLE_COUNTRY_CHARTS = ["Change over time", "Gender gap", "SES gap", "Group comparison"]
+
+    if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
+        selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
+        selected_countries = [selected_country]
+    else:
+        label = "Countries (Pool)" if side_by_side else "Countries"
+        selected_countries = st.sidebar.multiselect(
+            label, country_pool, default=country_pool[:2]
         )
-else:
-    selected_year = available_years[0]
 
-primary_country = selected_countries[0]
+    if not selected_countries:
+        st.warning("Please select at least one country.")
+        st.stop()
 
-st.title("PISA Score Distribution Dashboard")
-st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
-           f"{len(all_countries)} countries")
+    if side_by_side:
+        country_left = st.sidebar.selectbox(
+            "Left country", selected_countries, key="cnt_left"
+        )
+        right_idx = 1 if len(selected_countries) > 1 else 0
+        country_right = st.sidebar.selectbox(
+            "Right country", selected_countries, index=right_idx, key="cnt_right"
+        )
+        
+        group_key_left = None
+        group_key_right = None
+        if chart_type_left == "Group comparison":
+            group_key_left = st.sidebar.selectbox(
+                "Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left"
+            )
+        if chart_type_right == "Group comparison":
+            group_key_right = st.sidebar.selectbox(
+                "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
+            )
 
-# ── Two-tab structure ──────────────────────────────────────────────────────
-tab1, tab2 = st.tabs(["📖 Data Story", "🔍 Explore"])
+    st.sidebar.markdown("---")
 
-with tab1:
-    render_story_tab(available_years, all_countries, oecd_countries, partner_countries)
+    subject = st.sidebar.selectbox(
+        "Subject", list(SUBJECTS.keys()),
+        format_func=lambda x: SUBJECTS[x]
+    )
 
-with tab2:
+    st.sidebar.markdown("---")
+    ref_year = None
+    comp_year = None
 
+    if len(available_years) > 1:
+        year_mode = st.sidebar.radio(
+            "Year",
+            ["Latest (2022)", "All years", "Compare two years"]
+        )
+        if year_mode == "Latest (2022)":
+            selected_year = 2022
+        elif year_mode == "All years":
+            selected_year = None
+        else:
+            col1, col2 = st.sidebar.columns(2)
+            with col1:
+                ref_year = st.selectbox(
+                    "Reference year",
+                    available_years[:-1],          
+                    index=0,
+                    key="ref_year"
+                )
+            with col2:
+                later_years = [y for y in available_years if y > ref_year]
+                comp_year = st.selectbox(
+                    "Compare to",
+                    later_years,
+                    index=len(later_years) - 1,
+                    key="comp_year"
+                )
+            selected_year = None   
+            st.sidebar.caption(f"Reference: {ref_year} (x-axis) → Compare: {comp_year}")
+    else:
+        selected_year = available_years[0]
+
+    primary_country = selected_countries[0]
+
+    # Draw the main area for Explore
     if side_by_side:
         left_col, right_col = st.columns(2)
         with left_col:
