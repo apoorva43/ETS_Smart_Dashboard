@@ -676,30 +676,37 @@ st.title("PISA Score Distribution Dashboard")
 st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
            f"{len(all_countries)} countries")
 
-if side_by_side:
-    left_col, right_col = st.columns(2)
-    with left_col:
-        st.subheader(chart_type_left)
+# ── Two-tab structure ──────────────────────────────────────────────────────
+tab1, tab2 = st.tabs(["📖 Data Story", "🔍 Explore"])
+
+with tab1:
+    st.info("📖 Data Story coming soon — use the Explore tab for now.")
+
+with tab2:
+
+    if side_by_side:
+        left_col, right_col = st.columns(2)
+        with left_col:
+            st.subheader(chart_type_left)
+            render_chart(
+                chart_type_left, subject, selected_countries,
+                selected_year, available_years,
+                primary_country=country_left,
+                ref_year=ref_year, comp_year=comp_year,
+                group_key=group_key_left,
+            )
+        with right_col:
+            st.subheader(chart_type_right)
+            render_chart(
+                chart_type_right, subject, selected_countries,
+                selected_year, available_years,
+                primary_country=country_right,
+                ref_year=ref_year, comp_year=comp_year,
+                group_key=group_key_right,
+            )
+    else:
         render_chart(
-            chart_type_left, subject, selected_countries,
-            selected_year, available_years, 
-            primary_country=country_left,
+            chart_type, subject, selected_countries,
+            selected_year, available_years, primary_country,
             ref_year=ref_year, comp_year=comp_year,
-            group_key=group_key_left,
         )
-    with right_col:
-        st.subheader(chart_type_right)
-        render_chart(
-            chart_type_right, subject, selected_countries,
-            selected_year, available_years, 
-            primary_country=country_right,
-            ref_year=ref_year, comp_year=comp_year,
-            group_key=group_key_right,
-        )
-else:
-    # If not side-by-side, it just uses the default global primary_country
-    render_chart(
-        chart_type, subject, selected_countries,
-        selected_year, available_years, primary_country,
-        ref_year=ref_year, comp_year=comp_year,
-    )
