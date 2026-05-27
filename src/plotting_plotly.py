@@ -379,41 +379,137 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
 
 
 def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) -> go.Figure:
-    subset = df[df["CNT"] == cnt]
-    if year is not None and "YEAR" in df.columns:
+    """
+    Plot the gender score difference across the distribution using Plotly.
+
+    The x-axis shows the female reference score at each percentile. The y-axis
+    shows the score difference between male and female students at the matched
+    percentile. Positive values indicate higher male scores, while negative
+    values indicate higher female scores.
+
+    This version uses neutral, accessible colors rather than gender-coded
+    colors. The main line is black, with positive and negative differences
+    shaded using Okabe-Ito blue and orange.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing gender identifiers, weights, plausible value
+        score columns, and optionally a year column.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are used.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        Plotly figure showing gender score difference across percentiles.
+    """
+    subset = df[df["CNT"] == cnt].copy()
+
+    if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
     female = subset[subset["ST004D01T"] == 1.0]
     male = subset[subset["ST004D01T"] == 2.0]
 
-    female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
-    male_percs = weighted_percentiles_pv(male, subject, PERCENTILES_FINE)
+    female_percs = weighted_percentiles_pv(
+        female, subject, PERCENTILES_FINE
+    )
+    male_percs = weighted_percentiles_pv(
+        male, subject, PERCENTILES_FINE
+    )
 
     fig = go.Figure()
+
     if np.isnan(female_percs).all() or np.isnan(male_percs).all():
-        return _check_sufficient_data(pd.DataFrame(), [], cnt, msg="Insufficient data")[1]
+        return _check_sufficient_data(
+            pd.DataFrame(), [], cnt, msg="Insufficient data"
+        )[1]
 
     diff = male_percs - female_percs
 
-    fig.add_hline(y=0, line_dash="dash", line_color="#cccccc", line_width=1.5, annotation_text="No gap")
+    positive_diff = np.where(diff >= 0, diff, 0)
+    negative_diff = np.where(diff < 0, diff, 0)
 
-    line_color = COUNTRY_COLORS.get(cnt, "#185FA5") if diff.mean() >= 0 else OKABE_ITO.get("pink", "#CC79A7")
+    # Accessible, non-gender-coded colors
+    positive_fill = "rgba(0, 114, 178, 0.22)"   # Okabe-Ito blue
+    negative_fill = "rgba(230, 159, 0, 0.22)"   # Okabe-Ito orange
+    main_line = OKABE_ITO.get("black", "#000000")
+
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        line_color="#999999",
+        line_width=1.5,
+        annotation_text="No difference",
+        annotation_position="top left",
+    )
 
     fig.add_trace(go.Scatter(
-        x=female_percs, y=diff,
-        mode="lines", name="Difference",
-        line=dict(color=line_color, width=2.5),
+        x=female_percs,
+        y=positive_diff,
+        mode="lines",
+        line=dict(width=0),
+        fill="tozeroy",
+        fillcolor=positive_fill,
+        name="Positive difference",
+        hoverinfo="skip",
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=female_percs,
+        y=negative_diff,
+        mode="lines",
+        line=dict(width=0),
+        fill="tozeroy",
+        fillcolor=negative_fill,
+        name="Negative difference",
+        hoverinfo="skip",
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=female_percs,
+        y=diff,
+        mode="lines+markers",
+        name="Male − Female",
+        line=dict(
+            color=main_line,
+            width=2.5,
+        ),
+        marker=dict(
+            size=5,
+            color=main_line,
+        ),
         customdata=PERCENTILES_FINE,
-        hovertemplate="Percentile: %{customdata}<br>Score Diff: %{y:.1f}<extra></extra>"
+        hovertemplate=(
+            "Percentile: %{customdata}<br>"
+            "Female reference score: %{x:.0f}<br>"
+            "Male − Female difference: %{y:.1f}<extra></extra>"
+        ),
     ))
 
     fig.update_layout(**_base_layout(
-        title=f"Gender Gap | {SUBJECTS[subject]} | {cnt}<br><sup>(above zero = males score higher)</sup>"
+        title=(
+            f"Scores by Gender | {SUBJECTS[subject]} | {cnt}<br>"
+            "<sup>Y-axis shows Male − Female score difference</sup>"
+        )
     ))
-    fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
-    fig.update_yaxes(title="Score Difference (Male - Female)")
-    return fig
 
+    fig.update_xaxes(
+        title=f"Female {SUBJECTS[subject]} score (reference)"
+    )
+
+    fig.update_yaxes(
+        title="Score difference (Male − Female)",
+        zeroline=False,
+    )
+
+    return fig
 
 def plot_belonging_by_immigration(df, countries: list, year: int = None,
                                 min_group_n: int = 30) -> go.Figure:

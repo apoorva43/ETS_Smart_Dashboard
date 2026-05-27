@@ -29,7 +29,6 @@ from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from src.config import SUBJECTS, GROUP_OPTIONS
 from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
-                          plot_gender_percentile_line,
                           plot_escs_gap,
                           plot_naep_time_comparison,
                           plot_year_diff_percentile,
@@ -323,7 +322,14 @@ def render_chart(chart_type, subject, selected_countries,
             for w in warns:
                 st.warning(w)
 
-        if group_key == "Score by gender":
+
+        if group_key == "Gender":
+            df = fetch(
+                (primary_country,),
+                selected_year,
+                tuple(BASE_COLS + pv_cols + ["ST004D01T"])
+            )
+
             fig = plot_gender_diff_percentile(
                 df=df,
                 subject=subject,
@@ -331,12 +337,18 @@ def render_chart(chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(
-                "This chart shows the gender score difference across the distribution. "
-                "Y-axis shows Male − Female score difference. Values above zero mean "
-                "males score higher; values below zero mean females score higher."
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                config={"displayModeBar": False}
             )
+
+            st.info(
+                "Y-axis shows Male − Female score difference. "
+                "Values above zero mean males score higher; values below zero mean females score higher."
+            )
+
+            return
             
         elif group_key == "Socioeconomic status":
             df = fetch(
