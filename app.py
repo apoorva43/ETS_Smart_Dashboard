@@ -272,7 +272,8 @@ def render_chart(chart_type, subject, selected_countries,
     pv_cols = PV_BY_SUBJ[subject]
 
     if chart_type == "Score distribution":
-        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
+        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
+        df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"], 
@@ -465,7 +466,8 @@ def render_chart(chart_type, subject, selected_countries,
         )
         
     elif chart_type == "Interval distribution":
-        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
+        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
+        df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"], 
@@ -670,14 +672,25 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     _story_section_header(1, "How does this country compare globally?",
         f"Where {story_country} sits in the international {subject_label} distribution")
 
-    df_s1 = fetch(tuple(display_countries), story_year, tuple(BASE_COLS + pv_cols))
+    fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
+    df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
 
-    mean_text = country_distribution_text(df_s1, story_subject, display_countries, year=story_year)
-    if mean_text:
-        _insight_box(mean_text)
+    missing_cnts = check_missing_countries(
+        df_s1, required_cols=[f"PV1{story_subject}"], 
+        countries=display_countries, year=story_year
+    )
+    valid_countries = [c for c in display_countries if c not in missing_cnts]
 
-    fig1 = plot_country_distributions(df_s1, story_subject, display_countries, year=story_year)
-    st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
+    if missing_cnts:
+        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {subject_label} scores.")
+
+    if valid_countries:
+        mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
+        if mean_text:
+            _insight_box(mean_text)
+
+        fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year)
+        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander("📖 How to read this chart"):
         st.markdown("""
@@ -705,39 +718,47 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     if len(available_years) < 2:
         st.info("Only one year of data is currently loaded. Load multiple years (2015, 2018, 2022) to unlock this section.")
     else:
-        df_s2        = fetch((story_country,), None, tuple(BASE_COLS + pv_cols))
-        reference_year   = min(available_years)
-        comparison_years = [y for y in available_years if y != reference_year]
+        df_s2 = fetch((story_country,), None, tuple(BASE_COLS + pv_cols))
+        
+        country_years = df_s2["YEAR"].dropna().unique() if "YEAR" in df_s2.columns else []
+        
+        if len(country_years) < 2:
+            st.warning(f"⚠️ **Data Unavailable:** {story_country} does not have enough historical data to compare changes over time (only {len(country_years)} year on record).")
+        else:
+            # Dynamically use the country's actual earliest/latest years
+            reference_year   = min(country_years) 
+            comparison_years = [y for y in country_years if y != reference_year]
+            latest_year      = max(country_years)
 
-        ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
-        last_subset = df_s2[df_s2["YEAR"] == max(available_years)]
-        ref_median  = weighted_percentiles_pv(ref_subset,  story_subject, [50])
-        last_median = weighted_percentiles_pv(last_subset, story_subject, [50])
+            ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
+            last_subset = df_s2[df_s2["YEAR"] == latest_year]
+            ref_median  = weighted_percentiles_pv(ref_subset,  story_subject, [50])
+            last_median = weighted_percentiles_pv(last_subset, story_subject, [50])
 
-        if not (np.isnan(ref_median).all() or np.isnan(last_median).all()):
-            delta     = last_median[0] - ref_median[0]
-            direction = "increased" if delta > 0 else "decreased"
-            _insight_box(
-                f"At the median, {story_country}'s {subject_label} score "
-                f"{direction} by {abs(delta):.0f} points between "
-                f"{reference_year} and {max(available_years)}."
-            )
+            if not (np.isnan(ref_median).all() or np.isnan(last_median).all()):
+                delta     = last_median[0] - ref_median[0]
+                direction = "increased" if delta > 0 else "decreased"
+                _insight_box(
+                    f"At the median, {story_country}'s {subject_label} score "
+                    f"{direction} by {abs(delta):.0f} points between "
+                    f"{reference_year} and {latest_year}."
+                )
 
-        fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
-                                         reference_year=reference_year,
-                                         comparison_years=comparison_years)
-        st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+            fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
+                                             reference_year=reference_year,
+                                             comparison_years=comparison_years)
+            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
-        with st.expander("📖 How to read this chart"):
-            st.markdown(f"""
-                This is a **NAEP-style gain plot**.
+            with st.expander("📖 How to read this chart"):
+                st.markdown(f"""
+                    This is a **NAEP-style gain plot**.
 
-                - The **x-axis** is the {reference_year} score at each percentile.
-                - The **y-axis** is the score at that same percentile in a later year.
-                - Points on the **diagonal grey line** = no change.
-                - Points **above** the diagonal = improvement at that percentile.
-                - Points **below** the diagonal = decline at that percentile.
-            """)
+                    - The **x-axis** is the {reference_year} score at each percentile.
+                    - The **y-axis** is the score at that same percentile in a later year.
+                    - Points on the **diagonal grey line** = no change.
+                    - Points **above** the diagonal = improvement at that percentile.
+                    - Points **below** the diagonal = decline at that percentile.
+                """)
 
         with st.expander("🔍 Why might scores change between cycles?"):
             st.markdown("""
@@ -762,17 +783,27 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     eq_col1, eq_col2 = st.columns(2, gap="large")
     with eq_col1:
         st.markdown("#### Scores by Socioeconomic Status")
-        ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
-        if ses_text and "Insufficient" not in ses_text:
-            _insight_box(ses_text)
-        fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
-        st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
+        
+        # 1. The Guardrail (Checks if data exists before doing any math)
+        if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {story_country}.")
+        else:
+            # 2. The Execution (Only runs if data is safe)
+            ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
+            if "Insufficient" not in ses_text:
+                _insight_box(ses_text)
+            
+            fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
+            st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
 
     with eq_col2:
         st.markdown("#### Scores by Immigration Background")
-        fig3b = plot_immigration_score_distribution(
-            df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
-        st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
+        if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {story_country}.")
+        else:
+            fig3b = plot_immigration_score_distribution(
+                df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
+            st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander("📖 How to read the SES chart"):
         st.markdown("""
@@ -807,15 +838,21 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     ctx_col1, ctx_col2 = st.columns(2, gap="large")
     with ctx_col1:
         st.markdown("#### Scores by School Location")
-        fig4a = plot_school_location_boxplot(
-            df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
-        st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
+        if check_missing_countries(df_loc, ["SC001Q01TA"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {story_country}.")
+        else:
+            fig4a = plot_school_location_boxplot(
+                df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
+            st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
 
     with ctx_col2:
         st.markdown("#### Scores by School Type")
-        fig4b = plot_school_type_distribution(
-            df=df_type, subject=story_subject, cnt=story_country, year=story_year)
-        st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
+        if check_missing_countries(df_type, ["SCHLTYPE"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {story_country}.")
+        else:
+            fig4b = plot_school_type_distribution(
+                df=df_type, subject=story_subject, cnt=story_country, year=story_year)
+            st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander("📖 How to read the school location chart"):
         st.markdown("""

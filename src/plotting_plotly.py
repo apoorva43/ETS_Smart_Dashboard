@@ -441,22 +441,24 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
     # Panel 1: Repetition
     if all(c in subset.columns for c in ["REPEAT", "ESCS", "CNT", "W_FSTUWT"]):
         df_rep = subset.dropna(subset=["REPEAT", "ESCS", "W_FSTUWT"]).copy()
-        df_rep["ESCS_Q"] = pd.qcut(df_rep["ESCS"].rank(method="first"), q=4, labels=["Q1 (low)", "Q2", "Q3", "Q4 (high)"])
         
-        for cnt in countries:
-            rates = []
-            for q in ["Q1 (low)", "Q2", "Q3", "Q4 (high)"]:
-                sub = df_rep[(df_rep["ESCS_Q"] == q) & (df_rep["CNT"] == cnt)]
-                if len(sub) < min_group_n:
-                    rates.append(np.nan)
-                else:
-                    rates.append(_weighted_mean((sub["REPEAT"] == 1).to_numpy(), sub["W_FSTUWT"].to_numpy()) * 100)
+        if len(df_rep) >= 4:
+            df_rep["ESCS_Q"] = pd.qcut(df_rep["ESCS"].rank(method="first"), q=4, labels=["Q1 (low)", "Q2", "Q3", "Q4 (high)"])
             
-            fig.add_trace(go.Bar(
-                x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=cnt, 
-                marker_color=color_map[cnt],
-                texttemplate="%{y:.1f}%", textposition="outside"
-            ), row=1, col=1)
+            for cnt in countries:
+                rates = []
+                for q in ["Q1 (low)", "Q2", "Q3", "Q4 (high)"]:
+                    sub = df_rep[(df_rep["ESCS_Q"] == q) & (df_rep["CNT"] == cnt)]
+                    if len(sub) < min_group_n:
+                        rates.append(np.nan)
+                    else:
+                        rates.append(_weighted_mean((sub["REPEAT"] == 1).to_numpy(), sub["W_FSTUWT"].to_numpy()) * 100)
+                
+                fig.add_trace(go.Bar(
+                    x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=cnt, 
+                    marker_color=color_map[cnt],
+                    texttemplate="%{y:.1f}%", textposition="outside"
+                ), row=1, col=1)
 
     # Panel 2: Belonging
     if all(c in subset.columns for c in ["BELONG", "IMMIG", "CNT", "W_FSTUWT"]):
