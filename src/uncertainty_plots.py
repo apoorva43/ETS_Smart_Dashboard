@@ -718,3 +718,146 @@ def plot_quantile_dotplot_stacked(df: pd.DataFrame, subject: str,
     )
     plt.tight_layout()
     return fig
+
+
+def plot_trend_with_ci(df: pd.DataFrame, subject: str,
+                       countries: list,
+                       years: list = None) -> plt.Figure:
+    """
+    Plot mean score trends across PISA cycles with 95% BRR confidence
+    bands for each country.
+
+    For each country and year, the weighted mean and its standard error
+    are computed from the 80 BRR replicates. A shaded ribbon spanning
+    mean ± 1.96 * SE is drawn behind the trend line. Where ribbons
+    overlap between two countries, the difference is not statistically
+    distinguishable.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full PISA dataset with BRR replicate weight columns.
+    subject : str
+        Subject code, e.g. ``"MATH"``.
+    countries : list of str
+        Country codes, e.g. ``["CAN", "USA"]``.
+    years : list of int, optional
+        PISA cycles to plot. Defaults to [2015, 2018, 2022].
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    if years is None:
+        years = [2015, 2018, 2022]
+
+    color_cycle = list(COUNTRY_COLORS.values()) + list(OKABE_ITO.values())
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+
+    for cnt, color in zip(countries,
+                          [color_cycle[i % len(color_cycle)]
+                           for i in range(len(countries))]):
+        means, los, his = [], [], []
+
+        for yr in years:
+            subset = df[(df["CNT"] == cnt) & (df["YEAR"] == yr)]
+            dist = _brr_mean_distribution(subset, subject)
+            valid = dist[~np.isnan(dist)]
+
+            if len(valid) < 5:
+                means.append(np.nan); los.append(np.nan); his.append(np.nan)
+                continue
+
+            mu = valid[0]           # index 0 = main estimate
+            se = valid[1:].std()    # SD of 80 replicates ≈ SE
+            means.append(mu)
+            los.append(mu - 1.96 * se)
+            his.append(mu + 1.96 * se)
+
+        ax.fill_between(years, los, his,
+                        color=color, alpha=0.15, zorder=1)
+        ax.plot(years, means,
+                color=color, lw=2.5, marker="o", ms=6,
+                label=cnt, zorder=3)
+
+    ax.set_xticks(years)
+    ax.set_xlabel("PISA cycle", fontsize=10)
+    ax.set_ylabel(f"Mean {subject} score", fontsize=10)
+    ax.set_title(
+        f"{subject} score trends with 95% BRR confidence bands\n"
+        "Overlapping bands = not statistically distinguishable",
+        fontsize=10, fontweight="500"
+    )
+    ax.legend(fontsize=9, frameon=False)
+    plt.tight_layout()
+    return fig
+
+
+def plot_replicate_fan(df: pd.DataFrame, subject: str,
+                       country: str,
+                       years: list = None) -> plt.Figure:
+    """
+    Plot all 80 BRR replicate trend lines as a visible fan behind the
+    main weighted mean, for a single country across PISA cycles.
+
+    Each faint line connects one replicate's estimate across years. The
+    width of the resulting fan directly encodes sampling uncertainty -
+    a narrow fan means the estimate is stable; a wide fan means it is
+    not. The bold line is the final weighted mean.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full PISA dataset with BRR replicate weight columns.
+    subject : str
+        Subject code, e.g. ``"MATH"``.
+    country : str
+        A single country code, e.g. ``"CAN"``.
+    years : list of int, optional
+        PISA cycles to plot. Defaults to [2015, 2018, 2022].
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    if years is None:
+        years = [2015, 2018, 2022]
+
+    color = COUNTRY_COLORS.get(country, "#185FA5")
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    main_means = []
+    rep_series = [[] for _ in range(80)]   # one list per replicate
+
+    for yr in years:
+        subset = df[(df["CNT"] == country) & (df["YEAR"] == yr)]
+        dist = _brr_mean_distribution(subset, subject)
+
+        main_means.append(dist[0] if not np.isnan(dist[0]) else np.nan)
+        for r in range(80):
+            rep_series[r].append(
+                dist[r + 1] if r + 1 < len(dist) else np.nan
+            )
+
+    # Draw all 80 replicate lines first (behind)
+    for r, rep in enumerate(rep_series):
+        ax.plot(years, rep,
+                color=color, alpha=0.06, lw=0.9,
+                zorder=1, label="_nolegend_")
+
+    # Draw main estimate on top
+    ax.plot(years, main_means,
+            color=color, lw=3, marker="o", ms=7,
+            zorder=5, label=f"{country} (weighted mean)")
+
+    ax.set_xticks(years)
+    ax.set_xlabel("PISA cycle", fontsize=10)
+    ax.set_ylabel(f"Mean {subject} score", fontsize=10)
+    ax.set_title(
+        f"{subject} score trend - {country}\n"
+        "Each faint line = one BRR replicate",
+        fontsize=10, fontweight="500"
+    )
+    ax.legend(fontsize=9, frameon=False)
+    plt.tight_layout()
+    return fig
