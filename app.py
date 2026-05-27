@@ -893,7 +893,14 @@ if app_mode == "📖 Data Story":
     else:
         story_pool = all_countries
 
-    story_country = st.sidebar.selectbox("Focus country", story_pool, key="story_country")
+    default_idx = story_pool.index("CAN") if "CAN" in story_pool else 0
+
+    story_country = st.sidebar.selectbox(
+        "Focus country", 
+        story_pool, 
+        index=default_idx, 
+        key="story_country"
+    )
     story_subject = st.sidebar.selectbox(
         "Subject", list(SUBJECTS.keys()),
         format_func=lambda x: SUBJECTS[x],
