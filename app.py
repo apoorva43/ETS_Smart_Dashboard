@@ -1089,11 +1089,11 @@ with tab2:
         with right_col:
             st.subheader(chart_type_right)
             render_chart(
-                chart_type_left, subject, selected_countries,
+                chart_type_right, subject, selected_countries,
                 selected_year, available_years,
-                primary_country=country_left,
+                primary_country=country_right,
                 ref_year=ref_year, comp_year=comp_year,
-                group_key=group_key_left,
+                group_key=group_key_right,
                 compact=True,
             )
     else:
