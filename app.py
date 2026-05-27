@@ -269,7 +269,8 @@ def render_chart(chart_type, subject, selected_countries,
     pv_cols = PV_BY_SUBJ[subject]
 
     if chart_type == "Percentile score profile":
-        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
+        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
+        df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"], 
@@ -477,7 +478,8 @@ def render_chart(chart_type, subject, selected_countries,
         )
         
     elif chart_type == "Score distribution":
-        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
+        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
+        df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"], 
@@ -612,7 +614,7 @@ def _insight_box(text):
     )
 
 
-def render_story_tab(available_years, all_countries, oecd_countries, partner_countries):
+def render_story_tab(available_years, story_country, story_subject, comparison_countries):
     """
     Render the full Data Story tab content.
 
@@ -621,34 +623,6 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     Intro → Section 1: Global standing → Section 2: Score change over time
           → Section 3: Equity gaps     → Section 4: School context
     """
-    st.sidebar.markdown("### 📖 Story Controls")
-
-    story_country_group = st.sidebar.radio(
-        "Country group",
-        ["All", "OECD members", "Partner countries"],
-        key="story_country_group"
-    )
-    if story_country_group == "OECD members":
-        story_pool = oecd_countries
-    elif story_country_group == "Partner countries":
-        story_pool = partner_countries
-    else:
-        story_pool = all_countries
-
-    story_country = st.sidebar.selectbox("Focus country", story_pool, key="story_country")
-    story_subject = st.sidebar.selectbox(
-        "Subject", list(SUBJECTS.keys()),
-        format_func=lambda x: SUBJECTS[x],
-        key="story_subject"
-    )
-    comparison_countries = st.sidebar.multiselect(
-        "Compare with (optional)",
-        [c for c in story_pool if c != story_country],
-        default=[],
-        max_selections=3,
-        key="story_compare_countries"
-    )
-
     story_year        = 2022 if 2022 in available_years else max(available_years)
     subject_label     = SUBJECTS[story_subject]
     display_countries = [story_country] + comparison_countries
@@ -682,14 +656,25 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     _story_section_header(1, "How does this country compare globally?",
         f"Where {story_country} sits in the international {subject_label} distribution")
 
-    df_s1 = fetch(tuple(display_countries), story_year, tuple(BASE_COLS + pv_cols))
+    fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
+    df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
 
-    mean_text = country_distribution_text(df_s1, story_subject, display_countries, year=story_year)
-    if mean_text:
-        _insight_box(mean_text)
+    missing_cnts = check_missing_countries(
+        df_s1, required_cols=[f"PV1{story_subject}"], 
+        countries=display_countries, year=story_year
+    )
+    valid_countries = [c for c in display_countries if c not in missing_cnts]
 
-    fig1 = plot_country_distributions(df_s1, story_subject, display_countries, year=story_year)
-    st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
+    if missing_cnts:
+        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {subject_label} scores.")
+
+    if valid_countries:
+        mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
+        if mean_text:
+            _insight_box(mean_text)
+
+        fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year)
+        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander("📖 How to read this chart"):
         st.markdown("""
@@ -717,39 +702,47 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     if len(available_years) < 2:
         st.info("Only one year of data is currently loaded. Load multiple years (2015, 2018, 2022) to unlock this section.")
     else:
-        df_s2        = fetch((story_country,), None, tuple(BASE_COLS + pv_cols))
-        reference_year   = min(available_years)
-        comparison_years = [y for y in available_years if y != reference_year]
+        df_s2 = fetch((story_country,), None, tuple(BASE_COLS + pv_cols))
+        
+        country_years = df_s2["YEAR"].dropna().unique() if "YEAR" in df_s2.columns else []
+        
+        if len(country_years) < 2:
+            st.warning(f"⚠️ **Data Unavailable:** {story_country} does not have enough historical data to compare changes over time (only {len(country_years)} year on record).")
+        else:
+            # Dynamically use the country's actual earliest/latest years
+            reference_year   = min(country_years) 
+            comparison_years = [y for y in country_years if y != reference_year]
+            latest_year      = max(country_years)
 
-        ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
-        last_subset = df_s2[df_s2["YEAR"] == max(available_years)]
-        ref_median  = weighted_percentiles_pv(ref_subset,  story_subject, [50])
-        last_median = weighted_percentiles_pv(last_subset, story_subject, [50])
+            ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
+            last_subset = df_s2[df_s2["YEAR"] == latest_year]
+            ref_median  = weighted_percentiles_pv(ref_subset,  story_subject, [50])
+            last_median = weighted_percentiles_pv(last_subset, story_subject, [50])
 
-        if not (np.isnan(ref_median).all() or np.isnan(last_median).all()):
-            delta     = last_median[0] - ref_median[0]
-            direction = "increased" if delta > 0 else "decreased"
-            _insight_box(
-                f"At the median, {story_country}'s {subject_label} score "
-                f"{direction} by {abs(delta):.0f} points between "
-                f"{reference_year} and {max(available_years)}."
-            )
+            if not (np.isnan(ref_median).all() or np.isnan(last_median).all()):
+                delta     = last_median[0] - ref_median[0]
+                direction = "increased" if delta > 0 else "decreased"
+                _insight_box(
+                    f"At the median, {story_country}'s {subject_label} score "
+                    f"{direction} by {abs(delta):.0f} points between "
+                    f"{reference_year} and {latest_year}."
+                )
 
-        fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
-                                         reference_year=reference_year,
-                                         comparison_years=comparison_years)
-        st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
+            fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
+                                             reference_year=reference_year,
+                                             comparison_years=comparison_years)
+            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
-        with st.expander("📖 How to read this chart"):
-            st.markdown(f"""
-                This is a **NAEP-style gain plot**.
+            with st.expander("📖 How to read this chart"):
+                st.markdown(f"""
+                    This is a **NAEP-style gain plot**.
 
-                - The **x-axis** is the {reference_year} score at each percentile.
-                - The **y-axis** is the score at that same percentile in a later year.
-                - Points on the **diagonal grey line** = no change.
-                - Points **above** the diagonal = improvement at that percentile.
-                - Points **below** the diagonal = decline at that percentile.
-            """)
+                    - The **x-axis** is the {reference_year} score at each percentile.
+                    - The **y-axis** is the score at that same percentile in a later year.
+                    - Points on the **diagonal grey line** = no change.
+                    - Points **above** the diagonal = improvement at that percentile.
+                    - Points **below** the diagonal = decline at that percentile.
+                """)
 
         with st.expander("🔍 Why might scores change between cycles?"):
             st.markdown("""
@@ -774,17 +767,27 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     eq_col1, eq_col2 = st.columns(2, gap="large")
     with eq_col1:
         st.markdown("#### Scores by Socioeconomic Status")
-        ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
-        if ses_text and "Insufficient" not in ses_text:
-            _insight_box(ses_text)
-        fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
-        st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
+        
+        # 1. The Guardrail (Checks if data exists before doing any math)
+        if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {story_country}.")
+        else:
+            # 2. The Execution (Only runs if data is safe)
+            ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
+            if "Insufficient" not in ses_text:
+                _insight_box(ses_text)
+            
+            fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
+            st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
 
     with eq_col2:
         st.markdown("#### Scores by Immigration Background")
-        fig3b = plot_immigration_score_distribution(
-            df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
-        st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
+        if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {story_country}.")
+        else:
+            fig3b = plot_immigration_score_distribution(
+                df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
+            st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander("📖 How to read the SES chart"):
         st.markdown("""
@@ -819,15 +822,21 @@ def render_story_tab(available_years, all_countries, oecd_countries, partner_cou
     ctx_col1, ctx_col2 = st.columns(2, gap="large")
     with ctx_col1:
         st.markdown("#### Scores by School Location")
-        fig4a = plot_school_location_boxplot(
-            df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
-        st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
+        if check_missing_countries(df_loc, ["SC001Q01TA"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {story_country}.")
+        else:
+            fig4a = plot_school_location_boxplot(
+                df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
+            st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
 
     with ctx_col2:
         st.markdown("#### Scores by School Type")
-        fig4b = plot_school_type_distribution(
-            df=df_type, subject=story_subject, cnt=story_country, year=story_year)
-        st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
+        if check_missing_countries(df_type, ["SCHLTYPE"], [story_country], story_year):
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {story_country}.")
+        else:
+            fig4b = plot_school_type_distribution(
+                df=df_type, subject=story_subject, cnt=story_country, year=story_year)
+            st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
 
     with st.expander("📖 How to read the school location chart"):
         st.markdown("""
@@ -866,176 +875,173 @@ all_countries = sorted(meta["CNT"].unique().tolist())
 oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist())
 partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist())
 
-# Sidebar controls
-st.sidebar.header("Filters")
+# ==========================================
+# SIDEBAR NAVIGATION & ROUTING
+# ==========================================
 
-# 1. Ask for Chart Type FIRST
-side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
-
-group_key = None
-if side_by_side:
-    st.sidebar.markdown("**Left panel**")
-    chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
-    st.sidebar.markdown("**Right panel**")
-    chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
-else:
-    chart_type = st.sidebar.radio("View", CHART_TYPES)
-
-    if chart_type == "Group comparison":
-        group_key = st.sidebar.selectbox(
-            "Break down by",
-            list(GROUP_OPTIONS.keys()),
-            key="group_main"
-        )
-
+# 1. The Main App Router
+app_mode = st.sidebar.radio(
+    "Navigation", 
+    ["📖 Data Story", "🔍 Explore"],
+    label_visibility="collapsed" # Hides the word "Navigation" for a cleaner look
+)
 st.sidebar.markdown("---")
 
-# 2. Country Group Filter
-country_group = st.sidebar.radio(
-    "Country group", ["All", "OECD members", "Partner countries"]
-)
-if country_group == "OECD members":
-    country_pool = oecd_countries
-elif country_group == "Partner countries":
-    country_pool = partner_countries
-else:
-    country_pool = all_countries
+# ==========================================
+# MODE 1: DATA STORY
+# ==========================================
+if app_mode == "📖 Data Story":
+    st.sidebar.header("📖 Story Controls")
 
-# 3. Dynamically Render Country Selector
-SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
-
-if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
-    # Show a single selectbox for strict 1-country charts
-    selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
-    selected_countries = [selected_country]  # Wrap in list so downstream code doesn't break
-else:
-    # Show the standard multiselect for global charts or Side-by-Side mode
-    label = "Countries (Pool)" if side_by_side else "Countries"
-    selected_countries = st.sidebar.multiselect(
-        label, country_pool, default=country_pool[:2]
+    story_country_group = st.sidebar.radio(
+        "Country group",
+        ["All", "OECD members", "Partner countries"],
+        key="story_country_group"
     )
+    if story_country_group == "OECD members":
+        story_pool = oecd_countries
+    elif story_country_group == "Partner countries":
+        story_pool = partner_countries
+    else:
+        story_pool = all_countries
 
-if not selected_countries:
-    st.warning("Please select at least one country.")
-    st.stop()
+    default_idx = story_pool.index("CAN") if "CAN" in story_pool else 0
 
-# 4. Handle Side-by-Side Specific Overrides
-if side_by_side:
-    country_left = st.sidebar.selectbox(
-        "Left country", selected_countries, key="cnt_left"
+    story_country = st.sidebar.selectbox(
+        "Focus country", 
+        story_pool, 
+        index=default_idx, 
+        key="story_country"
     )
-    right_idx = 1 if len(selected_countries) > 1 else 0
-    country_right = st.sidebar.selectbox(
-        "Right country", selected_countries, index=right_idx, key="cnt_right"
+    story_subject = st.sidebar.selectbox(
+        "Subject", list(SUBJECTS.keys()),
+        format_func=lambda x: SUBJECTS[x],
+        key="story_subject"
+    )
+    comparison_countries = st.sidebar.multiselect(
+        "Compare with (optional)",
+        [c for c in story_pool if c != story_country],
+        default=[],
+        max_selections=3,
+        key="story_compare_countries"
     )
     
-    group_key_left = None
-    group_key_right = None
-    if chart_type_left == "Group comparison":
-        group_key_left = st.sidebar.selectbox(
-            "Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left"
+    # Draw the main area
+    render_story_tab(available_years, story_country, story_subject, comparison_countries)
+
+
+# ==========================================
+# MODE 2: EXPLORE
+# ==========================================
+elif app_mode == "🔍 Explore":
+    st.sidebar.header("🔍 Explore Filters")
+
+    side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
+
+    group_key = None
+    if side_by_side:
+        st.sidebar.markdown("**Left panel**")
+        chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
+        st.sidebar.markdown("**Right panel**")
+        chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
+    else:
+        chart_type = st.sidebar.radio("View", CHART_TYPES)
+
+        # Teammate's update: Ask for breakdown group globally if Group comparison is selected
+        if chart_type == "Group comparison":
+            group_key = st.sidebar.selectbox(
+                "Break down by",
+                list(GROUP_OPTIONS.keys()),
+                key="group_main"
+            )
+
+    st.sidebar.markdown("---")
+
+    country_group = st.sidebar.radio(
+        "Country group", ["All", "OECD members", "Partner countries"]
+    )
+    if country_group == "OECD members":
+        country_pool = oecd_countries
+    elif country_group == "Partner countries":
+        country_pool = partner_countries
+    else:
+        country_pool = all_countries
+
+    # Teammate's update: Simplified charts list
+    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
+
+    if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
+        selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
+        selected_countries = [selected_country]
+    else:
+        label = "Countries (Pool)" if side_by_side else "Countries"
+        selected_countries = st.sidebar.multiselect(
+            label, country_pool, default=country_pool[:2]
         )
-    if chart_type_right == "Group comparison":
-        group_key_right = st.sidebar.selectbox(
-            "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
+
+    if not selected_countries:
+        st.warning("Please select at least one country.")
+        st.stop()
+
+    if side_by_side:
+        country_left = st.sidebar.selectbox(
+            "Left country", selected_countries, key="cnt_left"
         )
+        right_idx = 1 if len(selected_countries) > 1 else 0
+        country_right = st.sidebar.selectbox(
+            "Right country", selected_countries, index=right_idx, key="cnt_right"
+        )
+        
+        group_key_left = None
+        group_key_right = None
+        if chart_type_left == "Group comparison":
+            group_key_left = st.sidebar.selectbox(
+                "Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left"
+            )
+        if chart_type_right == "Group comparison":
+            group_key_right = st.sidebar.selectbox(
+                "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
+            )
 
-st.sidebar.markdown("---")
+    st.sidebar.markdown("---")
 
-subject = st.sidebar.selectbox(
-    "Subject", list(SUBJECTS.keys()),
-    format_func=lambda x: SUBJECTS[x]
-)
-
-# plan to remove year selector as all charts use only 1 year or compare across all years.
-st.sidebar.markdown("---")
-ref_year = None
-comp_year = None
-
-# if len(available_years) > 1:
-#     year_mode = st.sidebar.radio(
-#         "Year",
-#         ["Latest (2022)", "All years", "Compare two years"]
-#     )
-#     if year_mode == "Latest (2022)":
-#         selected_year = 2022
-#     elif year_mode == "All years":
-#         selected_year = None
-#     else:
-#         col1, col2 = st.sidebar.columns(2)
-#         with col1:
-#             ref_year = st.selectbox(
-#                 "Reference year",
-#                 available_years[:-1],          
-#                 index=0,
-#                 key="ref_year"
-#             )
-#         with col2:
-#             later_years = [y for y in available_years if y > ref_year]
-#             comp_year = st.selectbox(
-#                 "Compare to",
-#                 later_years,
-#                 index=len(later_years) - 1,
-#                 key="comp_year"
-#             )
-#         selected_year = None   
-#         st.sidebar.caption(
-#             f"Reference: {ref_year} (x-axis) → Compare: {comp_year}"
-#         )
-# else:
-#     selected_year = available_years[0]
-
-is_time_chart = (
-    (not side_by_side and chart_type == "Change over time") or
-    (side_by_side and (
-        chart_type_left == "Change over time" or
-        chart_type_right == "Change over time"
-    ))
-)
-
-if is_time_chart:
-    st.sidebar.markdown("### Time comparison")
-
-    ref_year = st.sidebar.selectbox(
-        "Baseline year",
-        available_years[:-1],
-        index=0,
-        key="ref_year"
+    subject = st.sidebar.selectbox(
+        "Subject", list(SUBJECTS.keys()),
+        format_func=lambda x: SUBJECTS[x]
     )
 
-    later_years = [y for y in available_years if y > ref_year]
-
-    comp_year = st.sidebar.selectbox(
-        "Compare to",
-        later_years,
-        index=len(later_years) - 1,
-        key="comp_year"
+    st.sidebar.markdown("---")
+    
+    # Teammate's update: Context-aware Year Selection UI
+    is_time_chart = (
+        (not side_by_side and chart_type == "Score change over time") or
+        (side_by_side and (
+            chart_type_left == "Score change over time" or
+            chart_type_right == "Score change over time"
+        ))
     )
 
-    selected_year = None
+    if is_time_chart:
+        st.sidebar.markdown("### Time comparison")
+        ref_year = st.sidebar.selectbox(
+            "Baseline year", available_years[:-1], index=0, key="ref_year"
+        )
+        later_years = [y for y in available_years if y > ref_year]
+        comp_year = st.sidebar.selectbox(
+            "Compare to", later_years, index=len(later_years) - 1, key="comp_year"
+        )
+        selected_year = None
+    else:
+        selected_year = st.sidebar.selectbox(
+            "Year", available_years, 
+            index=available_years.index(2022) if 2022 in available_years else len(available_years) - 1
+        )
+        ref_year = None
+        comp_year = None
 
-else:
-    selected_year = st.sidebar.selectbox(
-        "Year",
-        available_years,
-        index=available_years.index(
-            2022) if 2022 in available_years else len(available_years) - 1
-    )
+    primary_country = selected_countries[0]
 
-primary_country = selected_countries[0]
-
-st.title("PISA Score Distribution Dashboard")
-st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
-           f"{len(all_countries)} countries")
-
-# ── Two-tab structure ──────────────────────────────────────────────────────
-tab1, tab2 = st.tabs(["📖 Data Story", "🔍 Explore"])
-
-with tab1:
-    render_story_tab(available_years, all_countries, oecd_countries, partner_countries)
-
-with tab2:
-
+    # Draw the main area for Explore
     if side_by_side:
         left_col, right_col = st.columns(2)
         with left_col:

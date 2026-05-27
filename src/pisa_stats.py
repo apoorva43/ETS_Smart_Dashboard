@@ -74,16 +74,20 @@ def compute_escs_quartile_percentiles(df: pd.DataFrame, subject: str,
     if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
+    labels = ["Q1 (low SES)", "Q2", "Q3", "Q4 (high SES)"]
+
+    if len(subset) < 4:
+        return {q: np.full(len(percentiles), np.nan) for q in labels}
+
     subset["ESCS_Q"] = pd.qcut(
         subset["ESCS"].rank(method="first"), 
         q=4,
-        labels=["Q1 (low SES)", "Q2", "Q3", "Q4 (high SES)"]
+        labels=labels
     )
     
     return {
-        q: weighted_percentiles_pv(subset[subset["ESCS_Q"] == q],
-                                    subject, percentiles)
-        for q in ["Q1 (low SES)", "Q2", "Q3", "Q4 (high SES)"]
+        q: weighted_percentiles_pv(subset[subset["ESCS_Q"] == q], subject, percentiles)
+        for q in labels
     }
 
 
