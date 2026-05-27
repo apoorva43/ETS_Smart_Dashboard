@@ -372,3 +372,165 @@ def plot_quantile_dotplot_shared_axis(df: pd.DataFrame, subject: str,
             ax.set_position([pos.x0, pos.y0, min_width, pos.height])
 
     return fig
+
+
+def plot_quantile_dotplot_diff_axis(df: pd.DataFrame, subject: str,
+                                    countries: list,
+                                    year: int = None,
+                                    n_dots: int = 20) -> plt.Figure:
+    """
+    Quantile dotplot of the BRR distribution of mean scores per country,
+    following Kay et al. (2016), with a horizontal boxplot overlay on
+    the x-axis in the style of a raincloud plot.
+
+    Dots are binned into discrete score columns and stacked vertically,
+    forming a histogram-like mountain shape. A compact horizontal boxplot
+    sits on the x-axis baseline to show median and IQR at a glance. 
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full PISA dataset containing BRR replicate weight columns
+        ``W_FSTURWT1`` through ``W_FSTURWT80``.
+    subject : str
+        Subject code, e.g. ``"MATH"``, ``"READ"``, or ``"SCIE"``.
+    countries : list of str
+        Country codes to compare side by side, e.g. ``["CAN", "USA"]``.
+    year : int, optional
+        Filter to a single PISA cycle (2015, 2018, or 2022).
+        ``None`` uses all available years.
+    n_dots : int, optional
+        Number of dots. Each dot represents ``100 / n_dots`` percent
+        probability. 20 (5% per dot) is recommended. Defaults to 20.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure with one panel per country showing a vertically stacked
+        quantile dotplot above a horizontal boxplot baseline.
+    """
+    n_countries = len(countries)
+    fig, axes = plt.subplots(
+        1, n_countries,
+        figsize=(4.5 * n_countries, 4.5),
+        sharey=False
+    )
+    if n_countries == 1:
+        axes = [axes]
+
+    color_cycle = list(COUNTRY_COLORS.values()) + \
+        [OKABE_ITO["green"], OKABE_ITO["orange"], OKABE_ITO["pink"]]
+
+    # Fixed dot radius in points - same regardless of n_dots
+    DOT_PT = 7
+    DOT_S  = DOT_PT ** 2 * 3.14
+
+    for ax, cnt, color in zip(
+        axes,
+        countries,
+        [color_cycle[i % len(color_cycle)] for i in range(n_countries)]
+    ):
+        subset = df[df["CNT"] == cnt]
+        if year is not None and "YEAR" in df.columns:
+            subset = subset[subset["YEAR"] == year]
+
+        dist = _brr_mean_distribution(subset, subject)
+        valid = dist[~np.isnan(dist)]
+
+        if len(valid) < 5:
+            ax.text(0.5, 0.5, f"Insufficient data\nfor {cnt}",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=10, color="gray")
+            ax.axis("off")
+            continue
+
+        # Step 1: sample n_dots equally-spaced quantiles 
+        quantile_probs = np.linspace(
+            1 / (2 * n_dots),
+            1 - 1 / (2 * n_dots),
+            n_dots
+        )
+        dot_values = np.quantile(valid, quantile_probs)
+
+        # Step 2: bin into ~sqrt(n_dots) wide columns 
+        n_bins = max(int(np.round(np.sqrt(n_dots))), 3)
+        bin_edges = np.linspace(dot_values.min(), dot_values.max(), n_bins + 1)
+        bin_edges[0]  -= 1e-6
+        bin_edges[-1] += 1e-6
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        # Step 3: stack dots vertically within each bin 
+        bin_indices = np.clip(
+            np.digitize(dot_values, bin_edges) - 1, 0, n_bins - 1
+        )
+        dot_x, dot_y = [], []
+        bin_counts: dict = {}
+        for b in bin_indices:
+            count = bin_counts.get(b, 0)
+            dot_x.append(bin_centers[b])
+            dot_y.append(count + 1)       # y=1 is the bottom row
+            bin_counts[b] = count + 1
+
+        # Step 4: draw the dot cloud 
+        ax.scatter(dot_x, dot_y,
+                   s=DOT_S, color=color, alpha=0.88,
+                   zorder=3, edgecolors="white", linewidths=0.4)
+
+        # Step 5: horizontal boxplot on the x-axis (y=0) 
+        q1, med, q3 = np.percentile(valid, [25, 50, 75])
+        iqr  = q3 - q1
+        lo   = max(valid.min(), q1 - 1.5 * iqr)
+        hi   = min(valid.max(), q3 + 1.5 * iqr)
+        bh   = 0.35   # box half-height in y-data units
+
+        # Whisker lines
+        ax.plot([lo, q1], [0, 0], color=color, lw=1.2, zorder=4)
+        ax.plot([q3, hi], [0, 0], color=color, lw=1.2, zorder=4)
+
+        # IQR box
+        box = plt.Rectangle(
+            (q1, -bh), q3 - q1, 2 * bh,
+            facecolor=color, alpha=0.25,
+            edgecolor=color, linewidth=1.2, zorder=4
+        )
+        ax.add_patch(box)
+
+        # Median tick
+        ax.plot([med, med], [-bh, bh],
+                color=color, lw=2, zorder=5)
+
+        # Whisker caps
+        cap_h = bh * 0.6
+        for x in [lo, hi]:
+            ax.plot([x, x], [-cap_h, cap_h],
+                    color=color, lw=1.2, zorder=4)
+
+        # Axis formatting 
+        bin_width = bin_edges[1] - bin_edges[0]
+        pad = bin_width * 0.8
+        ax.set_xlim(dot_values.min() - pad, dot_values.max() + pad)
+        ax.set_ylim(-1, max(dot_y) + 0.8)
+
+        # Draw x-axis baseline at y=0
+        ax.axhline(0, color="#cccccc", lw=0.8, zorder=1)
+
+        ax.set_xlabel(f"{subject} mean score", fontsize=10)
+        ax.set_yticks([])
+        ax.spines["left"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)   # replaced by axhline
+
+        ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=5, integer=True))
+        ax.set_title(cnt, fontsize=13, fontweight="500", color=color, pad=8)
+
+    year_str = str(year) if year else "all years"
+    prob_per_dot = round(100 / n_dots, 1)
+    fig.suptitle(
+        f"How certain are we about mean {subject} scores? ({year_str})\n"
+        f"Each dot = {prob_per_dot}% chance of this outcome  "
+        "[Kay et al. 2016]",
+        fontsize=10, fontweight="500", y=1.04
+    )
+    plt.tight_layout()
+    return fig
