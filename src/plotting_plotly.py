@@ -286,39 +286,137 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
 
 
 def plot_year_diff_percentile(df, subject: str, cnt: str,
-                               reference_year: int, comparison_year: int,
-                               group_col: str = None, group_val: float = None,
-                               group_label: str = "All students") -> go.Figure:
-    
-    def get_subset(year):
-        subset = df[(df["CNT"] == cnt) & (df["YEAR"] == year)]
-        if group_col is not None and group_val is not None:
-            subset = subset[subset[group_col] == group_val]
-        return subset
+                              reference_year: int,
+                              comparison_years) -> go.Figure:
+    """
+    Plot score change across percentiles relative to a baseline year.
 
-    ref_percs = weighted_percentiles_pv(get_subset(reference_year), subject, PERCENTILES_FINE)
-    comp_percs = weighted_percentiles_pv(get_subset(comparison_year), subject, PERCENTILES_FINE)
+    X-axis = baseline-year percentile score.
+    Y-axis = comparison-year score minus baseline-year score.
+
+    If multiple comparison years are provided, one line is drawn per
+    comparison year. Percentile symbols are fixed:
+    triangle-down 10th, square 25th, diamond 50th, circle 75th, triangle-up 90th.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing CNT, YEAR, weights, and plausible value columns.
+    subject : str
+        Subject code: "MATH", "READ", or "SCIE".
+    cnt : str
+        Country code.
+    reference_year : int
+        Baseline year shown on the x-axis.
+    comparison_years : int or list[int]
+        Year(s) to compare against the baseline year.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        Plotly figure.
+    """
+    if isinstance(comparison_years, int):
+        comparison_years = [comparison_years]
+
+    comparison_years = [y for y in comparison_years if y != reference_year]
 
     fig = go.Figure()
-    if np.isnan(ref_percs).all() or np.isnan(comp_percs).all():
-        return _check_sufficient_data(pd.DataFrame(), [], cnt, msg="Insufficient data to compute difference")[1]
 
-    delta = comp_percs - ref_percs
+    subset = df[df["CNT"] == cnt].copy()
 
-    fig.add_hline(y=0, line_dash="dash", line_color="#777777", line_width=1.5)
+    ref_subset = subset[subset["YEAR"] == reference_year]
+    ref_percs = weighted_percentiles_pv(
+        ref_subset, subject, PERCENTILES_COARSE)
 
-    fig.add_trace(go.Scatter(
-        x=PERCENTILES_FINE, y=delta,
-        mode="lines", name=f"{comparison_year} - {reference_year}",
-        line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
-        hovertemplate="Percentile: %{x}<br>Score Diff: %{y:.1f}<extra></extra>"
-    ))
+    if np.isnan(ref_percs).all():
+        return _check_sufficient_data(
+            pd.DataFrame(), [], cnt,
+            msg=f"Insufficient data for baseline year {reference_year}"
+        )[1]
+
+    marker_map = {
+        10: "triangle-down",
+        25: "square",
+        50: "diamond",
+        75: "circle",
+        90: "triangle-up",
+    }
+
+    symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
+
+    # zero reference line
+    fig.add_hline(
+        y=0,
+        line_dash="solid",
+        line_color=OKABE_ITO["vermillion"],
+        line_width=1.4
+    )
+
+    for i, comp_year in enumerate(comparison_years):
+        comp_subset = subset[subset["YEAR"] == comp_year]
+        comp_percs = weighted_percentiles_pv(
+            comp_subset, subject, PERCENTILES_COARSE)
+
+        if np.isnan(comp_percs).all():
+            continue
+
+        delta = comp_percs - ref_percs
+        color = YEAR_COLORS.get(comp_year, PALETTE[i % len(PALETTE)])
+
+        # line trace
+        fig.add_trace(go.Scatter(
+            x=ref_percs,
+            y=delta,
+            mode="lines",
+            name=str(comp_year),
+            legendgroup=str(comp_year),
+            line=dict(color=color, width=2.5),
+            hoverinfo="skip",
+        ))
+
+        # one marker per percentile so symbols can differ
+        for p, x0, comp0, d0 in zip(PERCENTILES_COARSE, ref_percs, comp_percs, delta):
+            fig.add_trace(go.Scatter(
+                x=[x0],
+                y=[d0],
+                mode="markers",
+                name=str(comp_year),
+                legendgroup=str(comp_year),
+                showlegend=False,
+                marker=dict(
+                    symbol=marker_map[p],
+                    size=11,
+                    color=color,
+                    line=dict(color=OKABE_ITO["black"], width=0.8),
+                ),
+                customdata=[[p, x0, comp0, d0]],
+                hovertemplate=(
+                    f"Year: {comp_year}<br>"
+                    "Percentile: %{{customdata[0]}<br>"
+                    f"{reference_year} score: %{{customdata[1]:.0f}}<br>"
+                    f"{comp_year} score: %{{customdata[2]:.0f}}<br>"
+                    "Change: %{{customdata[3]:+.1f}}<extra></extra>"
+                ),
+            ))
 
     fig.update_layout(**_base_layout(
-        title=f"Score Change Across Distribution | {SUBJECTS[subject]} | {cnt}<br><sup>({comparison_year} vs {reference_year})</sup>"
+        title=(
+            f"{SUBJECTS[subject]} score change by percentile | {cnt}<br>"
+            f"<sup>{symbol_note}</sup>"
+        )
     ))
-    fig.update_xaxes(title="Percentile")
-    fig.update_yaxes(title=f"Score Difference ({comparison_year} - {reference_year})")
+
+    fig.update_xaxes(
+        title=f"{reference_year} score (baseline)",
+        zeroline=False
+    )
+
+    fig.update_yaxes(
+        title=f"Change in {SUBJECTS[subject]} score (comparison − {reference_year})",
+        zeroline=False
+    )
+
     return fig
 
 

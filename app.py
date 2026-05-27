@@ -208,8 +208,8 @@ CHART_HELP_TEXT = {
 * **The Whiskers (The Tails):** The lines extending from the box show the 10th and 90th percentiles.
 * **The Dots (Jitter):** A weighted sample of up to 1,000 students, showing exactly how individual scores are clustered.
     """,
-    "Gender gap": """
-**How to read this gap chart:**
+    "Score by gender": """
+**How to read this difference chart:**
 * **The Diagonal Line:** This represents perfect equality. If boys and girls scored exactly the same, the colored line would sit perfectly on this dotted line.
 * **Above the Line:** If the colored curve goes *above* the dotted line, Male students are scoring higher at that specific percentile.
 * **Below the Line:** If the colored curve dips *below*, Female students are scoring higher.
@@ -228,8 +228,8 @@ def render_chart_help(chart_type, group_key=None):
     help_key = None
     if chart_type == "Score distribution":
         help_key = "Score distribution"
-    elif chart_type == "Gender gap":
-        help_key = "Gender gap"
+    elif chart_type == "Score by gender":
+        help_key = "Score by gender"
     elif chart_type == "Country Scatterplot":
         help_key = "Country Scatterplot"
     elif chart_type == "Group comparison" and group_key == "School location":
@@ -441,46 +441,59 @@ def render_chart(chart_type, subject, selected_countries,
                 f"Score distribution broken down by {group_key} for {primary_country}."
             )
 
+
     elif chart_type == "Change over time":
+        df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         if len(available_years) < 2:
             st.warning(
-                "Only one year of data loaded. Run `make data` to add more years.")
+                "Only one year of data loaded. Run `make data` to add more years."
+            )
             return
 
         if len(selected_countries) > 1:
             st.info(
-                f"Time comparison shows one country at a time — displaying {primary_country}.")
+                f"Time comparison shows one country at a time — displaying {primary_country}."
+            )
 
-        df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
-        # If two specific years were selected, use those; otherwise default
-        # to all available years with the latest as reference.
-        if ref_year is not None and comp_year is not None:
-            reference_year    = ref_year
-            comparison_years  = [comp_year]
+        if year_mode == "Compare two years":
+            if ref_year is None or comp_year is None:
+                st.warning(
+                    "Please select both a reference year and a comparison year.")
+                return
+
             fig = plot_year_diff_percentile(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
-                reference_year=reference_year,
-                comparison_year=comp_year,
+                reference_year=ref_year,
+                comparison_years=[comp_year],
             )
-        else:
-            reference_year    = max(available_years)
-            comparison_years  = [y for y in available_years if y != max(available_years)]
 
-            fig = plot_naep_time_comparison(
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
+            st.info(
+                f"X-axis shows {ref_year} scores. "
+                f"Y-axis shows score change ({comp_year} − {ref_year})."
+            )
+
+        else:
+            reference_year = min(available_years)
+            comparison_years = [y for y in available_years if y != reference_year]
+
+            fig = plot_year_diff_percentile(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
                 reference_year=reference_year,
                 comparison_years=comparison_years,
             )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.info(
-            f"X-axis shows {reference_year} scores as the reference. "
-            "Points above the diagonal indicate improvement relative to the reference year. "
-            "Points below indicate decline."
-        )
+
+            st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
+            st.info(
+                f"X-axis shows {reference_year} scores. "
+                f"Each coloured line shows change relative to {reference_year}."
+            )
         
     elif chart_type == "Score distribution":
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols))
