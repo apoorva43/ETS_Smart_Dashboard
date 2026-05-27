@@ -551,6 +551,58 @@ def render_chart(chart_type, subject, selected_countries,
             highlight_countries=valid_countries
         ))
 
+# ---------------------------------------------------------------------------
+# Data Story helpers — Tab 1 only
+# ---------------------------------------------------------------------------
+
+def _story_section_header(number, title, subtitle):
+    """Render a numbered section header for the story tab."""
+    st.markdown(
+        f"""
+        <div style="
+            border-left: 4px solid #0072B2;
+            padding: 8px 16px;
+            margin: 24px 0 8px 0;
+            background: #f7f9fc;
+            border-radius: 0 6px 6px 0;
+        ">
+            <span style="color:#0072B2; font-size:0.8rem; font-weight:700;
+                         letter-spacing:0.08em; text-transform:uppercase;">
+                Section {number}
+            </span><br>
+            <span style="font-size:1.25rem; font-weight:700; color:#1a1a2e;">
+                {title}
+            </span><br>
+            <span style="font-size:0.9rem; color:#555;">{subtitle}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _insight_box(text):
+    """Render a highlighted key-finding callout above a chart."""
+    st.markdown(
+        f"""
+        <div style="
+            background: #e8f4fd;
+            border: 1px solid #b3d9f5;
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+            color: #1a3a52;
+        ">
+            💡 <strong>Key finding:</strong> {text}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_story_tab(available_years, all_countries, oecd_countries, partner_countries):
+    """Render the full Data Story tab — called in Commit 3."""
+    pass
 
 # Load data and derive country lists
 meta = get_meta()
