@@ -534,3 +534,187 @@ def plot_quantile_dotplot_diff_axis(df: pd.DataFrame, subject: str,
     )
     plt.tight_layout()
     return fig
+
+
+def plot_quantile_dotplot_stacked(df: pd.DataFrame, subject: str,
+                                  countries: list,
+                                  year: int = None,
+                                  n_dots: int = 20) -> plt.Figure:
+    """
+    Quantile dotplot of the BRR distribution of mean scores per country,
+    following Kay et al. (2016), with a horizontal boxplot overlay on
+    the x-axis in the style of a raincloud plot.
+
+    Countries are stacked vertically and share a single x-axis, making
+    distributional differences in position and spread directly comparable.
+    Dots are binned into discrete score columns and stacked vertically
+    within each panel, forming a histogram-like mountain shape. A compact
+    horizontal boxplot sits on each panel's baseline to show median and IQR
+    at a glance.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Full PISA dataset containing BRR replicate weight columns
+        ``W_FSTURWT1`` through ``W_FSTURWT80``.
+    subject : str
+        Subject code, e.g. ``"MATH"``, ``"READ"``, or ``"SCIE"``.
+    countries : list of str
+        Country codes to compare, e.g. ``["CAN", "USA"]``.
+    year : int, optional
+        Filter to a single PISA cycle (2015, 2018, or 2022).
+        ``None`` uses all available years.
+    n_dots : int, optional
+        Number of dots. Each dot represents ``100 / n_dots`` percent
+        probability. 20 (5% per dot) is recommended. Defaults to 20.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Figure with one row per country, all sharing the same x-axis.
+    """
+    n_countries = len(countries)
+    color_cycle = list(COUNTRY_COLORS.values()) + list(OKABE_ITO.values())
+
+    DOT_PT = 8
+    DOT_S  = DOT_PT ** 2 * 3.14
+
+    # Pre-compute all BRR distributions and shared x-limits
+    country_dists = {}
+    all_vals = []
+    for cnt in countries:
+        subset = df[df["CNT"] == cnt]
+        if year is not None and "YEAR" in df.columns:
+            subset = subset[subset["YEAR"] == year]
+        dist  = _brr_mean_distribution(subset, subject)
+        valid = dist[~np.isnan(dist)]
+        country_dists[cnt] = (dist, valid)
+        if len(valid) >= 5:
+            all_vals.extend(valid.tolist())
+
+    if all_vals:
+        global_pad = (np.max(all_vals) - np.min(all_vals)) * 0.15
+        x_lo = np.min(all_vals) - global_pad
+        x_hi = np.max(all_vals) + global_pad
+    else:
+        x_lo, x_hi = None, None
+
+    # Precompute dot layouts to set consistent y-limits
+    max_stack = 1
+    country_dots = {}
+    for cnt in countries:
+        _, valid = country_dists[cnt]
+        if len(valid) < 5:
+            country_dots[cnt] = ([], [], 1)
+            continue
+
+        quantile_probs = np.linspace(
+            1 / (2 * n_dots), 1 - 1 / (2 * n_dots), n_dots
+        )
+        dot_values = np.quantile(valid, quantile_probs)
+
+        n_bins = max(int(np.round(np.sqrt(n_dots))), 3)
+        bin_edges = np.linspace(dot_values.min(), dot_values.max(), n_bins + 1)
+        bin_edges[0]  -= 1e-6
+        bin_edges[-1] += 1e-6
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        bin_indices = np.clip(
+            np.digitize(dot_values, bin_edges) - 1, 0, n_bins - 1
+        )
+        dot_x, dot_y = [], []
+        bin_counts: dict = {}
+        for b in bin_indices:
+            count = bin_counts.get(b, 0)
+            dot_x.append(bin_centers[b])
+            dot_y.append(count + 1)
+            bin_counts[b] = count + 1
+
+        country_dots[cnt] = (dot_x, dot_y, dot_values)
+        max_stack = max(max_stack, max(dot_y))
+
+    # Create vertically stacked subplots sharing x-axis
+    fig, axes = plt.subplots(
+        n_countries, 1,
+        figsize=(7, 3.2 * n_countries),
+        sharex=True,                      # single shared x-axis
+    )
+    if n_countries == 1:
+        axes = [axes]
+
+    for ax, cnt, color in zip(
+        axes,
+        countries,
+        [color_cycle[i % len(color_cycle)] for i in range(n_countries)]
+    ):
+        _, valid = country_dists[cnt]
+        dot_x, dot_y, dot_values = country_dots[cnt]
+
+        if len(valid) < 5:
+            ax.text(0.5, 0.5, f"Insufficient data for {cnt}",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=10, color="gray")
+            ax.axis("off")
+            continue
+
+        # Dot cloud
+        ax.scatter(dot_x, dot_y,
+                   s=DOT_S, color=color, alpha=0.88,
+                   zorder=3, edgecolors="white", linewidths=0.4)
+
+        # Horizontal boxplot on baseline (y=0) 
+        q1, med, q3 = np.percentile(valid, [25, 50, 75])
+        iqr = q3 - q1
+        lo  = max(valid.min(), q1 - 1.5 * iqr)
+        hi  = min(valid.max(), q3 + 1.5 * iqr)
+        bh  = 0.35
+
+        ax.plot([lo, q1], [0, 0], color=color, lw=1.2, zorder=4)
+        ax.plot([q3, hi], [0, 0], color=color, lw=1.2, zorder=4)
+
+        box = plt.Rectangle(
+            (q1, -bh), q3 - q1, 2 * bh,
+            facecolor=color, alpha=0.25,
+            edgecolor=color, linewidth=1.2, zorder=4
+        )
+        ax.add_patch(box)
+        ax.plot([med, med], [-bh, bh], color=color, lw=2, zorder=5)
+
+        cap_h = bh * 0.6
+        for x in [lo, hi]:
+            ax.plot([x, x], [-cap_h, cap_h], color=color, lw=1.2, zorder=4)
+
+        # Axis formatting
+        ax.set_ylim(-1, max_stack + 0.8)   # consistent height across rows
+        ax.axhline(0, color="#cccccc", lw=0.8, zorder=1)
+        ax.set_yticks([])
+        ax.spines["left"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+
+        # Country label on the right as a y-axis title
+        ax.set_ylabel(cnt, fontsize=12, fontweight="500",
+                      color=color, rotation=0,
+                      labelpad=40, va="center")
+
+    # Shared x-axis label on the bottom panel only 
+    axes[-1].set_xlabel(f"{subject} mean score", fontsize=10)
+    if x_lo is not None:
+        axes[-1].set_xlim(x_lo, x_hi)
+        axes[-1].xaxis.set_major_locator(
+            mticker.MaxNLocator(nbins=6, integer=True)
+        )
+    axes[-1].spines["bottom"].set_visible(True)
+    axes[-1].spines["bottom"].set_color("#cccccc")
+
+    year_str = str(year) if year else "all years"
+    prob_per_dot = round(100 / n_dots, 1)
+    fig.suptitle(
+        f"How certain are we about mean {subject} scores? ({year_str})\n"
+        f"Each dot = {prob_per_dot}% chance of this outcome  "
+        "[Kay et al. 2016]",
+        fontsize=10, fontweight="500"
+    )
+    plt.tight_layout()
+    return fig
