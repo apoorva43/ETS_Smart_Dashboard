@@ -119,7 +119,7 @@ def plot_country_distributions(df, subject: str,
                 hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
-    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
+    fig.update_layout(**_base_layout(title=f"Percentile Score Profile | {SUBJECTS[subject]}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -149,7 +149,7 @@ def plot_escs_gap(df, subject, cnt, year=None):
             marker=dict(size=6)
         ))
 
-    fig.update_layout(**_base_layout(title=f"SES Gap | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by Socioeconomic Status | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -286,39 +286,137 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
 
 
 def plot_year_diff_percentile(df, subject: str, cnt: str,
-                               reference_year: int, comparison_year: int,
-                               group_col: str = None, group_val: float = None,
-                               group_label: str = "All students") -> go.Figure:
-    
-    def get_subset(year):
-        subset = df[(df["CNT"] == cnt) & (df["YEAR"] == year)]
-        if group_col is not None and group_val is not None:
-            subset = subset[subset[group_col] == group_val]
-        return subset
+                              reference_year: int,
+                              comparison_years) -> go.Figure:
+    """
+    Plot score change across percentiles relative to a baseline year.
 
-    ref_percs = weighted_percentiles_pv(get_subset(reference_year), subject, PERCENTILES_FINE)
-    comp_percs = weighted_percentiles_pv(get_subset(comparison_year), subject, PERCENTILES_FINE)
+    X-axis = baseline-year percentile score.
+    Y-axis = comparison-year score minus baseline-year score.
+
+    If multiple comparison years are provided, one line is drawn per
+    comparison year. Percentile symbols are fixed:
+    triangle-down 10th, square 25th, diamond 50th, circle 75th, triangle-up 90th.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing CNT, YEAR, weights, and plausible value columns.
+    subject : str
+        Subject code: "MATH", "READ", or "SCIE".
+    cnt : str
+        Country code.
+    reference_year : int
+        Baseline year shown on the x-axis.
+    comparison_years : int or list[int]
+        Year(s) to compare against the baseline year.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        Plotly figure.
+    """
+    if isinstance(comparison_years, int):
+        comparison_years = [comparison_years]
+
+    comparison_years = [y for y in comparison_years if y != reference_year]
 
     fig = go.Figure()
-    if np.isnan(ref_percs).all() or np.isnan(comp_percs).all():
-        return _check_sufficient_data(pd.DataFrame(), [], cnt, msg="Insufficient data to compute difference")[1]
 
-    delta = comp_percs - ref_percs
+    subset = df[df["CNT"] == cnt].copy()
 
-    fig.add_hline(y=0, line_dash="dash", line_color="#777777", line_width=1.5)
+    ref_subset = subset[subset["YEAR"] == reference_year]
+    ref_percs = weighted_percentiles_pv(
+        ref_subset, subject, PERCENTILES_COARSE)
 
-    fig.add_trace(go.Scatter(
-        x=PERCENTILES_FINE, y=delta,
-        mode="lines", name=f"{comparison_year} - {reference_year}",
-        line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
-        hovertemplate="Percentile: %{x}<br>Score Diff: %{y:.1f}<extra></extra>"
-    ))
+    if np.isnan(ref_percs).all():
+        return _check_sufficient_data(
+            pd.DataFrame(), [], cnt,
+            msg=f"Insufficient data for baseline year {reference_year}"
+        )[1]
+
+    marker_map = {
+        10: "triangle-down",
+        25: "square",
+        50: "diamond",
+        75: "circle",
+        90: "triangle-up",
+    }
+
+    symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
+
+    # zero reference line
+    fig.add_hline(
+        y=0,
+        line_dash="solid",
+        line_color=OKABE_ITO["vermillion"],
+        line_width=1.4
+    )
+
+    for i, comp_year in enumerate(comparison_years):
+        comp_subset = subset[subset["YEAR"] == comp_year]
+        comp_percs = weighted_percentiles_pv(
+            comp_subset, subject, PERCENTILES_COARSE)
+
+        if np.isnan(comp_percs).all():
+            continue
+
+        delta = comp_percs - ref_percs
+        color = YEAR_COLORS.get(comp_year, PALETTE[i % len(PALETTE)])
+
+        # line trace
+        fig.add_trace(go.Scatter(
+            x=ref_percs,
+            y=delta,
+            mode="lines",
+            name=str(comp_year),
+            legendgroup=str(comp_year),
+            line=dict(color=color, width=2.5),
+            hoverinfo="skip",
+        ))
+
+        # one marker per percentile so symbols can differ
+        for p, x0, comp0, d0 in zip(PERCENTILES_COARSE, ref_percs, comp_percs, delta):
+            fig.add_trace(go.Scatter(
+                x=[x0],
+                y=[d0],
+                mode="markers",
+                name=str(comp_year),
+                legendgroup=str(comp_year),
+                showlegend=False,
+                marker=dict(
+                    symbol=marker_map[p],
+                    size=11,
+                    color=color,
+                    line=dict(color=OKABE_ITO["black"], width=0.8),
+                ),
+                customdata=[[p, x0, comp0, d0]],
+                hovertemplate=(
+                    f"Year: {comp_year}<br>"
+                    "Percentile: %{customdata[0]}<br>"
+                    f"{reference_year} score: %{{customdata[1]:.0f}}<br>"
+                    f"{comp_year} score: %{{customdata[2]:.0f}}<br>"
+                    "Change: %{customdata[3]:+.1f}<extra></extra>"
+                ), 
+            ))
 
     fig.update_layout(**_base_layout(
-        title=f"Score Change Across Distribution | {SUBJECTS[subject]} | {cnt}<br><sup>({comparison_year} vs {reference_year})</sup>"
+        title=(
+            f"{SUBJECTS[subject]} score change by percentile | {cnt}<br>"
+            f"<sup>{symbol_note}</sup>"
+        )
     ))
-    fig.update_xaxes(title="Percentile")
-    fig.update_yaxes(title=f"Score Difference ({comparison_year} - {reference_year})")
+
+    fig.update_xaxes(
+        title=f"{reference_year} score (baseline)",
+        zeroline=False
+    )
+
+    fig.update_yaxes(
+        title=f"Change in {SUBJECTS[subject]} score (comparison − {reference_year})",
+        zeroline=False
+    )
+
     return fig
 
 
@@ -379,41 +477,146 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
 
 
 def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) -> go.Figure:
-    subset = df[df["CNT"] == cnt]
-    if year is not None and "YEAR" in df.columns:
+    """
+    Plot the gender score difference across the distribution using Plotly.
+
+    The x-axis shows the female reference score at each percentile. The y-axis
+    shows the score difference between male and female students at the matched
+    percentile. Positive values indicate higher male scores, while negative
+    values indicate higher female scores.
+
+    This version uses neutral, accessible colors rather than gender-coded
+    colors. The main line is black, with positive and negative differences
+    shaded using Okabe-Ito blue and orange.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        PISA dataset containing gender identifiers, weights, plausible value
+        score columns, and optionally a year column.
+    subject : str
+        Subject code used to select plausible value columns. Expected values
+        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
+    cnt : str
+        Country code to filter the data, such as ``"CAN"`` or ``"USA"``.
+    year : int, optional
+        PISA cycle year to filter by. If ``None``, all available years are used.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+        Plotly figure showing gender score difference across percentiles.
+    """
+    subset = df[df["CNT"] == cnt].copy()
+
+    if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
     female = subset[subset["ST004D01T"] == 1.0]
     male = subset[subset["ST004D01T"] == 2.0]
 
-    female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
-    male_percs = weighted_percentiles_pv(male, subject, PERCENTILES_FINE)
+    female_percs = weighted_percentiles_pv(
+        female, subject, PERCENTILES_FINE
+    )
+    male_percs = weighted_percentiles_pv(
+        male, subject, PERCENTILES_FINE
+    )
 
     fig = go.Figure()
+
     if np.isnan(female_percs).all() or np.isnan(male_percs).all():
-        return _check_sufficient_data(pd.DataFrame(), [], cnt, msg="Insufficient data")[1]
+        return _check_sufficient_data(
+            pd.DataFrame(), [], cnt, msg="Insufficient data"
+        )[1]
 
     diff = male_percs - female_percs
 
-    fig.add_hline(y=0, line_dash="dash", line_color="#cccccc", line_width=1.5, annotation_text="No gap")
+    positive_diff = np.where(diff >= 0, diff, 0)
+    negative_diff = np.where(diff < 0, diff, 0)
 
-    line_color = COUNTRY_COLORS.get(cnt, "#185FA5") if diff.mean() >= 0 else OKABE_ITO.get("pink", "#CC79A7")
+    # Accessible, non-gender-coded colors
+    positive_fill = "rgba(0, 114, 178, 0.22)"   # Okabe-Ito blue
+    negative_fill = "rgba(230, 159, 0, 0.22)"   # Okabe-Ito orange
+    main_line = OKABE_ITO.get("black", "#000000")
+
+    fig.add_hline(
+        y=0,
+        line_dash="dash",
+        line_color="#999999",
+        line_width=1.5,
+        annotation_text="No difference",
+        annotation_position="top left",
+    )
 
     fig.add_trace(go.Scatter(
-        x=female_percs, y=diff,
-        mode="lines", name="Difference",
-        line=dict(color=line_color, width=2.5),
-        customdata=PERCENTILES_FINE,
-        hovertemplate="Percentile: %{customdata}<br>Score Diff: %{y:.1f}<extra></extra>"
+        x=female_percs,
+        y=positive_diff,
+        mode="lines",
+        line=dict(width=0),
+        fill="tozeroy",
+        fillcolor=positive_fill,
+        name="Positive difference",
+        hoverinfo="skip",
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=female_percs,
+        y=negative_diff,
+        mode="lines",
+        line=dict(width=0),
+        fill="tozeroy",
+        fillcolor=negative_fill,
+        name="Negative difference",
+        hoverinfo="skip",
+    ))
+
+    customdata = np.column_stack([
+        PERCENTILES_FINE,
+        female_percs,
+        male_percs,
+        diff
+    ])
+
+
+    fig.add_trace(go.Scatter(
+        x=female_percs,
+        y=diff,
+        mode="lines+markers",
+        name="Male − Female",
+        line=dict(
+            color=main_line,
+            width=2.5,
+        ),
+        marker=dict(
+            size=5,
+            color=main_line,
+        ),
+        customdata=customdata,
+        hovertemplate=(
+            "Percentile: %{customdata[0]}<br>"
+            "Female score: %{customdata[1]:.0f}<br>"
+            "Male score: %{customdata[2]:.0f}<br>"
+            "Male − Female difference: %{customdata[3]:+.1f}<extra></extra>"
+        ),
     ))
 
     fig.update_layout(**_base_layout(
-        title=f"Gender Gap | {SUBJECTS[subject]} | {cnt}<br><sup>(above zero = males score higher)</sup>"
+        title=(
+            f"Scores by Gender | {SUBJECTS[subject]} | {cnt}<br>"
+            "<sup>Y-axis shows Male − Female score difference</sup>"
+        )
     ))
-    fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
-    fig.update_yaxes(title="Score Difference (Male - Female)")
-    return fig
 
+    fig.update_xaxes(
+        title=f"Female {SUBJECTS[subject]} score (reference)"
+    )
+
+    fig.update_yaxes(
+        title="Score difference (Male − Female)",
+        zeroline=False,
+    )
+
+    return fig
 
 def plot_belonging_by_immigration(df, countries: list, year: int = None,
                                 min_group_n: int = 30) -> go.Figure:
@@ -558,7 +761,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             hovertemplate=f"Student Score ({pv_col}): %{{y:.0f}}<extra></extra>"
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score Distribution by School Location | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {cnt}"))
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     
     # Hide the legend since the x-axis already labels the groups perfectly

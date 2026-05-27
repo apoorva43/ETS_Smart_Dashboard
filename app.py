@@ -29,7 +29,6 @@ from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from src.config import SUBJECTS, GROUP_OPTIONS
 from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
-                          plot_gender_percentile_line,
                           plot_escs_gap,
                           plot_naep_time_comparison,
                           plot_year_diff_percentile,
@@ -50,11 +49,9 @@ st.set_page_config(page_title="PISA Dashboard", layout="wide")
 S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 CHART_TYPES = [
+    "Percentile score profile",
     "Score distribution",
-    "Interval distribution",
-    "Change over time",
-    "Gender gap",
-    "SES gap",
+    "Score change over time",
     "Belonging by Immigration",
     "Group comparison",
     "Country Scatterplot"
@@ -122,7 +119,7 @@ def fetch(countries: tuple[str, ...],
     year : int or None
         PISA cycle year to filter by (2015, 2018 or 2022).
         Pass ``None`` to return all available years, which is required 
-        for the "Change over time" chart type.
+        for the "Score change over time" chart type.
     cols : tuple of str
         Columns to select from the parquet file. Should always include
         "CNT", "YEAR", "W_FSTUWT", plus whichever plausible value and
@@ -211,8 +208,8 @@ CHART_HELP_TEXT = {
 * **The Whiskers (The Tails):** The lines extending from the box show the 10th and 90th percentiles.
 * **The Dots (Jitter):** A weighted sample of up to 1,000 students, showing exactly how individual scores are clustered.
     """,
-    "Gender gap": """
-**How to read this gap chart:**
+    "Score by gender": """
+**How to read this difference chart:**
 * **The Diagonal Line:** This represents perfect equality. If boys and girls scored exactly the same, the colored line would sit perfectly on this dotted line.
 * **Above the Line:** If the colored curve goes *above* the dotted line, Male students are scoring higher at that specific percentile.
 * **Below the Line:** If the colored curve dips *below*, Female students are scoring higher.
@@ -231,8 +228,8 @@ def render_chart_help(chart_type, group_key=None):
     help_key = None
     if chart_type == "Score distribution":
         help_key = "Score distribution"
-    elif chart_type == "Gender gap":
-        help_key = "Gender gap"
+    elif chart_type == "Score by gender":
+        help_key = "Score by gender"
     elif chart_type == "Country Scatterplot":
         help_key = "Country Scatterplot"
     elif chart_type == "Group comparison" and group_key == "School location":
@@ -242,12 +239,51 @@ def render_chart_help(chart_type, group_key=None):
     if help_key and help_key in CHART_HELP_TEXT:
         with st.expander(f"How to read the {chart_type.lower()} chart"):
             st.markdown(CHART_HELP_TEXT[help_key])
+            
+
+def apply_compact_plotly_layout(fig, hide_legend=False):
+    """
+    Make Plotly charts fit better inside narrow columns.
+    Used for side-by-side mode and story tab two-column sections.
+    """
+    fig.update_layout(
+        title=dict(
+            font=dict(size=14),
+            x=0,
+            xanchor="left",
+            y=0.96,
+        ),
+        margin=dict(t=90, b=50, l=60, r=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.08,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=9),
+        ),
+    )
+
+    fig.update_xaxes(
+        title_font=dict(size=11),
+        tickfont=dict(size=10),
+    )
+
+    fig.update_yaxes(
+        title_font=dict(size=11),
+        tickfont=dict(size=10),
+    )
+
+    if hide_legend:
+        fig.update_layout(showlegend=False)
+
+    return fig
 
 
 def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
-                 group_key=None):
+                 group_key=None,  compact=False):
     """
     Render a single chart panel and its accompanying text/info blocks.
 
@@ -271,7 +307,7 @@ def render_chart(chart_type, subject, selected_countries,
     """
     pv_cols = PV_BY_SUBJ[subject]
 
-    if chart_type == "Score distribution":
+    if chart_type == "Percentile score profile":
         fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
@@ -294,42 +330,16 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             ))
 
-    elif chart_type == "Gender gap":
-        render_chart_help(chart_type, group_key)
-        if len(selected_countries) > 1:
-            st.info(
-                f"Gender gap shows one country at a time — displaying {primary_country}.")
-        df = fetch((primary_country,), selected_year,
-                   tuple(BASE_COLS + pv_cols + ["ST004D01T"]))
-        fig = plot_gender_percentile_line(
-            df, subject, primary_country, year=selected_year)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown(gender_gap_text(
-            df, subject, primary_country, year=selected_year))
-        st.info("The x-axis shows Female scores as the reference group. "
-                "Where the Male line sits above the diagonal, males score higher "
-                "at that point in the distribution.")
-
-    elif chart_type == "SES gap":
-        if len(selected_countries) > 1:
-            st.info(
-                f"SES gap shows one country at a time — displaying {primary_country}.")
-        df = fetch((primary_country,), selected_year,
-                   tuple(BASE_COLS + pv_cols + ["ESCS"]))
-        fig = plot_escs_gap(df, subject, primary_country, year=selected_year)
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        st.markdown(ses_gap_text(df, subject, primary_country, year=selected_year))
-        st.info("Students are split into four equal groups by socioeconomic status "
-                "(ESCS index). Q1 = lowest SES, Q4 = highest.")
-
 
     # Group comparison
     elif chart_type == "Group comparison":
+        #if group_key is None:
+        #    group_key = st.sidebar.selectbox(
+        #        "Break down by",
+        #        list(GROUP_OPTIONS.keys())
+        #    )
         if group_key is None:
-            group_key = st.sidebar.selectbox(
-                "Break down by",
-                list(GROUP_OPTIONS.keys())
-            )
+            group_key = list(GROUP_OPTIONS.keys())[0]
 
         group_col, group_vals = GROUP_OPTIONS[group_key]
 
@@ -341,18 +351,27 @@ def render_chart(chart_type, subject, selected_countries,
         df = fetch((primary_country,), selected_year,
                    tuple(BASE_COLS + pv_cols + [group_col]))
         
-        warns = check_group_sizes(
-            df,
-            group_col,
-            group_vals,
-            primary_country,
-            year=selected_year
-        )
+        
+        if group_key != "Socioeconomic status":
+            warns = check_group_sizes(
+                df,
+                group_col,
+                group_vals,
+                primary_country,
+                year=selected_year
+            )
 
-        for w in warns:
-            st.warning(w)
+            for w in warns:
+                st.warning(w)
+
 
         if group_key == "Gender":
+            df = fetch(
+                (primary_country,),
+                selected_year,
+                tuple(BASE_COLS + pv_cols + ["ST004D01T"])
+            )
+
             fig = plot_gender_diff_percentile(
                 df=df,
                 subject=subject,
@@ -360,11 +379,51 @@ def render_chart(chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                config={"displayModeBar": False}
+            )
+
             st.info(
-                "This chart shows the gender score difference across the distribution. "
-                "Y-axis shows Male − Female score difference. Values above zero mean "
-                "males score higher; values below zero mean females score higher."
+                "Y-axis shows Male − Female score difference. "
+                "Values above zero mean males score higher; values below zero mean females score higher."
+            )
+
+            return
+            
+        elif group_key == "Socioeconomic status":
+            df = fetch(
+                (primary_country,),
+                selected_year,
+                tuple(BASE_COLS + pv_cols + ["ESCS"])
+            )
+
+            fig = plot_escs_gap(
+                df=df,
+                subject=subject,
+                cnt=primary_country,
+                year=selected_year,
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                config={"displayModeBar": False}
+            )
+
+            st.markdown(
+                ses_gap_text(
+                    df,
+                    subject,
+                    primary_country,
+                    year=selected_year
+                )
+            )
+
+            st.info(
+                "Students are split into four equal groups by socioeconomic status "
+                "(ESCS index). Q1 = lowest SES, Q4 = highest."
             )
 
         elif group_key == "Immigration status":
@@ -424,48 +483,40 @@ def render_chart(chart_type, subject, selected_countries,
                 f"Score distribution broken down by {group_key} for {primary_country}."
             )
 
-    elif chart_type == "Change over time":
+
+    elif chart_type == "Score change over time":
+        df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         if len(available_years) < 2:
             st.warning(
-                "Only one year of data loaded. Run `make data` to add more years.")
+                "Only one year of data loaded. Run `make data` to add more years."
+            )
             return
 
         if len(selected_countries) > 1:
             st.info(
-                f"Time comparison shows one country at a time — displaying {primary_country}.")
-
-        df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
-        # If two specific years were selected, use those; otherwise default
-        # to all available years with the latest as reference.
-        if ref_year is not None and comp_year is not None:
-            reference_year    = ref_year
-            comparison_years  = [comp_year]
-            fig = plot_year_diff_percentile(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                reference_year=reference_year,
-                comparison_year=comp_year,
+                f"Time comparison shows one country at a time — displaying {primary_country}."
             )
-        else:
-            reference_year    = max(available_years)
-            comparison_years  = [y for y in available_years if y != max(available_years)]
 
-            fig = plot_naep_time_comparison(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                reference_year=reference_year,
-                comparison_years=comparison_years,
-            )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        reference_year = min(available_years)
+        comparison_years = [y for y in available_years if y != reference_year]
+        
+        fig = plot_year_diff_percentile(
+            df=df,
+            subject=subject,
+            cnt=primary_country,
+            reference_year=reference_year,
+            comparison_years=comparison_years,
+        )
+
+        st.plotly_chart(fig, use_container_width=True,
+                            config={"displayModeBar": False})
         st.info(
-            f"X-axis shows {reference_year} scores as the reference. "
-            "Points above the diagonal indicate improvement relative to the reference year. "
-            "Points below indicate decline."
+            f"This chart shows score changes over time. "
+            f"X-axis shows {reference_year} scores. "
+            f"Each coloured line shows change relative to {reference_year}."
         )
         
-    elif chart_type == "Interval distribution":
+    elif chart_type == "Score distribution":
         fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
@@ -608,7 +659,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     Structure
     ---------
-    Intro → Section 1: Global standing → Section 2: Change over time
+    Intro → Section 1: Global standing → Section 2: Score change over time
           → Section 3: Equity gaps     → Section 4: School context
     """
     story_year        = 2022 if 2022 in available_years else max(available_years)
@@ -683,7 +734,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     st.divider()
 
-    # ── Section 2: Change over time ────────────────────────────────────────
+    # ── Section 2: Score change over time ────────────────────────────────────────
     _story_section_header(2, "Has performance changed over time?",
         f"Tracking {story_country}'s {subject_label} scores across PISA cycles")
 
@@ -926,6 +977,7 @@ elif app_mode == "🔍 Explore":
 
     side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
 
+    group_key = None
     if side_by_side:
         st.sidebar.markdown("**Left panel**")
         chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
@@ -933,6 +985,14 @@ elif app_mode == "🔍 Explore":
         chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
     else:
         chart_type = st.sidebar.radio("View", CHART_TYPES)
+
+        # Teammate's update: Ask for breakdown group globally if Group comparison is selected
+        if chart_type == "Group comparison":
+            group_key = st.sidebar.selectbox(
+                "Break down by",
+                list(GROUP_OPTIONS.keys()),
+                key="group_main"
+            )
 
     st.sidebar.markdown("---")
 
@@ -946,7 +1006,8 @@ elif app_mode == "🔍 Explore":
     else:
         country_pool = all_countries
 
-    SINGLE_COUNTRY_CHARTS = ["Change over time", "Gender gap", "SES gap", "Group comparison"]
+    # Teammate's update: Simplified charts list
+    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
 
     if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
         selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
@@ -989,41 +1050,39 @@ elif app_mode == "🔍 Explore":
     )
 
     st.sidebar.markdown("---")
-    ref_year = None
-    comp_year = None
+    
+    # Teammate's update: Context-aware Year Selection UI
+    is_time_chart = (
+        (not side_by_side and chart_type == "Score change over time") or
+        (side_by_side and (
+            chart_type_left == "Score change over time" or
+            chart_type_right == "Score change over time"
+        ))
+    )
 
-    if len(available_years) > 1:
-        year_mode = st.sidebar.radio(
-            "Year",
-            ["Latest (2022)", "All years", "Compare two years"]
+    if is_time_chart:
+        st.sidebar.markdown("### Time comparison")
+        ref_year = st.sidebar.selectbox(
+            "Baseline year", available_years[:-1], index=0, key="ref_year"
         )
-        if year_mode == "Latest (2022)":
-            selected_year = 2022
-        elif year_mode == "All years":
-            selected_year = None
-        else:
-            col1, col2 = st.sidebar.columns(2)
-            with col1:
-                ref_year = st.selectbox(
-                    "Reference year",
-                    available_years[:-1],          
-                    index=0,
-                    key="ref_year"
-                )
-            with col2:
-                later_years = [y for y in available_years if y > ref_year]
-                comp_year = st.selectbox(
-                    "Compare to",
-                    later_years,
-                    index=len(later_years) - 1,
-                    key="comp_year"
-                )
-            selected_year = None   
-            st.sidebar.caption(f"Reference: {ref_year} (x-axis) → Compare: {comp_year}")
+        later_years = [y for y in available_years if y > ref_year]
+        comp_year = st.sidebar.selectbox(
+            "Compare to", later_years, index=len(later_years) - 1, key="comp_year"
+        )
+        selected_year = None
     else:
-        selected_year = available_years[0]
+        selected_year = st.sidebar.selectbox(
+            "Year", available_years, 
+            index=available_years.index(2022) if 2022 in available_years else len(available_years) - 1
+        )
+        ref_year = None
+        comp_year = None
 
     primary_country = selected_countries[0]
+
+    st.title("PISA Score Distribution Dashboard")
+    st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
+               f"{len(all_countries)} countries")
 
     # Draw the main area for Explore
     if side_by_side:
@@ -1036,6 +1095,7 @@ elif app_mode == "🔍 Explore":
                 primary_country=country_left,
                 ref_year=ref_year, comp_year=comp_year,
                 group_key=group_key_left,
+                compact=True,
             )
         with right_col:
             st.subheader(chart_type_right)
@@ -1045,10 +1105,13 @@ elif app_mode == "🔍 Explore":
                 primary_country=country_right,
                 ref_year=ref_year, comp_year=comp_year,
                 group_key=group_key_right,
+                compact=True,
             )
     else:
         render_chart(
             chart_type, subject, selected_countries,
             selected_year, available_years, primary_country,
             ref_year=ref_year, comp_year=comp_year,
+            group_key=group_key,
+            compact=False,
         )
