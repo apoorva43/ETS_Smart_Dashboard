@@ -442,7 +442,7 @@ def render_chart(chart_type, subject, selected_countries,
             )
 
 
-    elif chart_type == "Change over time":
+    elif chart_type == "Score change over time":
         df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         if len(available_years) < 2:
             st.warning(
