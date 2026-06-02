@@ -433,8 +433,8 @@ def render_chart(chart_type, subject, selected_countries,
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
-                "Each curve shows the weighted score distribution for one immigration "
-                "status group, using score intervals averaged across all 10 plausible values."
+                "Each curve shows the score distribution for one immigration "
+                "status group."
             )
 
         elif group_key == "School location":
@@ -458,8 +458,7 @@ def render_chart(chart_type, subject, selected_countries,
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
-                "Each curve shows the weighted score distribution for one school type, "
-                "using score intervals averaged across all 10 plausible values."
+                "Each curve shows the score distribution for one school type."
             )
 
         else:
@@ -507,7 +506,7 @@ def render_chart(chart_type, subject, selected_countries,
                             config={"displayModeBar": False})
         st.info(
             f"This chart shows score changes over time. "
-            f"X-axis shows {reference_year} scores. "
+            f"Horizontal axis shows {reference_year} scores. "
             f"Each coloured line shows change relative to {reference_year}."
         )
         
@@ -529,7 +528,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Weighted proportion of students per 20-point score interval, averaged across all 10 plausible values.")
+            st.info("Distribution showing percentage of students per 20-point score interval.")
 
     elif chart_type == "Belonging by Immigration":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
@@ -552,7 +551,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df=df, countries=valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Distribution of school belonging index by immigration status.")
+            st.info("Left: Grade repetition rate in different SES quartiles. Right: Distribution of school belonging index by immigration status.")
 
     elif chart_type == "Country Scatterplot":
         resource_options = {
@@ -1004,19 +1003,37 @@ elif app_mode == "🔍 Explore":
     # Teammate's update: Simplified charts list
     SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
 
+    # Initialize a memory state so countries aren't lost on toggle
+    if "memory_countries" not in st.session_state:
+        st.session_state.memory_countries = country_pool[:2]
+
+    # Ensure the remembered countries actually exist in the currently selected pool
+    valid_defaults = [
+        c for c in st.session_state.memory_countries if c in country_pool]
+    if not valid_defaults:
+        valid_defaults = country_pool[:1]
+
     if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
-        selected_country = st.sidebar.selectbox("Country", country_pool, index=0)
+        # User is in a single-country view
+        current_index = country_pool.index(
+            valid_defaults[0]) if valid_defaults[0] in country_pool else 0
+        selected_country = st.sidebar.selectbox(
+            "Country", country_pool, index=current_index)
         selected_countries = [selected_country]
+        st.session_state.memory_countries = selected_countries  # Save to memory
     else:
+        # User is in a multi-country view
         label = "Countries (Pool)" if side_by_side else "Countries"
         selected_countries = st.sidebar.multiselect(
-            label, country_pool, default=country_pool[:2]
+            label, country_pool, default=valid_defaults
         )
+        if selected_countries:
+            st.session_state.memory_countries = selected_countries  # Save to memory
 
     if not selected_countries:
         st.warning("Please select at least one country.")
         st.stop()
-
+        
     if side_by_side:
         country_left = st.sidebar.selectbox(
             "Left country", selected_countries, key="cnt_left"
