@@ -649,7 +649,6 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     fig.update_layout(**_base_layout(
         title=(
             f"Scores by Gender | {SUBJECTS[subject]} | {cnt}<br>"
-            "<sup>Y-axis shows Male − Female score difference</sup>"
         )
     ))
 
