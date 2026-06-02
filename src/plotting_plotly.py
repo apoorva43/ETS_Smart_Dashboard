@@ -81,14 +81,24 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
         
     return valid_data, None
 
+# keep color consistent
+def _country_color(cnt: str, index: int) -> str:
+    """
+    Return a consistent accessible color for a country.
+
+    Countries explicitly defined in COUNTRY_COLORS keep their assigned colors.
+    Other countries use PALETTE by index so the same selected-country order
+    produces consistent colors across charts.
+    """
+    return COUNTRY_COLORS.get(cnt, PALETTE[index % len(PALETTE)])
+
 # percentile score profile
 def plot_country_distributions(df, subject: str,
                                countries: list,
                                year: int = None,
                                show_oecd: bool = True) -> go.Figure:
     fig = go.Figure()
-    
-    color_list = list(OKABE_ITO.values())
+
 
     for i, cnt in enumerate(countries):
         subset = df[df["CNT"] == cnt]
@@ -99,7 +109,7 @@ def plot_country_distributions(df, subject: str,
         if np.isnan(percs).all():
             continue
             
-        color = COUNTRY_COLORS.get(cnt, color_list[i % len(color_list)])
+        color = _country_color(cnt, i)
         
         fig.add_trace(go.Scatter(
             x=PERCENTILES_COARSE, y=percs,
@@ -443,7 +453,6 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
     midpoints = (bins[:-1] + bins[1:]) / 2
 
     fig = go.Figure()
-    color_cycle = list(COUNTRY_COLORS.values()) + ["#1D9E75", "#BA7517", "#888780"]
 
     def _country_proportions(subset):
         w = subset["W_FSTUWT"].values
@@ -463,8 +472,8 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             subset = subset[subset["YEAR"] == year]
         
         props = _country_proportions(subset)
-        color = COUNTRY_COLORS.get(cnt, color_cycle[i % len(color_cycle)])
-        
+        color = _country_color(cnt, i)
+
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
             mode="lines+markers", name=cnt,
@@ -673,7 +682,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
 
     color_map = {}
     for i, cnt in enumerate(countries):
-        color_map[cnt] = COUNTRY_COLORS.get(cnt, PALETTE[i % len(PALETTE)])
+        color_map[cnt] = _country_color(cnt, i)
 
     # Panel 1: Repetition
     if all(c in subset.columns for c in ["REPEAT", "ESCS", "CNT", "W_FSTUWT"]):
