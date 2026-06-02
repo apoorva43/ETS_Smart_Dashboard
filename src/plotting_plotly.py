@@ -114,8 +114,9 @@ def plot_country_distributions(df, subject: str,
         if not np.isnan(oecd).all():
             fig.add_trace(go.Scatter(
                 x=PERCENTILES_COARSE, y=oecd,
-                mode="lines", name="OECD avg",
+                mode="lines+markers", name="OECD avg",
                 line=dict(color="#777777", width=2, dash="dash"),
+                marker=dict(size=6),
                 hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
@@ -466,8 +467,9 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
         if not np.isnan(oecd_props).all():
             fig.add_trace(go.Scatter(
                 x=midpoints, y=oecd_props,
-                mode="lines", name="OECD avg",
-                line=dict(color="#777777", width=2, dash="dash")
+                mode="lines+markers", name="OECD avg",
+                line=dict(color="#777777", width=2, dash="dash"),
+                marker=dict(size=6),
             ))
 
     fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}<br><sup>(averaged across 10 PVs)</sup>"))
@@ -888,5 +890,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     ))
     fig.update_xaxes(title=resource_label)
     fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
+    
+    fig.update_layout(hovermode="closest")
 
     return fig

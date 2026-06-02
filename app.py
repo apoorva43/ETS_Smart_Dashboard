@@ -689,10 +689,17 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
               systems on a common scale and track progress over time.
         """)
 
+    with st.expander("🔍 Language note: talking about gaps without deficit framing"):
+        st.markdown("""
+            Gaps reflect **structural inequalities** in access to resources, language support, 
+            and school quality — not inherent differences in students' ability or potential.
+            For guidance see: [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf)
+        """)
+
     st.divider()
 
     # ── Section 1: Global standing ─────────────────────────────────────────
-    _story_section_header(1, "How does this country compare globally?",
+    _story_section_header(1, "How does this compare to the OECD average?",
         f"Where {story_country} sits in the international {subject_label} distribution")
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
@@ -795,7 +802,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 3: Equity gaps ─────────────────────────────────────────────
     _story_section_header(3, "Who scores highest — and who is left behind?",
-        f"Socioeconomic and immigration-related gaps in {story_country}")
+        f"Score differences by socioeconomic and immigration status in {story_country}")
 
     st.markdown("High average scores can mask large gaps between student groups. "
                 "This section examines two key dimensions of equity.")
@@ -840,13 +847,6 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
             - **Native:** born in the country, both parents born in the country
             - **Second-generation:** born in the country, at least one parent born abroad
             - **First-generation:** born abroad, came to the country before or during school age
-        """)
-
-    with st.expander("🔍 Language note: talking about gaps without deficit framing"):
-        st.markdown("""
-            Gaps reflect **structural inequalities** in access to resources, language support, 
-            and school quality — not inherent differences in students' ability or potential.
-            For guidance see: [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf)
         """)
 
     st.divider()
