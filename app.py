@@ -433,8 +433,8 @@ def render_chart(chart_type, subject, selected_countries,
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
-                "Each curve shows the weighted score distribution for one immigration "
-                "status group, using score intervals averaged across all 10 plausible values."
+                "Each curve shows the score distribution for one immigration "
+                "status group."
             )
 
         elif group_key == "School location":
@@ -458,8 +458,7 @@ def render_chart(chart_type, subject, selected_countries,
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
-                "Each curve shows the weighted score distribution for one school type, "
-                "using score intervals averaged across all 10 plausible values."
+                "Each curve shows the score distribution for one school type."
             )
 
         else:
@@ -507,7 +506,7 @@ def render_chart(chart_type, subject, selected_countries,
                             config={"displayModeBar": False})
         st.info(
             f"This chart shows score changes over time. "
-            f"X-axis shows {reference_year} scores. "
+            f"Horizontal axis shows {reference_year} scores. "
             f"Each coloured line shows change relative to {reference_year}."
         )
         
@@ -529,7 +528,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Weighted proportion of students per 20-point score interval, averaged across all 10 plausible values.")
+            st.info("Distribution showing percentage of students per 20-point score interval.")
 
     elif chart_type == "Belonging by Immigration":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
@@ -552,7 +551,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df=df, countries=valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Distribution of school belonging index by immigration status.")
+            st.info("Left: Grade repetition rate in different SES quartiles. Right: Distribution of school belonging index by immigration status.")
 
     elif chart_type == "Country Scatterplot":
         resource_options = {
