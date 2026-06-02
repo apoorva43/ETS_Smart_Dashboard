@@ -839,7 +839,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             opacity=0.8,
             marker=dict(size=4, opacity=0.4, line=dict(width=0)), 
             line=dict(width=2),
-        
+            hovertemplate="<b>%{x}</b><br>Student Score: %{y:.0f}<extra></extra>"
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {cnt}"))
