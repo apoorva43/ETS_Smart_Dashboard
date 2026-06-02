@@ -15,7 +15,7 @@ from src.config import (
     LOC_MAP,
     IMMIG_MAP,
     SCHLTYPE_MAP,
-    MIN_GROUP_N,
+    SYMBOLS_COARSE,
     OKABE_ITO,
     SUBJECTS,
 )
@@ -105,7 +105,7 @@ def plot_country_distributions(df, subject: str,
             x=PERCENTILES_COARSE, y=percs,
             mode="lines+markers", name=cnt,
             line=dict(color=color, width=2.5),
-            marker=dict(size=6),
+            marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1)),
             hovertemplate=f"<b>{cnt}</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
         ))
 
@@ -116,11 +116,12 @@ def plot_country_distributions(df, subject: str,
                 x=PERCENTILES_COARSE, y=oecd,
                 mode="lines+markers", name="OECD avg",
                 line=dict(color="#777777", width=2, dash="dash"),
-                marker=dict(size=6),
+                marker=dict(symbol=SYMBOLS_COARSE, size=9),
                 hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
-    fig.update_layout(**_base_layout(title=f"Percentile Score Profile | {SUBJECTS[subject]}"))
+    symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
+    fig.update_layout(**_base_layout(title=f"Percentile Score Profile | {SUBJECTS[subject]}<br><sup>{symbol_note}</sup>"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -147,10 +148,11 @@ def plot_escs_gap(df, subject, cnt, year=None):
             x=PERCENTILES_COARSE, y=percs,
             mode="lines+markers", name=label,
             line=dict(color=color, width=2.5),
-            marker=dict(size=6)
+            marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1))
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by Socioeconomic Status | {SUBJECTS[subject]} | {cnt}"))
+    symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
+    fig.update_layout(**_base_layout(title=f"Score by Socioeconomic Status | {SUBJECTS[subject]} | {cnt}<br><sup>{symbol_note}</sup>"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -226,10 +228,14 @@ def plot_group_comparison(df, subject: str, group_col: str,
         fig.add_trace(go.Scatter(
             x=PERCENTILES_COARSE, y=percs,
             mode="lines+markers", name=label,
-            line=dict(color=color, width=2.5)
+            line=dict(color=color, width=2.5),
+            marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1))
         ))
 
-    fig.update_layout(**_base_layout(title=title or f"{SUBJECTS[subject]} by Group | {cnt}"))
+    symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
+    clean_title = title or f"{SUBJECTS[subject]} by Group | {cnt}"
+    
+    fig.update_layout(**_base_layout(title=f"{clean_title}<br><sup>{symbol_note}</sup>"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -472,9 +478,9 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
                 marker=dict(size=6),
             ))
 
-    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}<br><sup>(averaged across 10 PVs)</sup>"))
+    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
     fig.update_xaxes(title="Score")
-    fig.update_yaxes(title="Weighted proportion of students")
+    fig.update_yaxes(title="Percentage of Students")
     return fig
 
 

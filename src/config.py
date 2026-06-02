@@ -75,3 +75,5 @@ PALETTE = [
 ]
 
 MIN_GROUP_N = 30  # minimum rows to compute a stat; below this return NaN
+
+SYMBOLS_COARSE = ["triangle-down", "square", "diamond", "circle", "triangle-up"]

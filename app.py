@@ -333,11 +333,6 @@ def render_chart(chart_type, subject, selected_countries,
 
     # Group comparison
     elif chart_type == "Group comparison":
-        #if group_key is None:
-        #    group_key = st.sidebar.selectbox(
-        #        "Break down by",
-        #        list(GROUP_OPTIONS.keys())
-        #    )
         if group_key is None:
             group_key = list(GROUP_OPTIONS.keys())[0]
 
