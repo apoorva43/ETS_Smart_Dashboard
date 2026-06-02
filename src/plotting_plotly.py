@@ -539,13 +539,31 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
 
     diff = male_percs - female_percs
 
-    positive_diff = np.where(diff >= 0, diff, 0)
-    negative_diff = np.where(diff < 0, diff, 0)
+    if np.isnan(diff).all():
+        return _check_sufficient_data(pd.DataFrame(), [], cnt, msg="Insufficient data")[1]
+
+    x_new, diff_new = [], []
+    for i in range(len(female_percs)):
+        # If the line crosses zero between the previous point and this point
+        if i > 0 and diff[i-1] * diff[i] < 0:
+            slope = (diff[i] - diff[i-1]) / (female_percs[i] - female_percs[i-1])
+            x_zero = female_percs[i-1] - (diff[i-1] / slope)
+            x_new.append(x_zero)
+            diff_new.append(0.0) # Inject the exact zero point
+        
+        x_new.append(female_percs[i])
+        diff_new.append(diff[i])
+    
+    x_interp = np.array(x_new)
+    diff_interp = np.array(diff_new)
+
+    positive_diff = np.where(diff_interp >= 0, diff_interp, 0)
+    negative_diff = np.where(diff_interp < 0, diff_interp, 0)
 
     # Accessible, non-gender-coded colors
     positive_fill = "rgba(0, 114, 178, 0.22)"   # Okabe-Ito blue
     negative_fill = "rgba(230, 159, 0, 0.22)"   # Okabe-Ito orange
-    main_line = OKABE_ITO.get("black", "#000000")
+    main_line = OKABE_ITO.get("vermillion", "#D85A30")
 
     fig.add_hline(
         y=0,
@@ -557,7 +575,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     )
 
     fig.add_trace(go.Scatter(
-        x=female_percs,
+        x=x_interp,
         y=positive_diff,
         mode="lines",
         line=dict(width=0),
@@ -568,7 +586,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     ))
 
     fig.add_trace(go.Scatter(
-        x=female_percs,
+        x=x_interp,
         y=negative_diff,
         mode="lines",
         line=dict(width=0),
