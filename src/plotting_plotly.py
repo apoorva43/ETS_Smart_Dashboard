@@ -478,7 +478,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             x=midpoints, y=props,
             mode="lines+markers", name=cnt,
             line=dict(color=color, width=2.5),
-            hovertemplate=f"<b>{cnt}</b><br>Score: %{{x}}<br>Percentage: %{{y:.3f}}<extra></extra>"
+            hovertemplate=f"<b>{cnt}</b><br>Score: %{{x}}<br>Percentage: %{{y:.1%}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -492,12 +492,15 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
                 mode="lines+markers", name="OECD avg",
                 line=dict(color="#777777", width=2, dash="dash"),
                 marker=dict(size=6),
-                hovertemplate=f"OECD avg: %{{y:.3f}}<extra></extra>"
+                hovertemplate=f"OECD avg: %{{y:.1%}}<extra></extra>"
             ))
 
     fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
     fig.update_xaxes(title="Score")
-    fig.update_yaxes(title="Percentage of Students")
+    fig.update_yaxes(
+        title="Percentage of students",
+        tickformat=".0%"
+    )
     return fig
 
 
@@ -793,13 +796,13 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
             customdata=customdata,
             hovertemplate=(
                 "Status: %{customdata[0]}<br>"
-                "Proportion: %{customdata[1]}<extra></extra>"
+                "Percentage: %{customdata[1]}<extra></extra>"
             ),
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Score")
-    fig.update_yaxes(title="Proportion of Students")
+    fig.update_yaxes(title="Percentage of Students", tickformat=".0%")
     return fig
 
 def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
@@ -886,13 +889,16 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
             hovertemplate=(
                 f"School type: {label}<br>"
                 "Score: %{x}<br>"
-                "Proportion: %{y:.3f}<extra></extra>"
+                "Percentage: %{y:.1%}<extra></extra>"
             ),
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by School Type | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Score")
-    fig.update_yaxes(title="Proportion")
+    fig.update_yaxes(
+        title="Percentage of students",
+        tickformat=".0%"
+    )
     return fig
 
 def plot_resource_scatter(df, subject: str, resource_col: str,
