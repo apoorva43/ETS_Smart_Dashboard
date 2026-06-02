@@ -81,7 +81,7 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
         
     return valid_data, None
 
-
+# percentile score profile
 def plot_country_distributions(df, subject: str,
                                countries: list,
                                year: int = None,
@@ -126,7 +126,7 @@ def plot_country_distributions(df, subject: str,
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
 
-
+# group - ses
 def plot_escs_gap(df, subject, cnt, year=None):
     subset = df[df["CNT"] == cnt].copy()
     if year is not None:
@@ -148,7 +148,8 @@ def plot_escs_gap(df, subject, cnt, year=None):
             x=PERCENTILES_COARSE, y=percs,
             mode="lines+markers", name=label,
             line=dict(color=color, width=2.5),
-            marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1))
+            marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1)),
+            hovertemplate=f"<b>{label}</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
         ))
 
     symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
@@ -292,6 +293,7 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
     return fig
 
 
+# change over time
 def plot_year_diff_percentile(df, subject: str, cnt: str,
                               reference_year: int,
                               comparison_years) -> go.Figure:
@@ -397,16 +399,21 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
                     color=color,
                     line=dict(color=OKABE_ITO["black"], width=0.8),
                 ),
-                customdata=[[p, x0, comp0, d0]],
+                customdata=[[
+                    p,
+                    f"{x0:.0f}",
+                    f"{comp0:.0f}",
+                    f"{d0:+.0f}"
+                ]],
                 hovertemplate=(
                     f"Year: {comp_year}<br>"
                     "Percentile: %{customdata[0]}<br>"
                     f"{reference_year} score: %{{customdata[1]:.0f}}<br>"
                     f"{comp_year} score: %{{customdata[2]:.0f}}<br>"
-                    "Change: %{customdata[3]:+.1f}<extra></extra>"
+                    "Change: %{customdata[3]:+.0f}<extra></extra>"
                 ), 
             ))
-
+    
     fig.update_layout(**_base_layout(
         title=(
             f"{SUBJECTS[subject]} score change by percentile | {cnt}<br>"
@@ -426,7 +433,7 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
 
     return fig
 
-
+# score distribution
 def plot_weighted_interval_distribution(df, subject: str, countries: list,
                                         year: int = None, interval_width: int = 20,
                                         score_range: tuple = (0, 1000),
@@ -462,7 +469,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             x=midpoints, y=props,
             mode="lines+markers", name=cnt,
             line=dict(color=color, width=2.5),
-            hovertemplate=f"<b>{cnt}</b><br>Score: %{{x}}<br>Proportion: %{{y:.3f}}<extra></extra>"
+            hovertemplate=f"<b>{cnt}</b><br>Score: %{{x}}<br>Percentage: %{{y:.3f}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -476,6 +483,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
                 mode="lines+markers", name="OECD avg",
                 line=dict(color="#777777", width=2, dash="dash"),
                 marker=dict(size=6),
+                hovertemplate=f"OECD avg: %{{y:.3f}}<extra></extra>"
             ))
 
     fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
@@ -598,9 +606,9 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
 
     customdata = np.column_stack([
         PERCENTILES_FINE,
-        female_percs,
-        male_percs,
-        diff
+        np.round(female_percs).astype(int),
+        np.round(male_percs).astype(int),
+        [f"{d:+.0f}" for d in diff],
     ])
 
 
@@ -622,7 +630,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
             "Percentile: %{customdata[0]}<br>"
             "Female score: %{customdata[1]:.0f}<br>"
             "Male score: %{customdata[2]:.0f}<br>"
-            "Male − Female difference: %{customdata[3]:+.1f}<extra></extra>"
+            "Male − Female difference: %{customdata[3]:+.0f}<extra></extra>"
         ),
     ))
 
@@ -686,7 +694,8 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 fig.add_trace(go.Bar(
                     x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=cnt, 
                     marker_color=color_map[cnt],
-                    texttemplate="%{y:.1f}%", textposition="outside"
+                    texttemplate="%{y:.0f}%", textposition="outside",
+                    hoverinfo="skip"
                 ), row=1, col=1)
 
     # Panel 2: Belonging
@@ -703,11 +712,36 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 x=list(IMMIG_MAP.values()), y=means, name=cnt, 
                 marker_color=color_map[cnt],
                 showlegend=False, 
-                texttemplate="%{y:.2f}", textposition="outside"
+                texttemplate="%{y:.2f}", textposition="outside",
+                hovertemplate=(
+                    f"Country: {cnt}<br>"
+                    "Immigration status: %{x}<br>"
+                    "Mean BELONG index: %{y:.2f}<extra></extra>"
+                )
             ), row=1, col=2)
 
     fig.update_layout(**_base_layout(title="Student Context"))
     fig.update_layout(barmode='group')
+    fig.update_yaxes(
+        title_text="Grade repetition rate (%)",
+        row=1,
+        col=1
+    )
+    fig.update_yaxes(
+        title_text="Mean Sense of Belonging index",
+        row=1,
+        col=2
+    )
+    fig.update_xaxes(
+        title_text="SES quartile",
+        row=1,
+        col=1
+    )
+    fig.update_xaxes(
+        title_text="Immigration status",
+        row=1,
+        col=2
+    )
     return fig
 
 
@@ -737,16 +771,26 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
             pv_props.append(np.array([w[(scores >= bins[i]) & (scores < bins[i + 1])].sum() / total_w for i in range(len(bins) - 1)]))
 
         props = np.mean(pv_props, axis=0)
-        
+
+        customdata = np.column_stack([
+            [label] * len(midpoints),
+            [f"{p:.1%}" for p in props]
+        ])
+
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
             mode="lines", name=label,
-            line=dict(color=color, width=2.5)
+            line=dict(color=color, width=2.5),
+            customdata=customdata,
+            hovertemplate=(
+                "Status: %{customdata[0]}<br>"
+                "Proportion: %{customdata[1]}<extra></extra>"
+            ),
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Score")
-    fig.update_yaxes(title="Weighted proportion")
+    fig.update_yaxes(title="Proportion of Students")
     return fig
 
 def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
@@ -784,7 +828,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             opacity=0.8,
             marker=dict(size=4, opacity=0.4, line=dict(width=0)), 
             line=dict(width=2),
-            hovertemplate=f"Student Score ({pv_col}): %{{y:.0f}}<extra></extra>"
+        
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {cnt}"))
@@ -829,12 +873,17 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
             x=midpoints, y=props,
             mode="lines+markers", name=label,
             line=dict(color=color, width=2.5),
-            marker=dict(size=4)
+            marker=dict(size=4),
+            hovertemplate=(
+                f"School type: {label}<br>"
+                "Score: %{x}<br>"
+                "Proportion: %{y:.3f}<extra></extra>"
+            ),
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by School Type | {SUBJECTS[subject]} | {cnt}"))
     fig.update_xaxes(title="Score")
-    fig.update_yaxes(title="Weighted proportion")
+    fig.update_yaxes(title="Proportion")
     return fig
 
 def plot_resource_scatter(df, subject: str, resource_col: str,
@@ -873,7 +922,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     # Standardize the hover tooltip
     htemp = (
         "<b>%{customdata[0]}</b><br>" + 
-        f"{resource_label}: %{{x:.2f}}<br>" + 
+        f"{resource_label}: %{{x:.0f}}<br>" + 
         f"Mean {SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
     )
 
