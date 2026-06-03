@@ -38,7 +38,8 @@ from src.plotting_plotly import (plot_country_distributions,
                           plot_immigration_score_distribution,
                           plot_school_location_boxplot,
                           plot_school_type_distribution,
-                          plot_resource_scatter)
+                          plot_resource_scatter,
+                          _cnt_label)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
                                 gender_gap_text,
@@ -139,13 +140,6 @@ def fetch(countries: tuple[str, ...],
     >>> df = fetch(("CAN",), 2022, ("CNT", "YEAR", "W_FSTUWT") + pv_cols)
     """
     return query_pisa(list(countries), year=year, cols=list(cols))
-
-
-def _cnt_label(code: str) -> str:
-    """
-    Return full country name for a CNT code, falling back to the code itself.
-    """
-    return COUNTRY_NAMES.get(str(code), str(code))
 
 
 def check_group_sizes(df, group_col, group_vals, cnt, year=None):
