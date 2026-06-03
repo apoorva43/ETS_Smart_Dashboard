@@ -1009,18 +1009,22 @@ elif app_mode == "🔍 Explore":
     else:
         country_pool = all_countries
 
-    # Teammate's update: Simplified charts list
+    DEFAULT_COUNTRIES = ["CAN", "USA"]
     SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
 
     # Initialize a memory state so countries aren't lost on toggle
     if "memory_countries" not in st.session_state:
-        st.session_state.memory_countries = country_pool[:2]
+        st.session_state.memory_countries = [
+            c for c in DEFAULT_COUNTRIES if c in country_pool
+        ] or country_pool[:2]
 
     # Ensure the remembered countries actually exist in the currently selected pool
     valid_defaults = [
         c for c in st.session_state.memory_countries if c in country_pool]
     if not valid_defaults:
-        valid_defaults = country_pool[:1]
+        valid_defaults = [
+            c for c in DEFAULT_COUNTRIES if c in country_pool
+        ] or country_pool[:1]
 
     if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
         # User is in a single-country view
