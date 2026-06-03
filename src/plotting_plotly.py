@@ -948,7 +948,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     # Standardize the hover tooltip
     htemp = (
         "<b>%{customdata[0]}</b><br>" + 
-        f"{resource_label}: %{{x:.0f}}<br>" + 
+        f"{resource_label}: %{{x:.2f}}<br>" + 
         f"Mean {SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
     )
 
