@@ -26,7 +26,7 @@ from pathlib import Path
 
 from src.data_loader import query_pisa
 from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
-from src.config import SUBJECTS, GROUP_OPTIONS
+from src.config import SUBJECTS, GROUP_OPTIONS, COUNTRY_NAMES
 from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
                           plot_escs_gap,
@@ -38,7 +38,8 @@ from src.plotting_plotly import (plot_country_distributions,
                           plot_immigration_score_distribution,
                           plot_school_location_boxplot,
                           plot_school_type_distribution,
-                          plot_resource_scatter)
+                          plot_resource_scatter,
+                          _cnt_label)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
                                 gender_gap_text,
@@ -318,7 +319,7 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
         
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
+            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
             render_chart_help(chart_type)
@@ -340,7 +341,7 @@ def render_chart(chart_type, subject, selected_countries,
 
         if len(selected_countries) > 1:
             st.info(
-                f"Group comparison shows one country at a time — displaying {primary_country}."
+                f"Group comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
         df = fetch((primary_country,), selected_year,
@@ -469,12 +470,12 @@ def render_chart(chart_type, subject, selected_countries,
                 group_vals=group_vals,
                 cnt=primary_country,
                 year=selected_year,
-                title=f"{SUBJECTS[subject]} by {group_key} | {primary_country}",
+                title=f"{SUBJECTS[subject]} by {group_key} | {_cnt_label(primary_country)}",
             )
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
-                f"Score distribution broken down by {group_key} for {primary_country}."
+                f"Score distribution broken down by {group_key} for {_cnt_label(primary_country)}."
             )
 
 
@@ -488,7 +489,7 @@ def render_chart(chart_type, subject, selected_countries,
 
         if len(selected_countries) > 1:
             st.info(
-                f"Time comparison shows one country at a time — displaying {primary_country}."
+                f"Time comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
         reference_year = min(available_years)
@@ -521,7 +522,7 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
+            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
             fig = plot_weighted_interval_distribution(
@@ -542,7 +543,7 @@ def render_chart(chart_type, subject, selected_countries,
         
         if missing_cnts:
             st.warning(
-                f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** "
+                f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** "
                 f"due to missing student context data."
             )
 
@@ -578,7 +579,7 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(missing_cnts)}** (missing {selected_col} data).")
+            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing {selected_col} data).")
         
         render_chart_help(chart_type)
         fig = plot_resource_scatter(
@@ -662,7 +663,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     pv_cols           = PV_BY_SUBJ[story_subject]
 
     # Page header
-    st.markdown(f"## PISA {story_year}: {subject_label} Performance — {story_country}")
+    st.markdown(f"## PISA {story_year}: {subject_label} Performance — {_cnt_label(story_country)}")
     st.caption(
         "This story walks you through what PISA data reveals about student performance "
         "— from how countries compare globally, to whether results have changed over time, "
@@ -694,7 +695,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 1: Global standing ─────────────────────────────────────────
     _story_section_header(1, "How does this compare to the OECD average?",
-        f"Where {story_country} sits in the international {subject_label} distribution")
+        f"Where {_cnt_label(story_country)} sits in the international {subject_label} distribution")
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
@@ -706,7 +707,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     valid_countries = [c for c in display_countries if c not in missing_cnts]
 
     if missing_cnts:
-        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {subject_label} scores.")
+        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {subject_label} scores.")
 
     if valid_countries:
         mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
@@ -737,7 +738,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 2: Score change over time ────────────────────────────────────────
     _story_section_header(2, "Has performance changed over time?",
-        f"Tracking {story_country}'s {subject_label} scores across PISA cycles")
+        f"Tracking {_cnt_label(story_country)}'s {subject_label} scores across PISA cycles")
 
     if len(available_years) < 2:
         st.info("Only one year of data is currently loaded. Load multiple years (2015, 2018, 2022) to unlock this section.")
@@ -747,7 +748,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         country_years = df_s2["YEAR"].dropna().unique() if "YEAR" in df_s2.columns else []
         
         if len(country_years) < 2:
-            st.warning(f"⚠️ **Data Unavailable:** {story_country} does not have enough historical data to compare changes over time (only {len(country_years)} year on record).")
+            st.warning(f"⚠️ **Data Unavailable:** {_cnt_label(story_country)} does not have enough historical data to compare changes over time (only {len(country_years)} year on record).")
         else:
             # Dynamically use the country's actual earliest/latest years
             reference_year   = min(country_years) 
@@ -763,7 +764,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
                 delta     = last_median[0] - ref_median[0]
                 direction = "increased" if delta > 0 else "decreased"
                 _insight_box(
-                    f"At the median, {story_country}'s {subject_label} score "
+                    f"At the median, {_cnt_label(story_country)}'s {subject_label} score "
                     f"{direction} by {abs(delta):.0f} points between "
                     f"{reference_year} and {latest_year}."
                 )
@@ -796,7 +797,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 3: Equity gaps ─────────────────────────────────────────────
     _story_section_header(3, "Who scores highest — and who is left behind?",
-        f"Score differences by socioeconomic and immigration status in {story_country}")
+        f"Score differences by socioeconomic and immigration status in {_cnt_label(story_country)}")
 
     st.markdown("High average scores can mask large gaps between student groups. "
                 "This section examines two key dimensions of equity.")
@@ -810,7 +811,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         
         # 1. The Guardrail (Checks if data exists before doing any math)
         if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {story_country}.")
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {_cnt_label(story_country)}.")
         else:
             # 2. The Execution (Only runs if data is safe)
             ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
@@ -823,7 +824,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     with eq_col2:
         st.markdown("#### Scores by Immigration Background")
         if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {story_country}.")
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {_cnt_label(story_country)}.")
         else:
             fig3b = plot_immigration_score_distribution(
                 df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
@@ -847,7 +848,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 4: School context ──────────────────────────────────────────
     _story_section_header(4, "Does school context matter?",
-        f"How school location and type relate to {subject_label} scores in {story_country}")
+        f"How school location and type relate to {subject_label} scores in {_cnt_label(story_country)}")
 
     df_loc  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
     df_type = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
@@ -856,7 +857,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     with ctx_col1:
         st.markdown("#### Scores by School Location")
         if check_missing_countries(df_loc, ["SC001Q01TA"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {story_country}.")
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {_cnt_label(story_country)}.")
         else:
             fig4a = plot_school_location_boxplot(
                 df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
@@ -865,7 +866,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     with ctx_col2:
         st.markdown("#### Scores by School Type")
         if check_missing_countries(df_type, ["SCHLTYPE"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {story_country}.")
+            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {_cnt_label(story_country)}.")
         else:
             fig4b = plot_school_type_distribution(
                 df=df_type, subject=story_subject, cnt=story_country, year=story_year)
@@ -904,9 +905,9 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 meta = get_meta()
 
 available_years = sorted(meta["YEAR"].unique().tolist())
-all_countries = sorted(meta["CNT"].unique().tolist())
-oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist())
-partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist())
+all_countries = sorted(meta["CNT"].unique().tolist(), key=_cnt_label)
+oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist(), key=_cnt_label)
+partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist(), key=_cnt_label)
 
 # ==========================================
 # SIDEBAR NAVIGATION & ROUTING
@@ -944,6 +945,7 @@ if app_mode == "📖 Data Story":
         "Focus country", 
         story_pool, 
         index=default_idx, 
+        format_func=_cnt_label,
         key="story_country"
     )
     story_subject = st.sidebar.selectbox(
@@ -954,6 +956,7 @@ if app_mode == "📖 Data Story":
     comparison_countries = st.sidebar.multiselect(
         "Compare with (optional)",
         [c for c in story_pool if c != story_country],
+        format_func=_cnt_label,
         default=[],
         max_selections=3,
         key="story_compare_countries"
@@ -1000,32 +1003,43 @@ elif app_mode == "🔍 Explore":
     else:
         country_pool = all_countries
 
-    # Teammate's update: Simplified charts list
+    DEFAULT_COUNTRIES = ["CAN", "USA"]
     SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
 
     # Initialize a memory state so countries aren't lost on toggle
     if "memory_countries" not in st.session_state:
-        st.session_state.memory_countries = country_pool[:2]
+        st.session_state.memory_countries = [
+            c for c in DEFAULT_COUNTRIES if c in country_pool
+        ] or country_pool[:2]
 
     # Ensure the remembered countries actually exist in the currently selected pool
     valid_defaults = [
         c for c in st.session_state.memory_countries if c in country_pool]
     if not valid_defaults:
-        valid_defaults = country_pool[:1]
+        valid_defaults = [
+            c for c in DEFAULT_COUNTRIES if c in country_pool
+        ] or country_pool[:1]
 
     if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
         # User is in a single-country view
         current_index = country_pool.index(
             valid_defaults[0]) if valid_defaults[0] in country_pool else 0
         selected_country = st.sidebar.selectbox(
-            "Country", country_pool, index=current_index)
+            "Country", 
+            country_pool, 
+            index=current_index,
+            format_func=_cnt_label
+        )
         selected_countries = [selected_country]
         st.session_state.memory_countries = selected_countries  # Save to memory
     else:
         # User is in a multi-country view
         label = "Countries (Pool)" if side_by_side else "Countries"
         selected_countries = st.sidebar.multiselect(
-            label, country_pool, default=valid_defaults
+            label, 
+            country_pool, 
+            default=valid_defaults,
+            format_func=_cnt_label
         )
         if selected_countries:
             st.session_state.memory_countries = selected_countries  # Save to memory
@@ -1036,11 +1050,18 @@ elif app_mode == "🔍 Explore":
         
     if side_by_side:
         country_left = st.sidebar.selectbox(
-            "Left country", selected_countries, key="cnt_left"
+            "Left country", 
+            selected_countries, 
+            key="cnt_left",
+            format_func=_cnt_label
         )
         right_idx = 1 if len(selected_countries) > 1 else 0
         country_right = st.sidebar.selectbox(
-            "Right country", selected_countries, index=right_idx, key="cnt_right"
+            "Right country", 
+            selected_countries, 
+            index=right_idx, 
+            key="cnt_right",
+            format_func=_cnt_label
         )
         
         group_key_left = None

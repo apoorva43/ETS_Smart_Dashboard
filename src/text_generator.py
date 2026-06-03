@@ -18,9 +18,15 @@ from src.pisa_stats import (
     )
 from src.config import (
     SUBJECTS,
-    PERCENTILES_COARSE
+    PERCENTILES_COARSE,
+    COUNTRY_NAMES
     )
 
+def _cnt_label(code: str) -> str:
+    """
+    Return full country name for a CNT code, falling back to the code itself.
+    """
+    return COUNTRY_NAMES.get(str(code), str(code))
 
 def country_distribution_text(df, subject, countries, year=None):
     """
@@ -52,7 +58,7 @@ def country_distribution_text(df, subject, countries, year=None):
             subset = subset[subset["YEAR"] == year]
         mean = weighted_mean_pv(subset, subject)
         if not np.isnan(mean):
-            lines.append(f"{cnt}: {mean:.0f}")
+            lines.append(f"{_cnt_label(cnt)}: {mean:.0f}")
     if not lines:
         return ""
     subject_label = SUBJECTS[subject]
@@ -92,7 +98,7 @@ def gender_gap_text(df, subject, cnt, year=None):
 
     valid_data = subset.dropna(subset=["ST004D01T", "W_FSTUWT"])
     if len(valid_data) < 100:
-        return f"Insufficient data to compute gender gap for {cnt}."
+        return f"Insufficient data to compute gender gap for {_cnt_label(cnt)}."
 
     female = valid_data[valid_data["ST004D01T"] == 1.0]
     male   = valid_data[valid_data["ST004D01T"] == 2.0]
@@ -101,18 +107,18 @@ def gender_gap_text(df, subject, cnt, year=None):
     m_percs = weighted_percentiles_pv(male,   subject, PERCENTILES_COARSE)
 
     if np.isnan(f_percs).all() or np.isnan(m_percs).all():
-        return f"Insufficient data to compute gender gap for {cnt}."
+        return f"Insufficient data to compute gender gap for {_cnt_label(cnt)}."
 
     gaps = m_percs - f_percs
     p10_gap, median_gap, p90_gap = gaps[0], gaps[2], gaps[-1]
     subject_label = SUBJECTS[subject]
 
     if abs(median_gap) < 5:
-        overall = f"At the median, male and female students in {cnt} score similarly in {subject_label} ({median_gap:+.0f} points)."
+        overall = f"At the median, male and female students in {_cnt_label(cnt)} score similarly in {subject_label} ({median_gap:+.0f} points)."
     elif median_gap > 0:
-        overall = f"Male students in {cnt} score {median_gap:.0f} points higher than female students at the median in {subject_label}."
+        overall = f"Male students in {_cnt_label(cnt)} score {median_gap:.0f} points higher than female students at the median in {subject_label}."
     else:
-        overall = f"Female students in {cnt} score {abs(median_gap):.0f} points higher than male students at the median in {subject_label}."
+        overall = f"Female students in {_cnt_label(cnt)} score {abs(median_gap):.0f} points higher than male students at the median in {subject_label}."
 
     if abs(p90_gap - p10_gap) > 10:
         spread = (f"The gap widens toward the top of the distribution: "
@@ -161,7 +167,7 @@ def ses_gap_text(df, subject, cnt, year=None):
     gap = q4_med - q1_med
     subject_label = SUBJECTS[subject]
     return (
-        f"In {cnt}, students in the highest SES quartile score "
+        f"In {_cnt_label(cnt)}, students in the highest SES quartile score "
         f"{gap:.0f} points higher than those in the lowest quartile "
         f"at the median in {subject_label}. "
         f"This gap represents the combined effect of home resources, "
@@ -209,7 +215,7 @@ def scatter_correlation_text(df, subject, resource_col, resource_label, year=Non
         if not hi_df.empty:
             details = []
             for _, row in hi_df.iterrows():
-                details.append(f"**{row['CNT']}** (Index: {row['resource']:.2f}, Score: {row['score']:.0f})")
+                details.append(f"**{_cnt_label(row['CNT'])}** (Index: {row['resource']:.2f}, Score: {row['score']:.0f})")
             
             base_text += f"\n\n**Highlighted Countries:** " + ", ".join(details) + "."
 

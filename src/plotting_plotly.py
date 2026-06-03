@@ -18,6 +18,7 @@ from src.config import (
     SYMBOLS_COARSE,
     OKABE_ITO,
     SUBJECTS,
+    COUNTRY_NAMES
 )
 from src.pisa_stats import (
     weighted_percentiles_pv,
@@ -26,6 +27,12 @@ from src.pisa_stats import (
     get_oecd_percentiles,
     weighted_mean_pv
 )
+
+def _cnt_label(code: str) -> str:
+    """
+    Return full country name for a CNT code, falling back to the code itself.
+    """
+    return COUNTRY_NAMES.get(str(code), str(code))
 
 def _base_layout(title: str = "", height: int = 480) -> dict:
     """Shared Plotly layout settings applied to all dashboard charts."""
@@ -113,10 +120,11 @@ def plot_country_distributions(df, subject: str,
         
         fig.add_trace(go.Scatter(
             x=PERCENTILES_COARSE, y=percs,
-            mode="lines+markers", name=cnt,
+            mode="lines+markers", 
+            name=_cnt_label(cnt),
             line=dict(color=color, width=2.5),
             marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1)),
-            hovertemplate=f"<b>{cnt}</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
+            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -163,7 +171,7 @@ def plot_escs_gap(df, subject, cnt, year=None):
         ))
 
     symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
-    fig.update_layout(**_base_layout(title=f"Score by Socioeconomic Status | {SUBJECTS[subject]} | {cnt}<br><sup>{symbol_note}</sup>"))
+    fig.update_layout(**_base_layout(title=f"Score by Socioeconomic Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>{symbol_note}</sup>"))
     fig.update_xaxes(title="Percentile", tickvals=PERCENTILES_COARSE)
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     return fig
@@ -208,7 +216,7 @@ def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) ->
     ))
 
     fig.update_layout(**_base_layout(
-        title=f"Gender Gap | {SUBJECTS[subject]} | {cnt}<br><sup>(above diagonal = males score higher)</sup>"
+        title=f"Gender Gap | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>(above diagonal = males score higher)</sup>"
     ))
     fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
     fig.update_yaxes(title="Male Score")
@@ -296,7 +304,7 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
         ))
 
     fig.update_layout(**_base_layout(
-        title=f"Score Change Over Time | {SUBJECTS[subject]} | {cnt} | {group_label}<br><sup>(above diagonal = improvement)</sup>"
+        title=f"Score Change Over Time | {SUBJECTS[subject]} | {_cnt_label(cnt)} | {group_label}<br><sup>(above diagonal = improvement)</sup>"
     ))
     fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)")
     fig.update_yaxes(title="Score")
@@ -426,7 +434,7 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
     
     fig.update_layout(**_base_layout(
         title=(
-            f"{SUBJECTS[subject]} score change by percentile | {cnt}<br>"
+            f"{SUBJECTS[subject]} score change by percentile | {_cnt_label(cnt)}<br>"
             f"<sup>{symbol_note}</sup>"
         )
     ))
@@ -476,9 +484,10 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
 
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
-            mode="lines+markers", name=cnt,
+            mode="lines+markers", 
+            name=_cnt_label(cnt),
             line=dict(color=color, width=2.5),
-            hovertemplate=f"<b>{cnt}</b><br>Score: %{{x}}<br>Percentage: %{{y:.1%}}<extra></extra>"
+            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Score: %{{x}}<br>Percentage: %{{y:.1%}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -648,7 +657,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
 
     fig.update_layout(**_base_layout(
         title=(
-            f"Scores by Gender | {SUBJECTS[subject]} | {cnt}<br>"
+            f"Scores by Gender | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br>"
         )
     ))
 
@@ -703,7 +712,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                         rates.append(_weighted_mean((sub["REPEAT"] == 1).to_numpy(), sub["W_FSTUWT"].to_numpy()) * 100)
                 
                 fig.add_trace(go.Bar(
-                    x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=cnt, 
+                    x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=_cnt_label(cnt), 
                     marker_color=color_map[cnt],
                     texttemplate="%{y:.0f}%", textposition="outside",
                     hoverinfo="skip"
@@ -720,12 +729,12 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 means.append(_weighted_mean(sub["BELONG"].to_numpy(), sub["W_FSTUWT"].to_numpy()) if len(sub) >= min_group_n else np.nan)
                 
             fig.add_trace(go.Bar(
-                x=list(IMMIG_MAP.values()), y=means, name=cnt, 
+                x=list(IMMIG_MAP.values()), y=means, name=_cnt_label(cnt), 
                 marker_color=color_map[cnt],
                 showlegend=False, 
                 texttemplate="%{y:.2f}", textposition="outside",
                 hovertemplate=(
-                    f"Country: {cnt}<br>"
+                    f"Country: {_cnt_label(cnt)}<br>"
                     "Immigration status: %{x}<br>"
                     "Mean BELONG index: %{y:.2f}<extra></extra>"
                 )
@@ -799,7 +808,7 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
             ),
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
     fig.update_xaxes(title="Score")
     fig.update_yaxes(title="Percentage of Students", tickformat=".0%")
     return fig
@@ -842,7 +851,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             hovertemplate="<b>%{x}</b><br>Student Score: %{y:.0f}<extra></extra>"
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
     
     # Hide the legend since the x-axis already labels the groups perfectly
@@ -892,7 +901,7 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
             ),
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by School Type | {SUBJECTS[subject]} | {cnt}"))
+    fig.update_layout(**_base_layout(title=f"Score by School Type | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
     fig.update_xaxes(title="Score")
     fig.update_yaxes(
         title="Percentage of students",
@@ -918,8 +927,11 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
         oecd_flag     = cnt_data["OECD"].iloc[0] if "OECD" in cnt_data.columns else 0
         
         if not np.isnan(mean_score) and not np.isnan(mean_resource):
-            rows.append({"CNT": cnt, "score": mean_score,
-                          "resource": mean_resource, "OECD": oecd_flag})
+            rows.append({"CNT": cnt, 
+                         "CNT_LABEL": _cnt_label(cnt),
+                         "score": mean_score,
+                         "resource": mean_resource, 
+                         "OECD": oecd_flag})
 
     plot_df = pd.DataFrame(rows)
     if plot_df.empty:
@@ -936,7 +948,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     # Standardize the hover tooltip
     htemp = (
         "<b>%{customdata[0]}</b><br>" + 
-        f"{resource_label}: %{{x:.0f}}<br>" + 
+        f"{resource_label}: %{{x:.2f}}<br>" + 
         f"Mean {SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
     )
 
@@ -945,7 +957,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
             x=partner["resource"], y=partner["score"],
             mode="markers", name="Partner countries",
             marker=dict(color="#cccccc", size=10, opacity=0.7),
-            customdata=partner[["CNT"]], hovertemplate=htemp
+            customdata=partner[["CNT_LABEL"]], hovertemplate=htemp
         ))
 
     if not oecd.empty:
@@ -953,7 +965,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
             x=oecd["resource"], y=oecd["score"],
             mode="markers", name="OECD members",
             marker=dict(color="#185FA5", size=10, opacity=0.8),
-            customdata=oecd[["CNT"]], hovertemplate=htemp
+            customdata=oecd[["CNT_LABEL"]], hovertemplate=htemp
         ))
 
     if not hi.empty:
@@ -966,10 +978,10 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
                 size=14, 
                 line=dict(width=2, color="white")
             ),
-            text=hi["CNT"], 
+            text=hi["CNT_LABEL"], 
             textposition="top center", 
             textfont=dict(size=11, color=OKABE_ITO.get("vermillion", "#D85A30")),
-            customdata=hi[["CNT"]], hovertemplate=htemp
+            customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
         ))
 
     fig.update_layout(**_base_layout(
