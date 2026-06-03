@@ -911,9 +911,9 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 meta = get_meta()
 
 available_years = sorted(meta["YEAR"].unique().tolist())
-all_countries = sorted(meta["CNT"].unique().tolist())
-oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist())
-partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist())
+all_countries = sorted(meta["CNT"].unique().tolist(), key=_cnt_label)
+oecd_countries = sorted(meta[meta["OECD"] == 1]["CNT"].unique().tolist(), key=_cnt_label)
+partner_countries = sorted(meta[meta["OECD"] == 0]["CNT"].unique().tolist(), key=_cnt_label)
 
 # ==========================================
 # SIDEBAR NAVIGATION & ROUTING
