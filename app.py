@@ -325,7 +325,7 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
         
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
+            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
             render_chart_help(chart_type)
@@ -528,7 +528,7 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
+            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
             fig = plot_weighted_interval_distribution(
@@ -549,7 +549,7 @@ def render_chart(chart_type, subject, selected_countries,
         
         if missing_cnts:
             st.warning(
-                f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** "
+                f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** "
                 f"due to missing student context data."
             )
 
@@ -585,7 +585,7 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(missing_cnts)}** (missing {selected_col} data).")
+            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing {selected_col} data).")
         
         render_chart_help(chart_type)
         fig = plot_resource_scatter(
@@ -713,7 +713,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     valid_countries = [c for c in display_countries if c not in missing_cnts]
 
     if missing_cnts:
-        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(missing_cnts)}** due to missing {subject_label} scores.")
+        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {subject_label} scores.")
 
     if valid_countries:
         mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
