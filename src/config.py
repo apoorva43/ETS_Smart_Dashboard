@@ -160,7 +160,7 @@ COUNTRY_NAMES = {
     "QUC": "Massachusettes (USA)", 
     "QUD": "Puerto Rico (USA)",
     "QUE": "North Carolina (USA)",
-    "QUR": "Ukrainian regions (18 of 27)",
+    "QUR": "Ukrainian Regions",
     "ROM": "Romania", 
     "ROU": "Romania", 
     "RUS": "Russia", 
