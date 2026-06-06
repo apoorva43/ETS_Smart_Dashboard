@@ -89,15 +89,22 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
     return valid_data, None
 
 # keep color consistent
-def _country_color(cnt: str, index: int) -> str:
+def _country_color(cnt: str, active_countries: list) -> str:
     """
-    Return a consistent accessible color for a country.
+    Assign a color based on the country's position in the dashboard's active selection.
+    If a user picks ["CAN", "USA"], CAN is always PALETTE[0] and USA is always PALETTE[1]
+    across EVERY chart.
+    """
+    if not active_countries:
+        return OKABE_ITO.get("blue", "#0072B2")
 
-    Countries explicitly defined in COUNTRY_COLORS keep their assigned colors.
-    Other countries use PALETTE by index so the same selected-country order
-    produces consistent colors across charts.
-    """
-    return COUNTRY_COLORS.get(cnt, PALETTE[index % len(PALETTE)])
+    # If the country is in the selected list, use its index to pick the color
+    if cnt in active_countries:
+        index = active_countries.index(cnt)
+        return PALETTE[index % len(PALETTE)]
+    
+    # If a chart plots a baseline/reference country not in the list, default it
+    return OKABE_ITO.get("blue", "#0072B2")
 
 # percentile score profile
 def plot_country_distributions(df, subject: str,
@@ -116,7 +123,7 @@ def plot_country_distributions(df, subject: str,
         if np.isnan(percs).all():
             continue
             
-        color = _country_color(cnt, i)
+        color = _country_color(cnt, countries)
         
         fig.add_trace(go.Scatter(
             x=PERCENTILES_COARSE, y=percs,
@@ -177,50 +184,50 @@ def plot_escs_gap(df, subject, cnt, year=None):
     return fig
 
 
-def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) -> go.Figure:
-    subset = df[df["CNT"] == cnt].copy()
-    if year is not None and "YEAR" in df.columns:
-        subset = subset[subset["YEAR"] == year]
+# def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) -> go.Figure:
+#     subset = df[df["CNT"] == cnt].copy()
+#     if year is not None and "YEAR" in df.columns:
+#         subset = subset[subset["YEAR"] == year]
 
-    valid_data, error_fig = _check_sufficient_data(
-        subset, ["ST004D01T"], cnt, msg=f"Insufficient gender data for {cnt}"
-    )
-    if error_fig is not None:
-        return error_fig
+#     valid_data, error_fig = _check_sufficient_data(
+#         subset, ["ST004D01T"], cnt, msg=f"Insufficient gender data for {cnt}"
+#     )
+#     if error_fig is not None:
+#         return error_fig
 
-    female = valid_data[valid_data["ST004D01T"] == 1.0]
-    male   = valid_data[valid_data["ST004D01T"] == 2.0]
+#     female = valid_data[valid_data["ST004D01T"] == 1.0]
+#     male   = valid_data[valid_data["ST004D01T"] == 2.0]
 
-    female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
-    male_percs   = weighted_percentiles_pv(male,   subject, PERCENTILES_FINE)
+#     female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
+#     male_percs   = weighted_percentiles_pv(male,   subject, PERCENTILES_FINE)
 
-    fig = go.Figure()
-    if np.isnan(female_percs).all():
-        return fig
+#     fig = go.Figure()
+#     if np.isnan(female_percs).all():
+#         return fig
 
-    # Reference diagonal
-    fig.add_trace(go.Scatter(
-        x=female_percs, y=female_percs,
-        mode="lines", name="Female (reference)",
-        line=dict(color="#cccccc", width=1.5, dash="dot"),
-        hoverinfo="skip"
-    ))
+#     # Reference diagonal
+#     fig.add_trace(go.Scatter(
+#         x=female_percs, y=female_percs,
+#         mode="lines", name="Female (reference)",
+#         line=dict(color="#cccccc", width=1.5, dash="dot"),
+#         hoverinfo="skip"
+#     ))
 
-    # Male line
-    fig.add_trace(go.Scatter(
-        x=female_percs, y=male_percs,
-        mode="lines", name="Male",
-        line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
-        customdata=PERCENTILES_FINE,
-        hovertemplate="Percentile: %{customdata}<br>Female Score: %{x:.0f}<br>Male Score: %{y:.0f}<extra></extra>"
-    ))
+#     # Male line
+#     fig.add_trace(go.Scatter(
+#         x=female_percs, y=male_percs,
+#         mode="lines", name="Male",
+#         line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
+#         customdata=PERCENTILES_FINE,
+#         hovertemplate="Percentile: %{customdata}<br>Female Score: %{x:.0f}<br>Male Score: %{y:.0f}<extra></extra>"
+#     ))
 
-    fig.update_layout(**_base_layout(
-        title=f"Gender Gap | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>(above diagonal = males score higher)</sup>"
-    ))
-    fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
-    fig.update_yaxes(title="Male Score")
-    return fig
+#     fig.update_layout(**_base_layout(
+#         title=f"Gender Gap | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>(above diagonal = males score higher)</sup>"
+#     ))
+#     fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
+#     fig.update_yaxes(title="Male Score")
+#     return fig
 
 
 def plot_group_comparison(df, subject: str, group_col: str,
@@ -484,7 +491,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             subset = subset[subset["YEAR"] == year]
         
         props = _country_proportions(subset)
-        color = _country_color(cnt, i)
+        color = _country_color(cnt, countries)
 
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
@@ -517,7 +524,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
     return fig
 
 
-def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) -> go.Figure:
+def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None, active_countries: list = None) -> go.Figure:
     """
     Plot the gender score difference across the distribution using Plotly.
 
@@ -596,7 +603,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     # Accessible, non-gender-coded colors
     positive_fill = "rgba(0, 114, 178, 0.22)"   # Okabe-Ito blue
     negative_fill = "rgba(230, 159, 0, 0.22)"   # Okabe-Ito orange
-    main_line = OKABE_ITO.get("vermillion", "#D85A30")
+    main_line = _country_color(cnt, active_countries) if active_countries else OKABE_ITO.get("vermillion", "#D85A30")
 
     fig.add_hline(
         y=0,
@@ -641,7 +648,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
         x=female_percs,
         y=diff,
         mode="lines+markers",
-        name="Male − Female",
+        name="Male - Female",
         line=dict(
             color=main_line,
             width=2.5,
@@ -655,7 +662,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
             "Percentile: %{customdata[0]}<br>"
             "Female score: %{customdata[1]:.0f}<br>"
             "Male score: %{customdata[2]:.0f}<br>"
-            "Male − Female difference: %{customdata[3]:+.0f}<extra></extra>"
+            "Male - Female difference: %{customdata[3]:+.0f}<extra></extra>"
         ),
     ))
 
@@ -698,7 +705,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
 
     color_map = {}
     for i, cnt in enumerate(countries):
-        color_map[cnt] = _country_color(cnt, i)
+        color_map[cnt] = _country_color(cnt, countries)
 
     # Panel 1: Repetition
     if all(c in subset.columns for c in ["REPEAT", "ESCS", "CNT", "W_FSTUWT"]):

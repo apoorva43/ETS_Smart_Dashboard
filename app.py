@@ -373,6 +373,7 @@ def render_chart(chart_type, subject, selected_countries,
                 subject=subject,
                 cnt=primary_country,
                 year=selected_year,
+                active_countries=selected_countries
             )
 
             st.plotly_chart(
