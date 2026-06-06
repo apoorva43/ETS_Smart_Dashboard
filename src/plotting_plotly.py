@@ -273,7 +273,7 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
             s = s[s[group_col] == group_val]
         return s
 
-    ref_percs = weighted_percentiles_pv(get_subset(reference_year), subject, PERCENTILES_FINE)
+    ref_percs = weighted_percentiles_pv(get_subset(reference_year), subject, PERCENTILES_COARSE)
     if np.isnan(ref_percs).all():
         return fig
 
@@ -286,27 +286,30 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
     ))
 
     for year in all_years:
-        yr_percs = weighted_percentiles_pv(get_subset(year), subject, PERCENTILES_FINE)
+        yr_percs = weighted_percentiles_pv(get_subset(year), subject, PERCENTILES_COARSE)
         if np.isnan(yr_percs).all():
             continue
         
         is_ref = (year == reference_year)
         fig.add_trace(go.Scatter(
             x=ref_percs, y=yr_percs,
-            mode="lines", name=f"{year} (ref)" if is_ref else str(year),
+            mode="lines+markers",
+            name=f"{year} (ref)" if is_ref else str(year),
             line=dict(
                 color=YEAR_COLORS.get(year, "#333333"), 
                 width=3.0 if is_ref else 2.0,
                 dash="solid" if is_ref else "dash"
             ),
-            customdata=PERCENTILES_FINE,
-            hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata}}<br>{reference_year} score: %{{x:.0f}}<br>{year} score: %{{y:.0f}}<extra></extra>"
+            marker=dict(symbol=SYMBOLS_COARSE, size=9), # FIX 3: Apply the 5 symbols
+            customdata=PERCENTILES_COARSE,
+            hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata}}<br>Score: %{{y:.0f}}<extra></extra>"
         ))
 
     fig.update_layout(**_base_layout(
         title=f"Score Change Over Time | {SUBJECTS[subject]} | {_cnt_label(cnt)} | {group_label}<br><sup>(above diagonal = improvement)</sup>"
     ))
-    fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)")
+    fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)",
+                     hoverformat=".0f")
     fig.update_yaxes(title="Score")
     return fig
 
@@ -426,7 +429,6 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
                 hovertemplate=(
                     f"Year: {comp_year}<br>"
                     "Percentile: %{customdata[0]}<br>"
-                    f"{reference_year} score: %{{customdata[1]:.0f}}<br>"
                     f"{comp_year} score: %{{customdata[2]:.0f}}<br>"
                     "Change: %{customdata[3]:+.0f}<extra></extra>"
                 ), 
@@ -441,6 +443,7 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
 
     fig.update_xaxes(
         title=f"{reference_year} score (baseline)",
+        hoverformat=".0f",
         zeroline=False
     )
 
@@ -487,7 +490,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             mode="lines+markers", 
             name=_cnt_label(cnt),
             line=dict(color=color, width=2.5),
-            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Score: %{{x}}<br>Percentage: %{{y:.1%}}<extra></extra>"
+            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Score: %{{x}}<br>Percentage: %{{y:.0%}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -662,7 +665,8 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     ))
 
     fig.update_xaxes(
-        title=f"Female {SUBJECTS[subject]} score (reference)"
+        title=f"Female {SUBJECTS[subject]} score (reference)",
+        hoverformat=".0f"
     )
 
     fig.update_yaxes(
@@ -713,6 +717,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 
                 fig.add_trace(go.Bar(
                     x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=_cnt_label(cnt), 
+                    legendgroup=_cnt_label(cnt),
                     marker_color=color_map[cnt],
                     texttemplate="%{y:.0f}%", textposition="outside",
                     hoverinfo="skip"
@@ -730,6 +735,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 
             fig.add_trace(go.Bar(
                 x=list(IMMIG_MAP.values()), y=means, name=_cnt_label(cnt), 
+                legendgroup=_cnt_label(cnt),
                 marker_color=color_map[cnt],
                 showlegend=False, 
                 texttemplate="%{y:.2f}", textposition="outside",
@@ -794,7 +800,7 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 
         customdata = np.column_stack([
             [label] * len(midpoints),
-            [f"{p:.1%}" for p in props]
+            [f"{p:.0%}" for p in props]
         ])
 
         fig.add_trace(go.Scatter(
@@ -852,7 +858,7 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
         ))
 
     fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
-    fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
+    fig.update_yaxes(title=f"{SUBJECTS[subject]} score", hoverformat=".0f")
     
     # Hide the legend since the x-axis already labels the groups perfectly
     fig.update_layout(showlegend=False) 
@@ -897,7 +903,7 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
             hovertemplate=(
                 f"School type: {label}<br>"
                 "Score: %{x}<br>"
-                "Percentage: %{y:.1%}<extra></extra>"
+                "Percentage: %{y:.0%}<extra></extra>"
             ),
         ))
 
