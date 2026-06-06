@@ -265,7 +265,6 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
                                group_col: str = None, group_val: float = None,
                                group_label: str = "All students") -> go.Figure:
     fig = go.Figure()
-    all_years = [reference_year] + comparison_years
 
     def get_subset(year):
         s = df[(df["CNT"] == cnt) & (df["YEAR"] == year)]
@@ -277,30 +276,31 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
     if np.isnan(ref_percs).all():
         return fig
 
-    # Neutral diagonal
     fig.add_trace(go.Scatter(
         x=ref_percs, y=ref_percs,
-        mode="lines", name="No change",
-        line=dict(color="#dddddd", width=1, dash="dot"),
-        hoverinfo="skip"
+        mode="lines+markers", 
+        name=f"{reference_year} baseline (no change)",
+        line=dict(color="#777777", width=2.5, dash="solid"),
+        marker=dict(symbol=SYMBOLS_COARSE, size=9),
+        customdata=PERCENTILES_COARSE,
+        hovertemplate=f"<b>{reference_year} Baseline</b><br>Percentile: %{{customdata}}<br>Score: %{{y:.0f}}<extra></extra>"
     ))
 
-    for year in all_years:
+    for year in comparison_years:
         yr_percs = weighted_percentiles_pv(get_subset(year), subject, PERCENTILES_COARSE)
         if np.isnan(yr_percs).all():
             continue
         
-        is_ref = (year == reference_year)
         fig.add_trace(go.Scatter(
             x=ref_percs, y=yr_percs,
-            mode="lines+markers",
-            name=f"{year} (ref)" if is_ref else str(year),
+            mode="lines+markers", 
+            name=str(year),
             line=dict(
-                color=YEAR_COLORS.get(year, "#333333"), 
-                width=3.0 if is_ref else 2.0,
-                dash="solid" if is_ref else "dash"
+                color=YEAR_COLORS.get(year, "#185FA5"), 
+                width=2.5,
+                dash="dash"
             ),
-            marker=dict(symbol=SYMBOLS_COARSE, size=9), # FIX 3: Apply the 5 symbols
+            marker=dict(symbol=SYMBOLS_COARSE, size=9), 
             customdata=PERCENTILES_COARSE,
             hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata}}<br>Score: %{{y:.0f}}<extra></extra>"
         ))
@@ -308,9 +308,10 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
     fig.update_layout(**_base_layout(
         title=f"Score Change Over Time | {SUBJECTS[subject]} | {_cnt_label(cnt)} | {group_label}<br><sup>(above diagonal = improvement)</sup>"
     ))
-    fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)",
-                     hoverformat=".0f")
+    
+    fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)", hoverformat=".0f")
     fig.update_yaxes(title="Score")
+    
     return fig
 
 
