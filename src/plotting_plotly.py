@@ -830,29 +830,72 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
                                  location_col: str = "SC001Q01TA", min_group_n: int = 30) -> go.Figure:
     """
-    Creates a 'Jitter Quantile Plot' (Raincloud Plot) using a weighted 
-    sample of students to prevent browser crashing.
+    Creates a 'Jitter Quantile Plot' using a weighted sample of students.
+    Uses an invisible bar overlay to bypass Plotly's default box tooltips
+    and deliver exact mathematical percentiles and demographic breakdowns.
     """
     subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
     fig = go.Figure()
+    pv_col = f"PV1{subject}"
     
-    # For raw point clouds, psychometric standard is to use the first Plausible Value
-    pv_col = f"PV1{subject}" 
+    # Calculate total valid country weight FIRST to ensure accurate percentages
+    valid_subset = subset.dropna(subset=[pv_col, "W_FSTUWT", location_col])
+    total_w = valid_subset["W_FSTUWT"].sum()
+    if total_w == 0:
+        return fig
 
     for i, (code, label) in enumerate(LOC_MAP.items()):
-        group = subset[subset[location_col] == code].dropna(subset=[pv_col, "W_FSTUWT"])
+        group = valid_subset[valid_subset[location_col] == code]
         if len(group) < min_group_n:
             continue
 
-        # Take a weighted sample of up to 1000 students for the jitter cloud
+        # Calculate population percentage breakdown
+        group_w = group["W_FSTUWT"].sum()
+        pct = (group_w / total_w) * 100
+        label_with_pct = f"{label}<br>({pct:.0f}%)" # Appends % directly to the X-axis label
+
+        # Calculate true weighted percentiles mathematically
+        percs = weighted_percentiles_pv(group, subject, [10, 25, 50, 75, 90])
+        if np.isnan(percs).all():
+            continue
+        p10, p25, p50, p75, p90 = percs
+
+        # Create clean tooltip string
+        hover_text = (
+            f"<b>{label}</b> ({pct:.0f}% of students)<br><br>"
+            f"90th Percentile: {p90:.0f}<br>"
+            f"75th Percentile: {p75:.0f}<br>"
+            f"Median (50th): {p50:.0f}<br>"
+            f"25th Percentile: {p25:.0f}<br>"
+            f"10th Percentile: {p10:.0f}"
+            f"<extra></extra>"
+        )
+
+        min_val = group[pv_col].min()
+        max_val = group[pv_col].max()
+        
+        fig.add_trace(go.Bar(
+            x=[label_with_pct],
+            y=[max_val - min_val],
+            base=[min_val],
+            width=0.7,
+            marker_color="rgba(0,0,0,0)",
+            hovertext=[hover_text],
+            hovertemplate="%{hovertext}",
+            textposition="none",
+            hoverlabel=dict(align="left"),
+            showlegend=False
+        ))
+
         sample_size = min(1000, len(group))
         sampled = group.sample(n=sample_size, weights="W_FSTUWT", random_state=42)
 
         fig.add_trace(go.Box(
             y=sampled[pv_col],
+            x=[label_with_pct] * len(sampled),
             name=label,
             marker_color=PALETTE[i % len(PALETTE)],
             boxpoints='all',
@@ -860,17 +903,23 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             pointpos=0,
             fillcolor='rgba(0,0,0,0)',
             opacity=0.8,
-            marker=dict(size=4, opacity=0.4, line=dict(width=0)), 
+            marker=dict(size=4, opacity=0.4, line=dict(width=0)),
             line=dict(width=2),
-            hovertemplate="<b>%{x}</b><br>Student Score: %{y:.0f}<extra></extra>"
+            hoverinfo="skip",
+            showlegend=False
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
+    fig.update_layout(
+        **_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {_cnt_label(cnt)}")
+    )
+    
+    fig.update_layout(
+        hovermode="closest", 
+        barmode="overlay"
+    )
+    
     fig.update_yaxes(title=f"{SUBJECTS[subject]} score", hoverformat=".0f")
-    
-    # Hide the legend since the x-axis already labels the groups perfectly
-    fig.update_layout(showlegend=False) 
-    
+
     return fig
 
 
