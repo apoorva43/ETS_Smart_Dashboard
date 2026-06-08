@@ -89,15 +89,22 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
     return valid_data, None
 
 # keep color consistent
-def _country_color(cnt: str, index: int) -> str:
+def _country_color(cnt: str, active_countries: list) -> str:
     """
-    Return a consistent accessible color for a country.
+    Assign a color based on the country's position in the dashboard's active selection.
+    If a user picks ["CAN", "USA"], CAN is always PALETTE[0] and USA is always PALETTE[1]
+    across EVERY chart.
+    """
+    if not active_countries:
+        return OKABE_ITO.get("blue", "#0072B2")
 
-    Countries explicitly defined in COUNTRY_COLORS keep their assigned colors.
-    Other countries use PALETTE by index so the same selected-country order
-    produces consistent colors across charts.
-    """
-    return COUNTRY_COLORS.get(cnt, PALETTE[index % len(PALETTE)])
+    # If the country is in the selected list, use its index to pick the color
+    if cnt in active_countries:
+        index = active_countries.index(cnt)
+        return PALETTE[index % len(PALETTE)]
+    
+    # If a chart plots a baseline/reference country not in the list, default it
+    return OKABE_ITO.get("blue", "#0072B2")
 
 # percentile score profile
 def plot_country_distributions(df, subject: str,
@@ -116,7 +123,7 @@ def plot_country_distributions(df, subject: str,
         if np.isnan(percs).all():
             continue
             
-        color = _country_color(cnt, i)
+        color = _country_color(cnt, countries)
         
         fig.add_trace(go.Scatter(
             x=PERCENTILES_COARSE, y=percs,
@@ -177,50 +184,50 @@ def plot_escs_gap(df, subject, cnt, year=None):
     return fig
 
 
-def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) -> go.Figure:
-    subset = df[df["CNT"] == cnt].copy()
-    if year is not None and "YEAR" in df.columns:
-        subset = subset[subset["YEAR"] == year]
+# def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) -> go.Figure:
+#     subset = df[df["CNT"] == cnt].copy()
+#     if year is not None and "YEAR" in df.columns:
+#         subset = subset[subset["YEAR"] == year]
 
-    valid_data, error_fig = _check_sufficient_data(
-        subset, ["ST004D01T"], cnt, msg=f"Insufficient gender data for {cnt}"
-    )
-    if error_fig is not None:
-        return error_fig
+#     valid_data, error_fig = _check_sufficient_data(
+#         subset, ["ST004D01T"], cnt, msg=f"Insufficient gender data for {cnt}"
+#     )
+#     if error_fig is not None:
+#         return error_fig
 
-    female = valid_data[valid_data["ST004D01T"] == 1.0]
-    male   = valid_data[valid_data["ST004D01T"] == 2.0]
+#     female = valid_data[valid_data["ST004D01T"] == 1.0]
+#     male   = valid_data[valid_data["ST004D01T"] == 2.0]
 
-    female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
-    male_percs   = weighted_percentiles_pv(male,   subject, PERCENTILES_FINE)
+#     female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
+#     male_percs   = weighted_percentiles_pv(male,   subject, PERCENTILES_FINE)
 
-    fig = go.Figure()
-    if np.isnan(female_percs).all():
-        return fig
+#     fig = go.Figure()
+#     if np.isnan(female_percs).all():
+#         return fig
 
-    # Reference diagonal
-    fig.add_trace(go.Scatter(
-        x=female_percs, y=female_percs,
-        mode="lines", name="Female (reference)",
-        line=dict(color="#cccccc", width=1.5, dash="dot"),
-        hoverinfo="skip"
-    ))
+#     # Reference diagonal
+#     fig.add_trace(go.Scatter(
+#         x=female_percs, y=female_percs,
+#         mode="lines", name="Female (reference)",
+#         line=dict(color="#cccccc", width=1.5, dash="dot"),
+#         hoverinfo="skip"
+#     ))
 
-    # Male line
-    fig.add_trace(go.Scatter(
-        x=female_percs, y=male_percs,
-        mode="lines", name="Male",
-        line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
-        customdata=PERCENTILES_FINE,
-        hovertemplate="Percentile: %{customdata}<br>Female Score: %{x:.0f}<br>Male Score: %{y:.0f}<extra></extra>"
-    ))
+#     # Male line
+#     fig.add_trace(go.Scatter(
+#         x=female_percs, y=male_percs,
+#         mode="lines", name="Male",
+#         line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
+#         customdata=PERCENTILES_FINE,
+#         hovertemplate="Percentile: %{customdata}<br>Female Score: %{x:.0f}<br>Male Score: %{y:.0f}<extra></extra>"
+#     ))
 
-    fig.update_layout(**_base_layout(
-        title=f"Gender Gap | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>(above diagonal = males score higher)</sup>"
-    ))
-    fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
-    fig.update_yaxes(title="Male Score")
-    return fig
+#     fig.update_layout(**_base_layout(
+#         title=f"Gender Gap | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>(above diagonal = males score higher)</sup>"
+#     ))
+#     fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
+#     fig.update_yaxes(title="Male Score")
+#     return fig
 
 
 def plot_group_comparison(df, subject: str, group_col: str,
@@ -265,7 +272,6 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
                                group_col: str = None, group_val: float = None,
                                group_label: str = "All students") -> go.Figure:
     fig = go.Figure()
-    all_years = [reference_year] + comparison_years
 
     def get_subset(year):
         s = df[(df["CNT"] == cnt) & (df["YEAR"] == year)]
@@ -273,41 +279,46 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
             s = s[s[group_col] == group_val]
         return s
 
-    ref_percs = weighted_percentiles_pv(get_subset(reference_year), subject, PERCENTILES_FINE)
+    ref_percs = weighted_percentiles_pv(get_subset(reference_year), subject, PERCENTILES_COARSE)
     if np.isnan(ref_percs).all():
         return fig
 
-    # Neutral diagonal
     fig.add_trace(go.Scatter(
         x=ref_percs, y=ref_percs,
-        mode="lines", name="No change",
-        line=dict(color="#dddddd", width=1, dash="dot"),
-        hoverinfo="skip"
+        mode="lines+markers", 
+        name=f"{reference_year} baseline (no change)",
+        line=dict(color="#777777", width=2.5, dash="solid"),
+        marker=dict(symbol=SYMBOLS_COARSE, size=9),
+        customdata=PERCENTILES_COARSE,
+        hovertemplate=f"<b>{reference_year} Baseline</b><br>Percentile: %{{customdata}}<br>Score: %{{y:.0f}}<extra></extra>"
     ))
 
-    for year in all_years:
-        yr_percs = weighted_percentiles_pv(get_subset(year), subject, PERCENTILES_FINE)
+    for year in comparison_years:
+        yr_percs = weighted_percentiles_pv(get_subset(year), subject, PERCENTILES_COARSE)
         if np.isnan(yr_percs).all():
             continue
         
-        is_ref = (year == reference_year)
         fig.add_trace(go.Scatter(
             x=ref_percs, y=yr_percs,
-            mode="lines", name=f"{year} (ref)" if is_ref else str(year),
+            mode="lines+markers", 
+            name=str(year),
             line=dict(
-                color=YEAR_COLORS.get(year, "#333333"), 
-                width=3.0 if is_ref else 2.0,
-                dash="solid" if is_ref else "dash"
+                color=YEAR_COLORS.get(year, "#185FA5"), 
+                width=2.5,
+                dash="dash"
             ),
-            customdata=PERCENTILES_FINE,
-            hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata}}<br>{reference_year} score: %{{x:.0f}}<br>{year} score: %{{y:.0f}}<extra></extra>"
+            marker=dict(symbol=SYMBOLS_COARSE, size=9), 
+            customdata=PERCENTILES_COARSE,
+            hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata}}<br>Score: %{{y:.0f}}<extra></extra>"
         ))
 
     fig.update_layout(**_base_layout(
         title=f"Score Change Over Time | {SUBJECTS[subject]} | {_cnt_label(cnt)} | {group_label}<br><sup>(above diagonal = improvement)</sup>"
     ))
-    fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)")
+    
+    fig.update_xaxes(title=f"{reference_year} {SUBJECTS[subject]} score (reference)", hoverformat=".0f")
     fig.update_yaxes(title="Score")
+    
     return fig
 
 
@@ -426,7 +437,6 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
                 hovertemplate=(
                     f"Year: {comp_year}<br>"
                     "Percentile: %{customdata[0]}<br>"
-                    f"{reference_year} score: %{{customdata[1]:.0f}}<br>"
                     f"{comp_year} score: %{{customdata[2]:.0f}}<br>"
                     "Change: %{customdata[3]:+.0f}<extra></extra>"
                 ), 
@@ -441,6 +451,7 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
 
     fig.update_xaxes(
         title=f"{reference_year} score (baseline)",
+        hoverformat=".0f",
         zeroline=False
     )
 
@@ -480,14 +491,14 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             subset = subset[subset["YEAR"] == year]
         
         props = _country_proportions(subset)
-        color = _country_color(cnt, i)
+        color = _country_color(cnt, countries)
 
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
             mode="lines+markers", 
             name=_cnt_label(cnt),
             line=dict(color=color, width=2.5),
-            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Score: %{{x}}<br>Percentage: %{{y:.1%}}<extra></extra>"
+            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Score: %{{x}}<br>Percentage: %{{y:.0%}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -513,7 +524,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
     return fig
 
 
-def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) -> go.Figure:
+def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None, active_countries: list = None) -> go.Figure:
     """
     Plot the gender score difference across the distribution using Plotly.
 
@@ -592,7 +603,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     # Accessible, non-gender-coded colors
     positive_fill = "rgba(0, 114, 178, 0.22)"   # Okabe-Ito blue
     negative_fill = "rgba(230, 159, 0, 0.22)"   # Okabe-Ito orange
-    main_line = OKABE_ITO.get("vermillion", "#D85A30")
+    main_line = _country_color(cnt, active_countries) if active_countries else OKABE_ITO.get("vermillion", "#D85A30")
 
     fig.add_hline(
         y=0,
@@ -637,7 +648,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
         x=female_percs,
         y=diff,
         mode="lines+markers",
-        name="Male − Female",
+        name="Male - Female",
         line=dict(
             color=main_line,
             width=2.5,
@@ -651,7 +662,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
             "Percentile: %{customdata[0]}<br>"
             "Female score: %{customdata[1]:.0f}<br>"
             "Male score: %{customdata[2]:.0f}<br>"
-            "Male − Female difference: %{customdata[3]:+.0f}<extra></extra>"
+            "Male - Female difference: %{customdata[3]:+.0f}<extra></extra>"
         ),
     ))
 
@@ -662,7 +673,8 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None) ->
     ))
 
     fig.update_xaxes(
-        title=f"Female {SUBJECTS[subject]} score (reference)"
+        title=f"Female {SUBJECTS[subject]} score (reference)",
+        hoverformat=".0f"
     )
 
     fig.update_yaxes(
@@ -693,7 +705,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
 
     color_map = {}
     for i, cnt in enumerate(countries):
-        color_map[cnt] = _country_color(cnt, i)
+        color_map[cnt] = _country_color(cnt, countries)
 
     # Panel 1: Repetition
     if all(c in subset.columns for c in ["REPEAT", "ESCS", "CNT", "W_FSTUWT"]):
@@ -713,6 +725,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 
                 fig.add_trace(go.Bar(
                     x=["Q1", "Q2", "Q3", "Q4"], y=rates, name=_cnt_label(cnt), 
+                    legendgroup=_cnt_label(cnt),
                     marker_color=color_map[cnt],
                     texttemplate="%{y:.0f}%", textposition="outside",
                     hoverinfo="skip"
@@ -730,6 +743,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 
             fig.add_trace(go.Bar(
                 x=list(IMMIG_MAP.values()), y=means, name=_cnt_label(cnt), 
+                legendgroup=_cnt_label(cnt),
                 marker_color=color_map[cnt],
                 showlegend=False, 
                 texttemplate="%{y:.2f}", textposition="outside",
@@ -794,7 +808,7 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 
         customdata = np.column_stack([
             [label] * len(midpoints),
-            [f"{p:.1%}" for p in props]
+            [f"{p:.0%}" for p in props]
         ])
 
         fig.add_trace(go.Scatter(
@@ -816,29 +830,72 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
                                  location_col: str = "SC001Q01TA", min_group_n: int = 30) -> go.Figure:
     """
-    Creates a 'Jitter Quantile Plot' (Raincloud Plot) using a weighted 
-    sample of students to prevent browser crashing.
+    Creates a 'Jitter Quantile Plot' using a weighted sample of students.
+    Uses an invisible bar overlay to bypass Plotly's default box tooltips
+    and deliver exact mathematical percentiles and demographic breakdowns.
     """
     subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
     fig = go.Figure()
+    pv_col = f"PV1{subject}"
     
-    # For raw point clouds, psychometric standard is to use the first Plausible Value
-    pv_col = f"PV1{subject}" 
+    # Calculate total valid country weight FIRST to ensure accurate percentages
+    valid_subset = subset.dropna(subset=[pv_col, "W_FSTUWT", location_col])
+    total_w = valid_subset["W_FSTUWT"].sum()
+    if total_w == 0:
+        return fig
 
     for i, (code, label) in enumerate(LOC_MAP.items()):
-        group = subset[subset[location_col] == code].dropna(subset=[pv_col, "W_FSTUWT"])
+        group = valid_subset[valid_subset[location_col] == code]
         if len(group) < min_group_n:
             continue
 
-        # Take a weighted sample of up to 1000 students for the jitter cloud
+        # Calculate population percentage breakdown
+        group_w = group["W_FSTUWT"].sum()
+        pct = (group_w / total_w) * 100
+        label_with_pct = f"{label}<br>({pct:.0f}%)" # Appends % directly to the X-axis label
+
+        # Calculate true weighted percentiles mathematically
+        percs = weighted_percentiles_pv(group, subject, [10, 25, 50, 75, 90])
+        if np.isnan(percs).all():
+            continue
+        p10, p25, p50, p75, p90 = percs
+
+        # Create clean tooltip string
+        hover_text = (
+            f"<b>{label}</b> ({pct:.0f}% of students)<br><br>"
+            f"90th Percentile: {p90:.0f}<br>"
+            f"75th Percentile: {p75:.0f}<br>"
+            f"Median (50th): {p50:.0f}<br>"
+            f"25th Percentile: {p25:.0f}<br>"
+            f"10th Percentile: {p10:.0f}"
+            f"<extra></extra>"
+        )
+
+        min_val = group[pv_col].min()
+        max_val = group[pv_col].max()
+        
+        fig.add_trace(go.Bar(
+            x=[label_with_pct],
+            y=[max_val - min_val],
+            base=[min_val],
+            width=0.7,
+            marker_color="rgba(0,0,0,0)",
+            hovertext=[hover_text],
+            hovertemplate="%{hovertext}",
+            textposition="none",
+            hoverlabel=dict(align="left"),
+            showlegend=False
+        ))
+
         sample_size = min(1000, len(group))
         sampled = group.sample(n=sample_size, weights="W_FSTUWT", random_state=42)
 
         fig.add_trace(go.Box(
             y=sampled[pv_col],
+            x=[label_with_pct] * len(sampled),
             name=label,
             marker_color=PALETTE[i % len(PALETTE)],
             boxpoints='all',
@@ -846,17 +903,23 @@ def plot_school_location_boxplot(df, subject: str, cnt: str, year: int = None,
             pointpos=0,
             fillcolor='rgba(0,0,0,0)',
             opacity=0.8,
-            marker=dict(size=4, opacity=0.4, line=dict(width=0)), 
+            marker=dict(size=4, opacity=0.4, line=dict(width=0)),
             line=dict(width=2),
-            hovertemplate="<b>%{x}</b><br>Student Score: %{y:.0f}<extra></extra>"
+            hoverinfo="skip",
+            showlegend=False
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
-    fig.update_yaxes(title=f"{SUBJECTS[subject]} score")
+    fig.update_layout(
+        **_base_layout(title=f"Score by School Location | {SUBJECTS[subject]} | {_cnt_label(cnt)}")
+    )
     
-    # Hide the legend since the x-axis already labels the groups perfectly
-    fig.update_layout(showlegend=False) 
+    fig.update_layout(
+        hovermode="closest", 
+        barmode="overlay"
+    )
     
+    fig.update_yaxes(title=f"{SUBJECTS[subject]} score", hoverformat=".0f")
+
     return fig
 
 
@@ -897,7 +960,7 @@ def plot_school_type_distribution(df, subject: str, cnt: str, year: int = None,
             hovertemplate=(
                 f"School type: {label}<br>"
                 "Score: %{x}<br>"
-                "Percentage: %{y:.1%}<extra></extra>"
+                "Percentage: %{y:.0%}<extra></extra>"
             ),
         ))
 

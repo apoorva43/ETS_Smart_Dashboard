@@ -373,6 +373,7 @@ def render_chart(chart_type, subject, selected_countries,
                 subject=subject,
                 cnt=primary_country,
                 year=selected_year,
+                active_countries=selected_countries
             )
 
             st.plotly_chart(
@@ -769,29 +770,30 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
                     f"{reference_year} and {latest_year}."
                 )
 
+            with st.expander("📖 How to read this chart"):
+                st.markdown(f"""
+                    This chart tracks score changes across the performance spectrum over time.
+
+                    - The **horizontal axis (x-axis)** shows the {reference_year} baseline score at each percentile (from the lowest to the highest achievers).
+                    - The **vertical axis (y-axis)** shows the score for that exact same percentile in a comparison year.
+                    - The **solid diagonal line** represents the {reference_year} baseline (exactly zero change).
+                    - The **dashed lines** represent the comparison years.
+                    - Points **above** the solid diagonal line indicate an **improvement** at that performance level.
+                    - Points **below** the solid diagonal line indicate a **decline** at that performance level.
+                """)
+
             fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
                                              reference_year=reference_year,
                                              comparison_years=comparison_years)
             st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
 
-            with st.expander("📖 How to read this chart"):
-                st.markdown(f"""
-                    This is a **NAEP-style gain plot**.
-
-                    - The **x-axis** is the {reference_year} score at each percentile.
-                    - The **y-axis** is the score at that same percentile in a later year.
-                    - Points on the **diagonal grey line** = no change.
-                    - Points **above** the diagonal = improvement at that percentile.
-                    - Points **below** the diagonal = decline at that percentile.
+            with st.expander("🔍 Why might scores change between cycles?"):
+                st.markdown("""
+                    - **Curriculum or policy reforms** implemented before the cycle
+                    - **Changes in school composition** (immigration, urbanisation)
+                    - **Disruptions** such as economic crises or the COVID-19 pandemic (relevant to 2022)
+                    - **Cohort effects** — the specific group of 15-year-olds tested that year
                 """)
-
-        with st.expander("🔍 Why might scores change between cycles?"):
-            st.markdown("""
-                - **Curriculum or policy reforms** implemented before the cycle
-                - **Changes in school composition** (immigration, urbanisation)
-                - **Disruptions** such as economic crises or the COVID-19 pandemic (relevant to 2022)
-                - **Cohort effects** — the specific group of 15-year-olds tested that year
-            """)
 
     st.divider()
 
