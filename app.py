@@ -42,7 +42,7 @@ from src.plotting_plotly import (plot_country_distributions,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
-                                gender_gap_text,
+                                immigration_gap_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
@@ -696,7 +696,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 1: Global standing ─────────────────────────────────────────
     _story_section_header(1, "How does this compare to the OECD average?",
-        f"Where {_cnt_label(story_country)} sits in the international {subject_label} distribution")
+        f"How students in {_cnt_label(story_country)} score on average in {subject_label} compared to the OECD average")
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
@@ -715,18 +715,18 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         if mean_text:
             _insight_box(mean_text)
 
+        with st.expander("📖 How to read this chart"):
+            st.markdown("""
+                - The **x-axis** is the percentile rank (P10 = bottom 10%, P90 = top 10%).
+                - The **y-axis** is the PISA score for students at that position.
+                - A **steeper curve** means more spread in scores — greater inequality within the country.
+                - The **dashed black line** is the OECD average across all member countries.
+                - If a country's curve sits **above** the OECD line, its students score higher at 
+                every point in the distribution.
+            """)
+
         fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year)
         st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
-
-    with st.expander("📖 How to read this chart"):
-        st.markdown("""
-            - The **x-axis** is the percentile rank (P10 = bottom 10%, P90 = top 10%).
-            - The **y-axis** is the PISA score for students at that position.
-            - A **steeper curve** means more spread in scores — greater inequality within the country.
-            - The **dashed black line** is the OECD average across all member countries.
-            - If a country's curve sits **above** the OECD line, its students score higher at 
-              every point in the distribution.
-        """)
 
     with st.expander("🔍 What does a 30-point gap actually mean?"):
         st.markdown("""
@@ -789,20 +789,19 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
             with st.expander("🔍 Why might scores change between cycles?"):
                 st.markdown("""
-                    - **Curriculum or policy reforms** implemented before the cycle
-                    - **Changes in school composition** (immigration, urbanisation)
+                    - **Changes in school composition** (e.g. due to immigration, urbanisation)
                     - **Disruptions** such as economic crises or the COVID-19 pandemic (relevant to 2022)
                     - **Cohort effects** — the specific group of 15-year-olds tested that year
+                    - **Curriculum or policy reforms** implemented before the cycle
                 """)
 
     st.divider()
 
     # ── Section 3: Equity gaps ─────────────────────────────────────────────
     _story_section_header(3, "Who scores highest — and who is left behind?",
-        f"Score differences by socioeconomic and immigration status in {_cnt_label(story_country)}")
+        f"This section examines two key dimensions of equity: score differences by socioeconomic status and immigration status in {_cnt_label(story_country)}")
 
-    st.markdown("High average scores can mask large gaps between student groups. "
-                "This section examines two key dimensions of equity.")
+    st.markdown("High average scores can mask large gaps between student groups.")
 
     df_ses  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["ESCS"]))
     df_immig = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["IMMIG"]))
@@ -811,46 +810,50 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     with eq_col1:
         st.markdown("#### Scores by Socioeconomic Status")
         
-        # 1. The Guardrail (Checks if data exists before doing any math)
+        # Check if data exists before doing any math
         if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
             st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {_cnt_label(story_country)}.")
         else:
-            # 2. The Execution (Only runs if data is safe)
+            # Only runs if data is safe
             ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
             if "Insufficient" not in ses_text:
                 _insight_box(ses_text)
             
+            with st.expander("📖 How to read the chart showing scores by socioeconomic status"):
+                st.markdown("""
+                    Students are divided into **four equal-sized groups** (quartiles) based on 
+                    the PISA ESCS index — a composite of parental education, occupational status, 
+                    and home possessions. **Q1** = bottom 25%, **Q4** = top 25%.
+                """)
+
             fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
             st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
 
     with eq_col2:
-        st.markdown("#### Scores by Immigration Background")
+        st.markdown("#### Scores by Immigration Status")
         if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
             st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {_cnt_label(story_country)}.")
         else:
+            immig_text = immigration_gap_text(df_immig, story_subject, story_country, year=story_year)
+            if "Insufficient" not in immig_text:
+                _insight_box(immig_text)
+
+            with st.expander("📖 How to read this chart"):
+                st.markdown("""
+                    - **Native:** born in the country, both parents born in the country
+                    - **Second-generation:** born in the country, at least one parent born abroad
+                    - **First-generation:** born abroad, came to the country before or during school age
+                    - The **dotted vertical lines** show the exact median (middle) score for each group.
+                """)
             fig3b = plot_immigration_score_distribution(
                 df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
             st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
-
-    with st.expander("📖 How to read the SES chart"):
-        st.markdown("""
-            Students are divided into **four equal-sized groups** (quartiles) based on 
-            the PISA ESCS index — a composite of parental education, occupational status, 
-            and home possessions. **Q1** = bottom 25%, **Q4** = top 25%.
-        """)
-
-    with st.expander("📖 How to read the immigration chart"):
-        st.markdown("""
-            - **Native:** born in the country, both parents born in the country
-            - **Second-generation:** born in the country, at least one parent born abroad
-            - **First-generation:** born abroad, came to the country before or during school age
-        """)
 
     st.divider()
 
     # ── Section 4: School context ──────────────────────────────────────────
     _story_section_header(4, "Does school context matter?",
-        f"How school location and type relate to {subject_label} scores in {_cnt_label(story_country)}")
+        f"How school location and whether school is public or private relate to {subject_label} scores in {_cnt_label(story_country)}")
 
     df_loc  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
     df_type = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
@@ -861,6 +864,12 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         if check_missing_countries(df_loc, ["SC001Q01TA"], [story_country], story_year):
             st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {_cnt_label(story_country)}.")
         else:
+            with st.expander("📖 How to read the school location chart"):
+                st.markdown("""
+                    - The **box** spans the middle 50% of students (P25–P75)
+                    - The **line** inside the box is the median score (P50)
+                    - The **whiskers** extend to P10 and P90
+                """)
             fig4a = plot_school_location_boxplot(
                 df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
             st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
@@ -870,23 +879,15 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         if check_missing_countries(df_type, ["SCHLTYPE"], [story_country], story_year):
             st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {_cnt_label(story_country)}.")
         else:
+            with st.expander("📖 How to read the school type chart"):
+                st.markdown("""
+                    - **Public:** government-operated and funded
+                    - **Government-dependent private:** privately managed, significant government funding
+                    - **Independent private:** privately managed and primarily privately funded
+                """)
             fig4b = plot_school_type_distribution(
                 df=df_type, subject=story_subject, cnt=story_country, year=story_year)
             st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
-
-    with st.expander("📖 How to read the school location chart"):
-        st.markdown("""
-            - The **box** spans the middle 50% of students (P25–P75)
-            - The **line** inside the box is the median score (P50)
-            - The **whiskers** extend to P10 and P90
-        """)
-
-    with st.expander("📖 How to read the school type chart"):
-        st.markdown("""
-            - **Public:** government-operated and funded
-            - **Government-dependent private:** privately managed, significant government funding
-            - **Independent private:** privately managed and primarily privately funded
-        """)
 
     st.divider()
 

@@ -220,3 +220,57 @@ def scatter_correlation_text(df, subject, resource_col, resource_label, year=Non
             base_text += f"\n\n**Highlighted Countries:** " + ", ".join(details) + "."
 
     return base_text
+
+def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
+    """
+    Calculates the median score gaps between Native students and both 1st- and 2nd-generation 
+    immigrant students, generating an automated insight string.
+    """
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    if "IMMIG" not in subset.columns or "W_FSTUWT" not in subset.columns:
+        return "Insufficient data to calculate the immigration gap."
+
+    # Calculate medians for all three groups
+    nat_med = weighted_percentiles_pv(subset[subset["IMMIG"] == 1.0], subject, [50])
+    gen2_med = weighted_percentiles_pv(subset[subset["IMMIG"] == 2.0], subject, [50])
+    gen1_med = weighted_percentiles_pv(subset[subset["IMMIG"] == 3.0], subject, [50])
+
+    # Safety check: We need the Native score to act as our baseline
+    if np.isnan(nat_med).all():
+        return "Insufficient Native student data to establish a baseline for comparison."
+
+    base_score = nat_med[0]
+    comparisons = []
+
+    # Calculate gap for 2nd-generation (if data exists)
+    if not np.isnan(gen2_med).all():
+        diff2 = gen2_med[0] - base_score
+        dir2 = "higher" if diff2 > 0 else "lower"
+        # If the gap is exactly 0, handle the language gracefully
+        if round(diff2) == 0:
+            comparisons.append("exactly the same for 2nd-generation immigrants")
+        else:
+            comparisons.append(f"**{abs(diff2):.0f} points {dir2}** for 2nd-generation immigrants")
+
+    # Calculate gap for 1st-generation (if data exists)
+    if not np.isnan(gen1_med).all():
+        diff1 = gen1_med[0] - base_score
+        dir1 = "higher" if diff1 > 0 else "lower"
+        if round(diff1) == 0:
+            comparisons.append("exactly the same for 1st-generation immigrants")
+        else:
+            comparisons.append(f"**{abs(diff1):.0f} points {dir1}** for 1st-generation immigrants")
+
+    if not comparisons:
+        return "Insufficient data to compare immigration groups."
+
+    # Join them together into a professional, readable sentence
+    joined_comparisons = " and ".join(comparisons)
+    
+    return (
+        f"Compared to the median Native student in {_cnt_label(cnt)}, "
+        f"the median {SUBJECTS[subject]} score is {joined_comparisons}."
+    )
