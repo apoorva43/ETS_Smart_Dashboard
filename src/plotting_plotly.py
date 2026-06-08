@@ -54,13 +54,13 @@ def _base_layout(title: str = "", height: int = 480) -> dict:
         ),
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
+            yanchor="top",
+            y=-0.25,
+            xanchor="center",
+            x=0.5
         ),
         hovermode="x unified",
-        margin=dict(t=60, b=40, l=50, r=20),
+        margin=dict(t=85, b=85, l=50, r=20),
     )
 
 
@@ -799,6 +799,7 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
         total_w = w.sum()
         if total_w == 0: continue
 
+        # Calculate the curve proportions
         pv_props = []
         for pv in pv_cols:
             scores = group_df[pv].values
@@ -806,14 +807,23 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 
         props = np.mean(pv_props, axis=0)
 
+        # Calculate the exact median and update the legend label
+        med_val = weighted_percentiles_pv(group_df, subject, [50])
+        med_label = f" (Median: {med_val[0]:.0f})" if not np.isnan(med_val).all() else ""
+        full_label = f"{label}{med_label}"
+
+        # Dotted vertical line exactly at the median
+        if not np.isnan(med_val).all():
+            fig.add_vline(x=med_val[0], line_width=1.5, line_dash="dot", line_color=color, opacity=0.7)
+
         customdata = np.column_stack([
-            [label] * len(midpoints),
+            [full_label] * len(midpoints),
             [f"{p:.0%}" for p in props]
         ])
 
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
-            mode="lines", name=label,
+            mode="lines", name=full_label, # <-- Places the exact score in the legend
             line=dict(color=color, width=2.5),
             customdata=customdata,
             hovertemplate=(
