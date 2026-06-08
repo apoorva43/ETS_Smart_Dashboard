@@ -823,7 +823,7 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
-            mode="lines", name=full_label, # <-- Places the exact score in the legend
+            mode="lines", name=full_label,
             line=dict(color=color, width=2.5),
             customdata=customdata,
             hovertemplate=(
