@@ -699,7 +699,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 1: Global standing ─────────────────────────────────────────
     _story_section_header(1, "How does this compare to the OECD average?",
-        f"Where {_cnt_label(story_country)} sits in the international {subject_label} distribution")
+        f"How students in {_cnt_label(story_country)} score on average in {subject_label} compared to the OECD average")
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
@@ -714,12 +714,10 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {subject_label} scores.")
 
     if valid_countries:
-        # 1. The Key Finding
         mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
         if mean_text:
             _insight_box(mean_text)
 
-        # 2. How to read the chart
         with st.expander("📖 How to read this chart"):
             st.markdown("""
                 - The **x-axis** is the percentile rank (P10 = bottom 10%, P90 = top 10%).
@@ -730,11 +728,9 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
                   every point in the distribution.
             """)
 
-        # 3. The Visual (Successfully passes primary_country)
         fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year, primary_country=story_country)
         st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-    # 4. Contextual Glossaries 
     ctx_col1, ctx_col2 = st.columns(2)
     
     with ctx_col1:

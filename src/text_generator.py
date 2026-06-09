@@ -97,8 +97,8 @@ def gender_gap_text(df, subject, cnt, year=None):
         subset = subset[subset["YEAR"] == year]
 
     valid_data = subset.dropna(subset=["ST004D01T", "W_FSTUWT"])
-    if len(valid_data) < 100:
-        return f"Insufficient data to compute gender gap for {_cnt_label(cnt)}."
+    if len(valid_data) < 30:
+        return f"Insufficient data to compute gender difference for {_cnt_label(cnt)}."
 
     female = valid_data[valid_data["ST004D01T"] == 1.0]
     male   = valid_data[valid_data["ST004D01T"] == 2.0]
@@ -107,25 +107,25 @@ def gender_gap_text(df, subject, cnt, year=None):
     m_percs = weighted_percentiles_pv(male,   subject, PERCENTILES_COARSE)
 
     if np.isnan(f_percs).all() or np.isnan(m_percs).all():
-        return f"Insufficient data to compute gender gap for {_cnt_label(cnt)}."
+        return f"Insufficient data to compute gender difference for {_cnt_label(cnt)}."
 
-    gaps = m_percs - f_percs
-    p10_gap, median_gap, p90_gap = gaps[0], gaps[2], gaps[-1]
+    diffs = m_percs - f_percs
+    p10_diff, median_diff, p90_diff = diffs[0], diffs[2], diffs[-1]
     subject_label = SUBJECTS[subject]
 
-    if abs(median_gap) < 5:
-        overall = f"At the median, male and female students in {_cnt_label(cnt)} score similarly in {subject_label} ({median_gap:+.0f} points)."
-    elif median_gap > 0:
-        overall = f"Male students in {_cnt_label(cnt)} score {median_gap:.0f} points higher than female students at the median in {subject_label}."
+    if abs(median_diff) < 5:
+        overall = f"At the median, male and female students in {_cnt_label(cnt)} score similarly in {subject_label} ({median_diff:+.0f} points)."
+    elif median_diff > 0:
+        overall = f"Male students in {_cnt_label(cnt)} score {median_diff:.0f} points higher than female students at the median in {subject_label}."
     else:
-        overall = f"Female students in {_cnt_label(cnt)} score {abs(median_gap):.0f} points higher than male students at the median in {subject_label}."
+        overall = f"Female students in {_cnt_label(cnt)} score {abs(median_diff):.0f} points higher than male students at the median in {subject_label}."
 
-    if abs(p90_gap - p10_gap) > 10:
-        spread = (f"The gap widens toward the top of the distribution: "
-                  f"{p10_gap:+.0f} pts at P10 vs {p90_gap:+.0f} pts at P90. "
+    if abs(p90_diff - p10_diff) > 10:
+        spread = (f"The difference widens toward the top of the distribution: "
+                  f"{p10_diff:+.0f} pts at P10 vs {p90_diff:+.0f} pts at P90. "
                   f"This pattern is invisible in average-only reporting.")
     else:
-        spread = f"The gap is relatively consistent across the distribution ({p10_gap:+.0f} pts at P10, {p90_gap:+.0f} pts at P90)."
+        spread = f"The difference is relatively consistent across the distribution ({p10_diff:+.0f} pts at P10, {p90_diff:+.0f} pts at P90)."
 
     return f"{overall} {spread}"
 
@@ -162,15 +162,15 @@ def ses_gap_text(df, subject, cnt, year=None):
     q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
 
     if np.isnan(q1_med) or np.isnan(q4_med):
-        return "Insufficient data to compute SES gap."
+        return "Insufficient data to compute SES difference."
 
-    gap = q4_med - q1_med
+    diff = q4_med - q1_med
     subject_label = SUBJECTS[subject]
     return (
         f"In {_cnt_label(cnt)}, students in the highest SES quartile score "
-        f"{gap:.0f} points higher than those in the lowest quartile "
+        f"{diff:.0f} points higher than those in the lowest quartile "
         f"at the median in {subject_label}. "
-        f"This gap represents the combined effect of home resources, "
+        f"This difference represents the combined effect of home resources, "
         f"parental education, and occupational status."
     )
 
@@ -231,7 +231,7 @@ def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         subset = subset[subset["YEAR"] == year]
 
     if "IMMIG" not in subset.columns or "W_FSTUWT" not in subset.columns:
-        return "Insufficient data to calculate the immigration gap."
+        return "Insufficient data to calculate the immigration difference."
 
     # Calculate medians for all three groups
     nat_med = weighted_percentiles_pv(subset[subset["IMMIG"] == 1.0], subject, [50])
