@@ -253,7 +253,7 @@ def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         if round(diff2) == 0:
             comparisons.append("exactly the same for 2nd-generation immigrants")
         else:
-            comparisons.append(f"**{abs(diff2):.0f} points {dir2}** for 2nd-generation immigrants")
+            comparisons.append(f"{abs(diff2):.0f} points {dir2} for 2nd-generation immigrants")
 
     # Calculate gap for 1st-generation (if data exists)
     if not np.isnan(gen1_med).all():
@@ -262,7 +262,7 @@ def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         if round(diff1) == 0:
             comparisons.append("exactly the same for 1st-generation immigrants")
         else:
-            comparisons.append(f"**{abs(diff1):.0f} points {dir1}** for 1st-generation immigrants")
+            comparisons.append(f"{abs(diff1):.0f} points {dir1} for 1st-generation immigrants")
 
     if not comparisons:
         return "Insufficient data to compare immigration groups."

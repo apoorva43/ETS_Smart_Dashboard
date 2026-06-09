@@ -175,8 +175,10 @@ def check_group_sizes(df, group_col, group_vals, cnt, year=None):
     warnings = []
     for code, label in group_vals.items():
         n = len(subset[subset[group_col] == code].dropna(subset=["W_FSTUWT"]))
-        if n < 30:
-            warnings.append(f"Results suppressed for {label} (only {n} students)")
+        
+        if 0 < n < 30:
+            warnings.append(f"⚠️ Limited data available for **{label}**. Results suppressed to ensure statistical reliability.")
+            
     return warnings
 
 def check_missing_countries(df, required_cols, countries, year=None, min_n=30):
@@ -677,19 +679,20 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
             the OECD every three years. It measures 15-year-olds' ability to apply reading, 
             mathematics, and science knowledge to real-world problems — not just recall facts.
 
+            - **Why it matters:** International data from PISA allows policymakers to compare 
+              education systems on a common scale and track country-level learning outcomes over time.
             - **Who takes it:** ~700,000 students across 80+ countries and economies
             - **Cycles:** 2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022
-            - **Score scale:** Average ~500, standard deviation ~100. A 30–40 point gap 
-              roughly corresponds to one year of schooling.
-            - **Why it matters:** PISA is one of the few tools that lets us compare education 
-              systems on a common scale and track progress over time.
+            - **Terminology:** The "OECD Average" serves as a benchmark representing the 38 member 
+              countries. Non-member participants are referred to as "Partner" economies.
         """)
 
-    with st.expander("🔍 Language note: talking about gaps without deficit framing"):
+    with st.expander("🔍 Language note: interpreting structural gaps"):
         st.markdown("""
-            Gaps reflect **structural inequalities** in access to resources, language support, 
-            and school quality — not inherent differences in students' ability or potential.
-            For guidance see: [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf)
+            When reviewing this data, it is important to use specific language that avoids deficit framing. 
+            Score differences between demographic groups reflect **structural inequalities** in access to 
+            resources, language support, school quality etc. — not inherent differences in students' ability.
+            For more information, see: [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf).
         """)
 
     st.divider()
@@ -697,6 +700,13 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     # ── Section 1: Global standing ─────────────────────────────────────────
     _story_section_header(1, "How does this compare to the OECD average?",
         f"How students in {_cnt_label(story_country)} score on average in {subject_label} compared to the OECD average")
+    
+    with st.expander("Which countries are OECD members?"):
+        st.markdown(
+            "The OECD is an international organization of 38 member countries. "
+            "PISA reports often use the OECD average as a global benchmark. "
+            "Non-member participating nations are referred to as Partner economies."
+        )
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
@@ -922,6 +932,12 @@ app_mode = st.sidebar.radio(
     ["📖 Data Story", "🔍 Explore"],
     label_visibility="collapsed" # Hides the word "Navigation" for a cleaner look
 )
+
+st.sidebar.info(
+    "**Interactive Dashboard:** Hover over charts for exact values, "
+    "click legend items to hide/show groups, and drag to zoom."
+)
+
 st.sidebar.markdown("---")
 
 # ==========================================
@@ -956,17 +972,9 @@ if app_mode == "📖 Data Story":
         format_func=lambda x: SUBJECTS[x],
         key="story_subject"
     )
-    comparison_countries = st.sidebar.multiselect(
-        "Compare with (optional)",
-        [c for c in story_pool if c != story_country],
-        format_func=_cnt_label,
-        default=[],
-        max_selections=3,
-        key="story_compare_countries"
-    )
     
     # Draw the main area
-    render_story_tab(available_years, story_country, story_subject, comparison_countries)
+    render_story_tab(available_years, story_country, story_subject, [])
 
 
 # ==========================================
@@ -977,7 +985,7 @@ elif app_mode == "🔍 Explore":
 
     side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
 
-    group_key = None
+    # group_key = None
     if side_by_side:
         st.sidebar.markdown("**Left panel**")
         chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
@@ -985,14 +993,6 @@ elif app_mode == "🔍 Explore":
         chart_type_right = st.sidebar.selectbox("Right chart", CHART_TYPES, key="chart_right", index=1)
     else:
         chart_type = st.sidebar.radio("View", CHART_TYPES)
-
-        # Teammate's update: Ask for breakdown group globally if Group comparison is selected
-        if chart_type == "Group comparison":
-            group_key = st.sidebar.selectbox(
-                "Break down by",
-                list(GROUP_OPTIONS.keys()),
-                key="group_main"
-            )
 
     st.sidebar.markdown("---")
 
@@ -1009,24 +1009,20 @@ elif app_mode == "🔍 Explore":
     DEFAULT_COUNTRIES = ["CAN", "USA"]
     SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
 
-    # Initialize a memory state so countries aren't lost on toggle
     if "memory_countries" not in st.session_state:
         st.session_state.memory_countries = [
             c for c in DEFAULT_COUNTRIES if c in country_pool
-        ] or country_pool[:2]
+        ]
 
-    # Ensure the remembered countries actually exist in the currently selected pool
     valid_defaults = [
         c for c in st.session_state.memory_countries if c in country_pool]
     if not valid_defaults:
-        valid_defaults = [
-            c for c in DEFAULT_COUNTRIES if c in country_pool
-        ] or country_pool[:1]
+        valid_defaults = [country_pool[0]]
 
+    # Determine selected countries based on chart type requirements
     if not side_by_side and chart_type in SINGLE_COUNTRY_CHARTS:
-        # User is in a single-country view
-        current_index = country_pool.index(
-            valid_defaults[0]) if valid_defaults[0] in country_pool else 0
+        # Use the first country from memory as the default, but DO NOT overwrite the memory list
+        current_index = country_pool.index(valid_defaults[0])
         selected_country = st.sidebar.selectbox(
             "Country", 
             country_pool, 
@@ -1034,9 +1030,8 @@ elif app_mode == "🔍 Explore":
             format_func=_cnt_label
         )
         selected_countries = [selected_country]
-        st.session_state.memory_countries = selected_countries  # Save to memory
     else:
-        # User is in a multi-country view
+        # User is in a multi-country view. Update memory ONLY here.
         label = "Countries (Pool)" if side_by_side else "Countries"
         selected_countries = st.sidebar.multiselect(
             label, 
@@ -1045,7 +1040,7 @@ elif app_mode == "🔍 Explore":
             format_func=_cnt_label
         )
         if selected_countries:
-            st.session_state.memory_countries = selected_countries  # Save to memory
+            st.session_state.memory_countries = selected_countries
 
     if not selected_countries:
         st.warning("Please select at least one country.")
@@ -1060,23 +1055,12 @@ elif app_mode == "🔍 Explore":
         )
         right_idx = 1 if len(selected_countries) > 1 else 0
         country_right = st.sidebar.selectbox(
-            "Right country", 
-            selected_countries, 
-            index=right_idx, 
+            "Right country",
+            selected_countries,
+            index=right_idx,
             key="cnt_right",
             format_func=_cnt_label
         )
-        
-        group_key_left = None
-        group_key_right = None
-        if chart_type_left == "Group comparison":
-            group_key_left = st.sidebar.selectbox(
-                "Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left"
-            )
-        if chart_type_right == "Group comparison":
-            group_key_right = st.sidebar.selectbox(
-                "Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right"
-            )
 
     st.sidebar.markdown("---")
 
@@ -1087,24 +1071,23 @@ elif app_mode == "🔍 Explore":
 
     st.sidebar.markdown("---")
     
-    # Teammate's update: Context-aware Year Selection UI
     is_time_chart = (
         (not side_by_side and chart_type == "Score change over time") or
         (side_by_side and (
             chart_type_left == "Score change over time" or
             chart_type_right == "Score change over time"
-        ))
+            ))
     )
 
     if is_time_chart:
         st.sidebar.markdown("### Time comparison")
         ref_year = st.sidebar.selectbox(
             "Baseline year", available_years[:-1], index=0, key="ref_year"
-        )
+            )
         later_years = [y for y in available_years if y > ref_year]
         comp_year = st.sidebar.selectbox(
             "Compare to", later_years, index=len(later_years) - 1, key="comp_year"
-        )
+            )
         selected_year = None
     else:
         selected_year = st.sidebar.selectbox(
@@ -1119,12 +1102,35 @@ elif app_mode == "🔍 Explore":
     st.title("PISA Score Distribution Dashboard")
     st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
                f"{len(all_countries)} countries")
+    
+    with st.sidebar.expander("🌍 Which countries are OECD members?"):
+        st.markdown(
+            "The OECD is an international organization of 38 member countries. "
+            "PISA reports often use the OECD average as a global benchmark. "
+            "Non-member participating nations are referred to as Partner economies."
+        )
+
+    # NEW: Chart-Specific Controls injected directly into the main view
+    group_key = None
+    group_key_left = None
+    group_key_right = None
+
+    if not side_by_side and chart_type == "Group comparison":
+        st.markdown("### 📊 Chart Controls")
+        group_key = st.selectbox("Break down by", list(GROUP_OPTIONS.keys()), key="group_main")
+        st.divider()
+        
+    elif side_by_side:
+        # For side-by-side, we embed the controls inside the columns
+        pass
 
     # Draw the main area for Explore
     if side_by_side:
         left_col, right_col = st.columns(2)
         with left_col:
             st.subheader(chart_type_left)
+            if chart_type_left == "Group comparison":
+                group_key_left = st.selectbox("Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left")
             render_chart(
                 chart_type_left, subject, selected_countries,
                 selected_year, available_years,
@@ -1135,6 +1141,8 @@ elif app_mode == "🔍 Explore":
             )
         with right_col:
             st.subheader(chart_type_right)
+            if chart_type_right == "Group comparison":
+                group_key_right = st.selectbox("Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right")
             render_chart(
                 chart_type_right, subject, selected_countries,
                 selected_year, available_years,

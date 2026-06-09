@@ -75,7 +75,7 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
     if len(valid_data) < min_n:
         fig = go.Figure()
         fig.add_annotation(
-            text=msg,
+            text=f"⚠️ Limited data available for this breakdown.<br>Results suppressed to ensure statistical reliability.",
             xref="paper", yref="paper",
             x=0.5, y=0.5,
             showarrow=False,
@@ -131,7 +131,7 @@ def plot_country_distributions(df, subject: str,
             name=_cnt_label(cnt),
             line=dict(color=color, width=2.5),
             marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1)),
-            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
+            hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
         ))
 
     if show_oecd:
@@ -142,7 +142,7 @@ def plot_country_distributions(df, subject: str,
                 mode="lines+markers", name="OECD avg",
                 line=dict(color="#777777", width=2, dash="dash"),
                 marker=dict(symbol=SYMBOLS_COARSE, size=9),
-                hovertemplate=f"<b>OECD avg</b><br>Percentile: %{{x}}<br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
+                hovertemplate=f"<b>OECD avg</b><br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
             ))
 
     symbol_note = "Percentile symbols: ▼ 10th   ■ 25th   ◆ 50th   ● 75th   ▲ 90th"
@@ -298,6 +298,10 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
         if np.isnan(yr_percs).all():
             continue
         
+        diff = yr_percs - ref_percs
+        
+        customdata = np.column_stack([PERCENTILES_COARSE, [f"{d:+.0f}" for d in diff]])
+        
         fig.add_trace(go.Scatter(
             x=ref_percs, y=yr_percs,
             mode="lines+markers", 
@@ -308,8 +312,8 @@ def plot_naep_time_comparison(df, subject: str, cnt: str,
                 dash="dash"
             ),
             marker=dict(symbol=SYMBOLS_COARSE, size=9), 
-            customdata=PERCENTILES_COARSE,
-            hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata}}<br>Score: %{{y:.0f}}<extra></extra>"
+            customdata=customdata,
+            hovertemplate=f"<b>{year}</b><br>Percentile: %{{customdata[0]}}<br>Score: %{{y:.0f}}<br>Change from baseline: %{{customdata[1]}}<extra></extra>"
         ))
 
     fig.update_layout(**_base_layout(
@@ -678,7 +682,7 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None, ac
     )
 
     fig.update_yaxes(
-        title="Score difference (Male − Female)",
+        title="Score difference (Male - Female)",
         zeroline=False,
     )
 
@@ -747,11 +751,7 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
                 marker_color=color_map[cnt],
                 showlegend=False, 
                 texttemplate="%{y:.2f}", textposition="outside",
-                hovertemplate=(
-                    f"Country: {_cnt_label(cnt)}<br>"
-                    "Immigration status: %{x}<br>"
-                    "Mean BELONG index: %{y:.2f}<extra></extra>"
-                )
+                hoverinfo="skip"
             ), row=1, col=2)
 
     fig.update_layout(**_base_layout(title="Student Context"))
@@ -780,7 +780,8 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
 
 
 def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = None,
-                                        interval_width: int = 20, score_range: tuple = (0, 1000)) -> go.Figure:
+                                        interval_width: int = 20, score_range: tuple = (0, 1000),
+                                        min_group_n: int = 30) -> go.Figure:
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     bins = np.arange(score_range[0], score_range[1] + interval_width, interval_width)
     midpoints = (bins[:-1] + bins[1:]) / 2
@@ -793,7 +794,8 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
 
     for color, (code, label) in zip(PALETTE, IMMIG_MAP.items()):
         group_df = subset[subset["IMMIG"] == code].dropna(subset=pv_cols + ["W_FSTUWT"])
-        if group_df.empty: continue
+        if len(group_df) < min_group_n: 
+            continue
 
         w = group_df["W_FSTUWT"].values
         total_w = w.sum()
