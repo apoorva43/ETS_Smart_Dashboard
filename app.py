@@ -26,7 +26,7 @@ from pathlib import Path
 
 from src.data_loader import query_pisa
 from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
-from src.config import SUBJECTS, GROUP_OPTIONS, COUNTRY_NAMES
+from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
                           plot_escs_gap,
@@ -851,6 +851,10 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
             st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {_cnt_label(story_country)}.")
         else:
+            immig_warnings = check_group_sizes(df_immig, "IMMIG", IMMIG_MAP, story_country, year=story_year)
+            for w in immig_warnings:
+                st.warning(w)
+
             immig_text = immigration_gap_text(df_immig, story_subject, story_country, year=story_year)
             if "Insufficient" not in immig_text:
                 _insight_box(immig_text)
@@ -861,7 +865,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
                     - **Second-generation:** born in the country, at least one parent born abroad
                     - **First-generation:** born abroad, came to the country before or during school age
                     - The **dotted vertical lines** show the exact median (middle) score for each group.
-                """)
+                """)                
             fig3b = plot_immigration_score_distribution(
                 df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
             st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})

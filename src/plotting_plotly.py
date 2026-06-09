@@ -837,7 +837,8 @@ def plot_immigration_score_distribution(df, subject: str, cnt: str, year: int = 
             ),
         ))
 
-    fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}"))
+    fig.update_layout(**_base_layout(title=f"Score by Immigration Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}"),
+                      showlegend=True)
     fig.update_xaxes(title="Score")
     fig.update_yaxes(title="Percentage of Students", tickformat=".0%")
     return fig
