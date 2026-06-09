@@ -202,14 +202,14 @@ CHART_HELP_TEXT = {
 **How to read this chart:**
 * **The Curves:** Each line represents the full range of student scores for a country. 
 * **The X-Axis (Percentiles):** Shows the ranking of students from lowest performing (P10) to highest performing (P90).
-* **The Slope:** A steeper, wider curve means there is a larger gap between the lowest and highest achievers (higher inequality).
+* **The Slope:** A steeper, wider curve means there is a greater difference in scores between the lowest and highest achievers (higher inequality).
     """,
     "Box Plot": """
 **How to read this box plot:**
 * **The Box (Middle 50%):** The colored rectangle represents the core of the student population. The bottom edge is the 25th percentile and the top edge is the 75th percentile.
 * **The Center Line (Median):** Half the students scored above this thick line, and half scored below.
 * **The Whiskers (The Tails):** The lines extending from the box show the 10th and 90th percentiles.
-* **The Dots (Jitter):** A weighted sample of up to 1,000 students, showing exactly how individual scores are clustered.
+* **The Dots (Jitter):** A representative sample of up to 1,000 students, showing exactly how individual scores are clustered.
     """,
     "Score by gender": """
 **How to read this difference chart:**
@@ -667,10 +667,10 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # Page header
     st.markdown(f"## PISA {story_year}: {subject_label} Performance — {_cnt_label(story_country)}")
-    st.caption(
+    st.markdown(
         "This story walks you through what PISA data reveals about student performance "
-        "— from how countries compare globally, to whether results have changed over time, "
-        "to which groups of students face the largest opportunity gaps."
+        "— from how countries compare to the OECD average, to whether results have changed over time, "
+        "to which groups of students face the largest opportunity differences."
     )
 
     with st.expander("ℹ️ What is PISA?"):
@@ -699,14 +699,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 1: Global standing ─────────────────────────────────────────
     _story_section_header(1, "How does this compare to the OECD average?",
-        f"How students in {_cnt_label(story_country)} score on average in {subject_label} compared to the OECD average")
-    
-    with st.expander("Which countries are OECD members?"):
-        st.markdown(
-            "The OECD is an international organization of 38 member countries. "
-            "PISA reports often use the OECD average as a global benchmark. "
-            "Non-member participating nations are referred to as Partner economies."
-        )
+        f"Where {_cnt_label(story_country)} sits in the international {subject_label} distribution")
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
@@ -721,10 +714,12 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
         st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {subject_label} scores.")
 
     if valid_countries:
+        # 1. The Key Finding
         mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
         if mean_text:
             _insight_box(mean_text)
 
+        # 2. How to read the chart
         with st.expander("📖 How to read this chart"):
             st.markdown("""
                 - The **x-axis** is the percentile rank (P10 = bottom 10%, P90 = top 10%).
@@ -732,18 +727,34 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
                 - A **steeper curve** means more spread in scores — greater inequality within the country.
                 - The **dashed black line** is the OECD average across all member countries.
                 - If a country's curve sits **above** the OECD line, its students score higher at 
-                every point in the distribution.
+                  every point in the distribution.
             """)
 
-        fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year)
+        # 3. The Visual (Successfully passes primary_country)
+        fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year, primary_country=story_country)
         st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
 
-    with st.expander("🔍 What does a 30-point gap actually mean?"):
-        st.markdown("""
-            Research suggests that **30–40 PISA score points** roughly corresponds to 
-            one year of formal schooling. So if two countries differ by 60 points at the 
-            median, that's approximately two school years of difference in learning outcomes.
-        """)
+    # 4. Contextual Glossaries 
+    ctx_col1, ctx_col2 = st.columns(2)
+    
+    with ctx_col1:
+        with st.expander("🌍 Which countries are OECD members?"):
+            st.markdown(
+                "The OECD is an international organization of 38 member countries. "
+                "PISA reports often use the OECD average as a global benchmark. "
+                "Non-member participating nations are referred to as Partner economies."
+            )
+            
+    with ctx_col2:
+        with st.expander("🔍 What does a 20-point difference actually mean?"):
+            st.markdown("""
+                According to the OECD, **20 PISA score points** represents the average 
+                annual pace of learning for 15-year-olds. So if two countries differ by 
+                40 points at the median, that's approximately two school years of difference 
+                in learning outcomes.
+                
+                *(Source: [PISA 2022 Results (Volume I), OECD](https://www.oecd.org/content/dam/oecd/en/publications/reports/2023/12/pisa-2022-results-volume-i_76772a36/53f23881-en.pdf))*
+            """)
 
     st.divider()
 
@@ -811,7 +822,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
     _story_section_header(3, "Who scores highest — and who is left behind?",
         f"This section examines two key dimensions of equity: score differences by socioeconomic status and immigration status in {_cnt_label(story_country)}")
 
-    st.markdown("High average scores can mask large gaps between student groups.")
+    st.markdown("High average scores can mask large differences between student groups.")
 
     df_ses  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["ESCS"]))
     df_immig = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["IMMIG"]))

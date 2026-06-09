@@ -110,9 +110,9 @@ def _country_color(cnt: str, active_countries: list) -> str:
 def plot_country_distributions(df, subject: str,
                                countries: list,
                                year: int = None,
-                               show_oecd: bool = True) -> go.Figure:
+                               show_oecd: bool = True,
+                               primary_country: str = None) -> go.Figure:
     fig = go.Figure()
-
 
     for i, cnt in enumerate(countries):
         subset = df[df["CNT"] == cnt]
@@ -125,12 +125,15 @@ def plot_country_distributions(df, subject: str,
             
         color = _country_color(cnt, countries)
         
+        line_width = 3 if cnt == primary_country else 2
+        marker_size = 10 if cnt == primary_country else 8
+        
         fig.add_trace(go.Scatter(
             x=PERCENTILES_COARSE, y=percs,
             mode="lines+markers", 
             name=_cnt_label(cnt),
-            line=dict(color=color, width=2.5),
-            marker=dict(symbol=SYMBOLS_COARSE, size=9, line=dict(color="white", width=1)),
+            line=dict(color=color, width=line_width),
+            marker=dict(symbol=SYMBOLS_COARSE, size=marker_size, line=dict(color="white", width=1)),
             hovertemplate=f"<b>{_cnt_label(cnt)}</b><br>{SUBJECTS[subject]}: %{{y:.0f}}<extra></extra>"
         ))
 
