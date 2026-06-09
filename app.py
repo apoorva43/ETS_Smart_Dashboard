@@ -720,7 +720,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
         with st.expander("📖 How to read this chart"):
             st.markdown("""
-                - The **x-axis** is the percentile rank (P10 = bottom 10%, P90 = top 10%).
+                - The **x-axis** is the percentile (P10 = bottom 10%, P90 = top 10%).
                 - The **y-axis** is the PISA score for students at that position.
                 - A **steeper curve** means more spread in scores — greater inequality within the country.
                 - The **dashed black line** is the OECD average across all member countries.
