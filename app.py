@@ -687,7 +687,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
               countries. Non-member participants are referred to as "Partner" economies.
         """)
 
-    with st.expander("🔍 Language note: interpreting structural gaps"):
+    with st.expander("🔍 Language note: interpreting score differences"):
         st.markdown("""
             When reviewing this data, it is important to use specific language that avoids deficit framing. 
             Score differences between demographic groups reflect **structural inequalities** in access to 
@@ -985,7 +985,6 @@ elif app_mode == "🔍 Explore":
 
     side_by_side = st.sidebar.toggle("Compare two views side by side", value=False, key="sbs_toggle")
 
-    # group_key = None
     if side_by_side:
         st.sidebar.markdown("**Left panel**")
         chart_type_left = st.sidebar.selectbox("Left chart", CHART_TYPES, key="chart_left")
