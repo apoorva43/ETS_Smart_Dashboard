@@ -14,7 +14,8 @@ import pandas as pd
 from src.pisa_stats import (
     weighted_mean_pv,
     weighted_percentiles_pv,
-    compute_escs_quartile_percentiles
+    compute_escs_quartile_percentiles,
+    get_oecd_percentiles
     )
 from src.config import (
     SUBJECTS,
@@ -28,41 +29,46 @@ def _cnt_label(code: str) -> str:
     """
     return COUNTRY_NAMES.get(str(code), str(code))
 
-def country_distribution_text(df, subject, countries, year=None):
+def country_distribution_text(df, subject: str, countries: list, year: int = None) -> str:
     """
-    Generate a short summary of weighted mean scores by country.
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        PISA dataset containing country identifiers, weights, and plausible
-        value score columns.
-    subject : str
-        Subject code used to select plausible value columns. Expected values
-        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
-    countries : list of str
-        Country codes to summarize, such as ``["CAN", "USA"]``.
-    year : int, optional
-        PISA cycle year to filter by. If ``None``, all available years are used.
-
-    Returns
-    -------
-    str
-        One-sentence summary of weighted mean scores. Returns an empty string
-        if no valid mean scores can be computed.
+    Generates insight text comparing the primary country's median to the OECD median,
+    and translates large differences into "years of schooling" equivalents.
     """
-    lines = []
-    for cnt in countries:
-        subset = df[df["CNT"] == cnt]
-        if year and "YEAR" in df.columns:
-            subset = subset[subset["YEAR"] == year]
-        mean = weighted_mean_pv(subset, subject)
-        if not np.isnan(mean):
-            lines.append(f"{_cnt_label(cnt)}: {mean:.0f}")
-    if not lines:
+    if not countries:
         return ""
-    subject_label = SUBJECTS[subject]
-    return f"Weighted mean {subject_label} scores | " + ",  ".join(lines) + "."
+        
+    cnt = countries[0] # Story mode focus country
+    subset = df[df["CNT"] == cnt]
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+        
+    cnt_med = weighted_percentiles_pv(subset, subject, [50])
+    
+    oecd_med = get_oecd_percentiles(df, subject, [50], year=year)
+    
+    if np.isnan(cnt_med).all() or np.isnan(oecd_med).all():
+        return "Insufficient data to compare median scores."
+        
+    diff = cnt_med[0] - oecd_med[0]
+    diff_abs = abs(diff)
+    subject_label = SUBJECTS.get(subject, subject)
+    
+    if diff_abs < 3:
+        return f"At the median, students in {_cnt_label(cnt)} score in line with the OECD average in {subject_label} ({cnt_med[0]:.0f} points)."
+        
+    direction = "higher" if diff > 0 else "lower"
+    insight_text = (
+        f"At the median, students in {_cnt_label(cnt)} score {diff_abs:.0f} points {direction} "
+        f"than the OECD average in {subject_label} "
+        f"({cnt_med[0]:.0f} vs {oecd_med[0]:.0f})."
+    )
+    
+    if diff_abs >= 20:
+        years = diff_abs / 20.0
+        years_str = f"{years:.1f}".replace(".0", "")
+        insight_text += f" This difference is equivalent to roughly {years_str} years of formal schooling (see note below)."
+        
+    return insight_text
 
 
 def gender_gap_text(df, subject, cnt, year=None):

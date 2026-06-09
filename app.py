@@ -699,7 +699,7 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
 
     # ── Section 1: Global standing ─────────────────────────────────────────
     _story_section_header(1, "How does this compare to the OECD average?",
-        f"How students in {_cnt_label(story_country)} score on average in {subject_label} compared to the OECD average")
+        f"Comparing the median {subject_label} performance in {_cnt_label(story_country)} to the OECD baseline")
 
     fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
