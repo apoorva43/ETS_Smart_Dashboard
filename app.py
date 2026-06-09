@@ -286,7 +286,7 @@ def apply_compact_plotly_layout(fig, hide_legend=False):
 def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
-                 group_key=None,  compact=False):
+                 compact=False, widget_key="main"):
     """
     Render a single chart panel and its accompanying text/info blocks.
 
@@ -310,6 +310,7 @@ def render_chart(chart_type, subject, selected_countries,
     """
     pv_cols = PV_BY_SUBJ[subject]
 
+    # 1. Percentile Profile
     if chart_type == "Percentile score profile":
         fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
@@ -333,11 +334,13 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             ))
 
-
-    # Group comparison
+    # 2. Group Comparison
     elif chart_type == "Group comparison":
-        if group_key is None:
-            group_key = list(GROUP_OPTIONS.keys())[0]
+        group_key = st.selectbox(
+            "Break down by:", 
+            list(GROUP_OPTIONS.keys()), 
+            key=f"group_select_{widget_key}"
+        )
 
         group_col, group_vals = GROUP_OPTIONS[group_key]
 
@@ -348,7 +351,6 @@ def render_chart(chart_type, subject, selected_countries,
 
         df = fetch((primary_country,), selected_year,
                    tuple(BASE_COLS + pv_cols + [group_col]))
-        
         
         if group_key != "Socioeconomic status":
             warns = check_group_sizes(
@@ -362,14 +364,12 @@ def render_chart(chart_type, subject, selected_countries,
             for w in warns:
                 st.warning(w)
 
-
         if group_key == "Gender":
             df = fetch(
                 (primary_country,),
                 selected_year,
                 tuple(BASE_COLS + pv_cols + ["ST004D01T"])
             )
-
             fig = plot_gender_diff_percentile(
                 df=df,
                 subject=subject,
@@ -377,19 +377,15 @@ def render_chart(chart_type, subject, selected_countries,
                 year=selected_year,
                 active_countries=selected_countries
             )
-
             st.plotly_chart(
                 fig,
                 use_container_width=True,
                 config={"displayModeBar": False}
             )
-
             st.info(
-                "Y-axis shows Male − Female score difference. "
+                "Y-axis shows Male - Female score difference. "
                 "Values above zero mean males score higher; values below zero mean females score higher."
             )
-
-            return
             
         elif group_key == "Socioeconomic status":
             df = fetch(
@@ -404,7 +400,6 @@ def render_chart(chart_type, subject, selected_countries,
                 cnt=primary_country,
                 year=selected_year,
             )
-
             st.plotly_chart(
                 fig,
                 use_container_width=True,
@@ -432,7 +427,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df=df,
                 subject=subject,
                 cnt=primary_country,
-                year=selected_year,
+                year=selected_year
             )
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
@@ -473,7 +468,7 @@ def render_chart(chart_type, subject, selected_countries,
                 group_vals=group_vals,
                 cnt=primary_country,
                 year=selected_year,
-                title=f"{SUBJECTS[subject]} by {group_key} | {_cnt_label(primary_country)}",
+                title=f"{SUBJECTS[subject]} by {group_key} | {_cnt_label(primary_country)}"
             )
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
@@ -481,7 +476,7 @@ def render_chart(chart_type, subject, selected_countries,
                 f"Score distribution broken down by {group_key} for {_cnt_label(primary_country)}."
             )
 
-
+    # 3. Score Change Over Time
     elif chart_type == "Score change over time":
         df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         if len(available_years) < 2:
@@ -503,7 +498,7 @@ def render_chart(chart_type, subject, selected_countries,
             subject=subject,
             cnt=primary_country,
             reference_year=reference_year,
-            comparison_years=comparison_years,
+            comparison_years=comparison_years
         )
 
         st.plotly_chart(fig, use_container_width=True,
@@ -514,12 +509,13 @@ def render_chart(chart_type, subject, selected_countries,
             f"Each coloured line shows change relative to {reference_year}."
         )
         
+    # 4. Score Distribution
     elif chart_type == "Score distribution":
         fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
-            df, required_cols=[f"PV1{subject}"], 
+            df, required_cols=[f"PV1{subject}"],
             countries=selected_countries, year=selected_year
         )
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
@@ -534,6 +530,7 @@ def render_chart(chart_type, subject, selected_countries,
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info("Distribution showing percentage of students per 20-point score interval.")
 
+    # 5. Belonging by Immigration
     elif chart_type == "Belonging by Immigration":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + extra))
@@ -557,6 +554,7 @@ def render_chart(chart_type, subject, selected_countries,
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info("Left: Grade repetition rate in different SES quartiles. Right: Distribution of school belonging index by immigration status.")
 
+    # 6. Country Scatterplot
     elif chart_type == "Country Scatterplot":
         resource_options = {
             "Socioeconomic Status (ESCS)": "ESCS",
@@ -568,17 +566,13 @@ def render_chart(chart_type, subject, selected_countries,
         selected_resource_label = st.selectbox(
             "Select X-Axis Variable:", 
             list(resource_options.keys()), 
-            key=f"scatter_select_{group_key}" 
+            key=f"scatter_select_{widget_key}" 
         )
         selected_col = resource_options[selected_resource_label]
         
         df = fetch(tuple(all_countries), selected_year, tuple(BASE_COLS + pv_cols + [selected_col]))
         
-        # Check if they are missing the specific resource they just selected
-        missing_cnts = check_missing_countries(
-            df, required_cols=[f"PV1{subject}", selected_col], 
-            countries=selected_countries, year=selected_year
-        )
+        missing_cnts = check_missing_countries(df, required_cols=[f"PV1{subject}", selected_col], countries=selected_countries, year=selected_year)
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
@@ -593,11 +587,10 @@ def render_chart(chart_type, subject, selected_countries,
             year=selected_year,
             highlight_countries=valid_countries
         )
-        
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
         st.markdown(scatter_correlation_text(
-            df=df, subject=subject, resource_col=selected_col, 
+            df=df, subject=subject, resource_col=selected_col,
             resource_label=selected_resource_label, year=selected_year,
             highlight_countries=valid_countries
         ))
@@ -1118,47 +1111,47 @@ elif app_mode == "🔍 Explore":
     group_key_left = None
     group_key_right = None
 
-    if not side_by_side and chart_type == "Group comparison":
-        st.markdown("### 📊 Chart Controls")
-        group_key = st.selectbox("Break down by", list(GROUP_OPTIONS.keys()), key="group_main")
-        st.divider()
-        
-    elif side_by_side:
-        # For side-by-side, we embed the controls inside the columns
-        pass
-
-    # Draw the main area for Explore
+    # ── Draw the main area for Explore ───────────────────────────────────────
     if side_by_side:
         left_col, right_col = st.columns(2)
         with left_col:
             st.subheader(chart_type_left)
-            if chart_type_left == "Group comparison":
-                group_key_left = st.selectbox("Left: Break down by", list(GROUP_OPTIONS.keys()), key="group_left")
             render_chart(
-                chart_type_left, subject, selected_countries,
-                selected_year, available_years,
+                chart_type=chart_type_left, 
+                subject=subject, 
+                selected_countries=selected_countries,
+                selected_year=selected_year, 
+                available_years=available_years,
                 primary_country=country_left,
-                ref_year=ref_year, comp_year=comp_year,
-                group_key=group_key_left,
+                ref_year=ref_year, 
+                comp_year=comp_year,
                 compact=True,
+                widget_key="left"
             )
         with right_col:
             st.subheader(chart_type_right)
-            if chart_type_right == "Group comparison":
-                group_key_right = st.selectbox("Right: Break down by", list(GROUP_OPTIONS.keys()), key="group_right")
             render_chart(
-                chart_type_right, subject, selected_countries,
-                selected_year, available_years,
+                chart_type=chart_type_right, 
+                subject=subject, 
+                selected_countries=selected_countries,
+                selected_year=selected_year, 
+                available_years=available_years,
                 primary_country=country_right,
-                ref_year=ref_year, comp_year=comp_year,
-                group_key=group_key_right,
+                ref_year=ref_year, 
+                comp_year=comp_year,
                 compact=True,
+                widget_key="right"
             )
     else:
         render_chart(
-            chart_type, subject, selected_countries,
-            selected_year, available_years, primary_country,
-            ref_year=ref_year, comp_year=comp_year,
-            group_key=group_key,
+            chart_type=chart_type, 
+            subject=subject, 
+            selected_countries=selected_countries,
+            selected_year=selected_year, 
+            available_years=available_years, 
+            primary_country=primary_country,
+            ref_year=ref_year, 
+            comp_year=comp_year,
             compact=False,
+            widget_key="main"
         )
