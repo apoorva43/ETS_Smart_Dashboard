@@ -14,7 +14,8 @@ import pandas as pd
 from src.pisa_stats import (
     weighted_mean_pv,
     weighted_percentiles_pv,
-    compute_escs_quartile_percentiles
+    compute_escs_quartile_percentiles,
+    get_oecd_percentiles
     )
 from src.config import (
     SUBJECTS,
@@ -28,41 +29,46 @@ def _cnt_label(code: str) -> str:
     """
     return COUNTRY_NAMES.get(str(code), str(code))
 
-def country_distribution_text(df, subject, countries, year=None):
+def country_distribution_text(df, subject: str, countries: list, year: int = None) -> str:
     """
-    Generate a short summary of weighted mean scores by country.
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        PISA dataset containing country identifiers, weights, and plausible
-        value score columns.
-    subject : str
-        Subject code used to select plausible value columns. Expected values
-        include ``"MATH"``, ``"READ"``, and ``"SCIE"``.
-    countries : list of str
-        Country codes to summarize, such as ``["CAN", "USA"]``.
-    year : int, optional
-        PISA cycle year to filter by. If ``None``, all available years are used.
-
-    Returns
-    -------
-    str
-        One-sentence summary of weighted mean scores. Returns an empty string
-        if no valid mean scores can be computed.
+    Generates insight text comparing the primary country's median to the OECD median,
+    and translates large differences into "years of schooling" equivalents.
     """
-    lines = []
-    for cnt in countries:
-        subset = df[df["CNT"] == cnt]
-        if year and "YEAR" in df.columns:
-            subset = subset[subset["YEAR"] == year]
-        mean = weighted_mean_pv(subset, subject)
-        if not np.isnan(mean):
-            lines.append(f"{_cnt_label(cnt)}: {mean:.0f}")
-    if not lines:
+    if not countries:
         return ""
-    subject_label = SUBJECTS[subject]
-    return f"Weighted mean {subject_label} scores | " + ",  ".join(lines) + "."
+        
+    cnt = countries[0] # Story mode focus country
+    subset = df[df["CNT"] == cnt]
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+        
+    cnt_med = weighted_percentiles_pv(subset, subject, [50])
+    
+    oecd_med = get_oecd_percentiles(df, subject, [50], year=year)
+    
+    if np.isnan(cnt_med).all() or np.isnan(oecd_med).all():
+        return "Insufficient data to compare median scores."
+        
+    diff = cnt_med[0] - oecd_med[0]
+    diff_abs = abs(diff)
+    subject_label = SUBJECTS.get(subject, subject)
+    
+    if diff_abs < 3:
+        return f"At the median, students in {_cnt_label(cnt)} score in line with the OECD average in {subject_label} ({cnt_med[0]:.0f} points)."
+        
+    direction = "higher" if diff > 0 else "lower"
+    insight_text = (
+        f"At the median, students in {_cnt_label(cnt)} score {diff_abs:.0f} points {direction} "
+        f"than the OECD average in {subject_label} "
+        f"({cnt_med[0]:.0f} vs {oecd_med[0]:.0f})."
+    )
+    
+    if diff_abs >= 20:
+        years = diff_abs / 20.0
+        years_str = f"{years:.1f}".replace(".0", "")
+        insight_text += f" This difference is equivalent to roughly {years_str} years of formal schooling (see note below)."
+        
+    return insight_text
 
 
 def gender_gap_text(df, subject, cnt, year=None):
@@ -97,8 +103,8 @@ def gender_gap_text(df, subject, cnt, year=None):
         subset = subset[subset["YEAR"] == year]
 
     valid_data = subset.dropna(subset=["ST004D01T", "W_FSTUWT"])
-    if len(valid_data) < 100:
-        return f"Insufficient data to compute gender gap for {_cnt_label(cnt)}."
+    if len(valid_data) < 30:
+        return f"Insufficient data to compute gender difference for {_cnt_label(cnt)}."
 
     female = valid_data[valid_data["ST004D01T"] == 1.0]
     male   = valid_data[valid_data["ST004D01T"] == 2.0]
@@ -107,25 +113,25 @@ def gender_gap_text(df, subject, cnt, year=None):
     m_percs = weighted_percentiles_pv(male,   subject, PERCENTILES_COARSE)
 
     if np.isnan(f_percs).all() or np.isnan(m_percs).all():
-        return f"Insufficient data to compute gender gap for {_cnt_label(cnt)}."
+        return f"Insufficient data to compute gender difference for {_cnt_label(cnt)}."
 
-    gaps = m_percs - f_percs
-    p10_gap, median_gap, p90_gap = gaps[0], gaps[2], gaps[-1]
+    diffs = m_percs - f_percs
+    p10_diff, median_diff, p90_diff = diffs[0], diffs[2], diffs[-1]
     subject_label = SUBJECTS[subject]
 
-    if abs(median_gap) < 5:
-        overall = f"At the median, male and female students in {_cnt_label(cnt)} score similarly in {subject_label} ({median_gap:+.0f} points)."
-    elif median_gap > 0:
-        overall = f"Male students in {_cnt_label(cnt)} score {median_gap:.0f} points higher than female students at the median in {subject_label}."
+    if abs(median_diff) < 5:
+        overall = f"At the median, male and female students in {_cnt_label(cnt)} score similarly in {subject_label} ({median_diff:+.0f} points)."
+    elif median_diff > 0:
+        overall = f"Male students in {_cnt_label(cnt)} score {median_diff:.0f} points higher than female students at the median in {subject_label}."
     else:
-        overall = f"Female students in {_cnt_label(cnt)} score {abs(median_gap):.0f} points higher than male students at the median in {subject_label}."
+        overall = f"Female students in {_cnt_label(cnt)} score {abs(median_diff):.0f} points higher than male students at the median in {subject_label}."
 
-    if abs(p90_gap - p10_gap) > 10:
-        spread = (f"The gap widens toward the top of the distribution: "
-                  f"{p10_gap:+.0f} pts at P10 vs {p90_gap:+.0f} pts at P90. "
+    if abs(p90_diff - p10_diff) > 10:
+        spread = (f"The difference widens toward the top of the distribution: "
+                  f"{p10_diff:+.0f} pts at P10 vs {p90_diff:+.0f} pts at P90. "
                   f"This pattern is invisible in average-only reporting.")
     else:
-        spread = f"The gap is relatively consistent across the distribution ({p10_gap:+.0f} pts at P10, {p90_gap:+.0f} pts at P90)."
+        spread = f"The difference is relatively consistent across the distribution ({p10_diff:+.0f} pts at P10, {p90_diff:+.0f} pts at P90)."
 
     return f"{overall} {spread}"
 
@@ -162,15 +168,15 @@ def ses_gap_text(df, subject, cnt, year=None):
     q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
 
     if np.isnan(q1_med) or np.isnan(q4_med):
-        return "Insufficient data to compute SES gap."
+        return "Insufficient data to compute SES difference."
 
-    gap = q4_med - q1_med
+    diff = q4_med - q1_med
     subject_label = SUBJECTS[subject]
     return (
         f"In {_cnt_label(cnt)}, students in the highest SES quartile score "
-        f"{gap:.0f} points higher than those in the lowest quartile "
+        f"{diff:.0f} points higher than those in the lowest quartile "
         f"at the median in {subject_label}. "
-        f"This gap represents the combined effect of home resources, "
+        f"This difference represents the combined effect of home resources, "
         f"parental education, and occupational status."
     )
 
@@ -231,7 +237,7 @@ def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         subset = subset[subset["YEAR"] == year]
 
     if "IMMIG" not in subset.columns or "W_FSTUWT" not in subset.columns:
-        return "Insufficient data to calculate the immigration gap."
+        return "Insufficient data to calculate the immigration difference."
 
     # Calculate medians for all three groups
     nat_med = weighted_percentiles_pv(subset[subset["IMMIG"] == 1.0], subject, [50])
@@ -253,7 +259,7 @@ def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         if round(diff2) == 0:
             comparisons.append("exactly the same for 2nd-generation immigrants")
         else:
-            comparisons.append(f"**{abs(diff2):.0f} points {dir2}** for 2nd-generation immigrants")
+            comparisons.append(f"{abs(diff2):.0f} points {dir2} for 2nd-generation immigrants")
 
     # Calculate gap for 1st-generation (if data exists)
     if not np.isnan(gen1_med).all():
@@ -262,7 +268,7 @@ def immigration_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         if round(diff1) == 0:
             comparisons.append("exactly the same for 1st-generation immigrants")
         else:
-            comparisons.append(f"**{abs(diff1):.0f} points {dir1}** for 1st-generation immigrants")
+            comparisons.append(f"{abs(diff1):.0f} points {dir1} for 1st-generation immigrants")
 
     if not comparisons:
         return "Insufficient data to compare immigration groups."
