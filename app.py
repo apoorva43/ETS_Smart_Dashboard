@@ -1102,15 +1102,8 @@ elif app_mode == "🔍 Explore":
     st.title("PISA Score Distribution Dashboard")
     st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
                f"{len(all_countries)} countries")
-    
-    with st.sidebar.expander("🌍 Which countries are OECD members?"):
-        st.markdown(
-            "The OECD is an international organization of 38 member countries. "
-            "PISA reports often use the OECD average as a global benchmark. "
-            "Non-member participating nations are referred to as Partner economies."
-        )
 
-    # NEW: Chart-Specific Controls injected directly into the main view
+    # Chart-Specific Controls injected directly into the main view
     group_key = None
     group_key_left = None
     group_key_right = None
