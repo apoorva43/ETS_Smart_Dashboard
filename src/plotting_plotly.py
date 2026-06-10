@@ -798,8 +798,6 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
     return fig
 
 def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
-    from scipy.stats import gaussian_kde
-
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"].isin(countries)].copy()
     if year is not None and "YEAR" in subset.columns:
@@ -812,18 +810,15 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
                            x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
         return fig
 
-    quartiles = countries
     x_grid = np.linspace(100, 900, 500)
-
-    # Percentile bands to shade: (low_p, high_p, opacity)
     BANDS = [
-        (0,  10,  0.10),
-        (10, 25,  0.20),
-        (25, 75,  0.45),   # IQR — darkest
-        (75, 90,  0.20),
-        (90, 100, 0.10),
+        (2,  10,  0.12),
+        (10, 25,  0.25),
+        (25, 75,  0.55),
+        (75, 90,  0.25),
+        (90, 98,  0.12),
     ]
-
+    bar_height = 0.7
     fig = go.Figure()
 
     for row_idx, cnt_code in enumerate(countries):
@@ -836,35 +831,17 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
         if color.startswith("#") and len(color) == 7:
             r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
         elif color.startswith("rgb"):
-            # Strip out letters and brackets to just get the numbers
-            clean_rgb = color.replace("rgba", "").replace("rgb", "").replace("(", "").replace(")", "")
-            parts = clean_rgb.split(",")
+            clean = color.replace("rgba","").replace("rgb","").replace("(","").replace(")","")
+            parts = clean.split(",")
             r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
         else:
-            r, g, b = 128, 128, 128 # Safe fallback gray
+            r, g, b = 128, 128, 128
 
-        # Average KDE across all 10 plausible values
-        kde_vals = []
-        for pv in pv_cols:
-            scores = group[pv].dropna().values
-            weights = group.loc[group[pv].notna(), "W_FSTUWT"].values
-            if len(scores) < 10:
-                continue
-            try:
-                kde = gaussian_kde(scores, weights=weights, bw_method="scott")
-                kde_vals.append(kde(x_grid))
-            except Exception:
-                continue
-
-        if not kde_vals:
-            continue
-
-        density = np.mean(kde_vals, axis=0)
-        density /= density.max()   # normalise to 1 so all rows same height
-
-        # Compute weighted percentile scores for band boundaries
+        # Weighted percentiles across all PVs
         all_scores = np.concatenate([group[pv].values for pv in pv_cols])
         all_weights = np.tile(group["W_FSTUWT"].values, len(pv_cols))
+        valid = np.isfinite(all_scores) & np.isfinite(all_weights)
+        all_scores, all_weights = all_scores[valid], all_weights[valid]
         sort_idx = np.argsort(all_scores)
         sorted_scores = all_scores[sort_idx]
         sorted_weights = all_weights[sort_idx]
@@ -872,106 +849,82 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
 
         def score_at_p(p):
             idx = np.searchsorted(cumw, p / 100)
-            return sorted_scores[min(idx, len(sorted_scores) - 1)]
+            return float(sorted_scores[min(idx, len(sorted_scores) - 1)])
 
-        # Row position: each quartile is a horizontal band on y
-        y_center = len(quartiles) - row_idx   # Q4 on top, Q1 on bottom
-        bar_height = 0.7
+        y_center = len(countries) - row_idx
 
-        # Draw shaded bands from darkest (IQR) to lightest (tails)
+        # Draw flat rectangular bands — no density shaping
         for (lo_p, hi_p, alpha) in BANDS:
             x_lo = score_at_p(lo_p)
             x_hi = score_at_p(hi_p)
-
-            # Clip density shape to this band's score range
-            mask = (x_grid >= x_lo) & (x_grid <= x_hi)
-            if mask.sum() < 2:
-                continue
-
-            band_x = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
-            band_density = np.concatenate([[0], density[mask], [0]])
-
-            # Scale density shape to bar_height, centred on y_center
-            scaled_y_top = y_center + (band_density / 2) * bar_height
-            scaled_y_bot = y_center - (band_density / 2) * bar_height
-
-            # Build closed polygon path for the filled shape
-            poly_x = np.concatenate([band_x, band_x[::-1]])
-            poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
-
             fill_color = f"rgba({r},{g},{b},{alpha})"
-            line_color = f"rgba({r},{g},{b},0)"  # no border between bands
 
-            fig.add_trace(go.Scatter(
-                x=poly_x, y=poly_y,
-                fill="toself",
+            fig.add_shape(
+                type="rect",
+                x0=x_lo, x1=x_hi,
+                y0=y_center - bar_height / 2,
+                y1=y_center + bar_height / 2,
                 fillcolor=fill_color,
-                line=dict(color=line_color, width=0),
-                mode="lines",
-                showlegend=False,
-                hoverinfo="skip"
-            ))
+                line=dict(width=0),
+            )
 
         # Median line
         med = score_at_p(50)
-        fig.add_trace(go.Scatter(
-            x=[med, med],
-            y=[y_center - bar_height / 2, y_center + bar_height / 2],
-            mode="lines",
-            line=dict(color=f"rgb({r},{g},{b})", width=2.5),
-            showlegend=False,
-            hovertemplate=f"<b>{q_label}</b><br>Median: {med:.0f}<extra></extra>"
-        ))
+        fig.add_shape(
+            type="line",
+            x0=med, x1=med,
+            y0=y_center - bar_height / 2,
+            y1=y_center + bar_height / 2,
+            line=dict(color=f"rgb({r},{g},{b})", width=3)
+        )
 
-        # Dense invisible hover points across the full row
-        hover_x = np.linspace(score_at_p(2), score_at_p(98), 200)
-        hover_y = np.full(200, y_center)
+        # Deduplicate — remove consecutive duplicate scores
+        p_vals = np.arange(2, 98.2, 0.2)
+        score_vals_raw = np.array([score_at_p(p) for p in p_vals])
+        unique_mask = np.concatenate([[True], np.diff(score_vals_raw.round(0)) != 0])
+        score_vals = score_vals_raw[unique_mask]
+        p_vals_clean = p_vals[unique_mask]
+
+        custom = np.stack([
+            p_vals_clean,
+        ], axis=1)
+
         fig.add_trace(go.Scatter(
-            x=hover_x,
-            y=hover_y,
+            x=score_vals,
+            y=np.full(len(score_vals), y_center),
             mode="markers",
-            marker=dict(color="rgba(0,0,0,0)", size=8),
+            marker=dict(color="rgba(0,0,0,0)", size=6),
             name=q_label,
             showlegend=True,
+            customdata=custom,
             hovertemplate=(
                 f"<b>{q_label}</b><br>"
-                f"P10: {round(score_at_p(10))}<br>"
-                f"P25: {round(score_at_p(25))}<br>"
-                f"Median: {round(score_at_p(50))}<br>"
-                f"P75: {round(score_at_p(75))}<br>"
-                f"P90: {round(score_at_p(90))}<extra></extra>"
+                "Score: %{x:.0f}<br>"
+                "Percentile: %{customdata[0]:.0f}"
+                "<extra></extra>"
             )
-        ))
-
-        # Visible markers at P10, P25, P50, P75, P90
-        marker_ps = [10, 25, 50, 75, 90]
-        marker_xs = [round(score_at_p(p)) for p in marker_ps]
-        marker_sizes = [6, 6, 10, 6, 6]  # median slightly bigger
-
-        fig.add_trace(go.Scatter(
-            x=marker_xs,
-            y=[y_center] * len(marker_xs),
-            mode="markers",
-            marker=dict(
-                color=f"rgb({r},{g},{b})",
-                size=marker_sizes,
-                symbol="line-ns",           # vertical tick mark
-                line=dict(color=f"rgb({r},{g},{b})", width=2)
-            ),
-            showlegend=False,
-            hoverinfo="skip"
         ))
 
     fig.update_layout(**_base_layout(
         title=f"Score Distribution | {SUBJECTS[subject]}"
     ))
-    fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900])
+    fig.update_layout(hovermode="closest",
+                      hoverlabel=dict(namelength=-1)
+                      )
+    fig.update_xaxes(
+        title=f"{SUBJECTS[subject]} score",
+        range=[100, 900],
+        showspikes=True,
+        spikemode="across",
+        spikesnap="data",
+        tickformat="d",
+        hoverformat="d"
+    )
     fig.update_yaxes(
-        tickvals=list(range(1, len(quartiles) + 1)),
-        ticktext=list(reversed(quartiles)),
-        showgrid=False,
-        zeroline=False,
-        range=[0.3, len(quartiles) + 0.7]
+        tickvals=list(range(1, len(countries) + 1)),
+        ticktext=list(reversed([_cnt_label(c) for c in countries])),
+        showgrid=False, zeroline=False,
+        range=[0.3, len(countries) + 0.7]
     )
     return fig
 
@@ -1709,14 +1662,13 @@ def plot_immigration_shaded_density(df, subject, cnt, year=None, min_group_n=30)
     )
     return fig
 
-def plot_jitter_boxplot(df, subject, cnt, group_col, group_labels,
-                         group_title, year=None, min_group_n=30):
+def plot_proficiency_tiers(df, subject, cnt, group_col, group_labels,
+                            group_title, year=None, min_group_n=30):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
-    # Handle continuous variables (e.g. ESCS) by binning
     if group_labels is None:
         subset = subset.dropna(subset=[group_col])
         subset["_group_bin"] = pd.qcut(
@@ -1725,16 +1677,13 @@ def plot_jitter_boxplot(df, subject, cnt, group_col, group_labels,
         )
         group_col = "_group_bin"
         group_labels = {
-            "Q1 (lowest)": "Q1 (lowest)",
-            "Q2": "Q2",
-            "Q3": "Q3",
-            "Q4 (highest)": "Q4 (highest)"
+            "Q1 (lowest)": "Q1 (lowest)", "Q2": "Q2",
+            "Q3": "Q3", "Q4 (highest)": "Q4 (highest)"
         }
 
     subset["mean_score"] = subset[pv_cols].mean(axis=1)
-    subset = subset.dropna(subset=[group_col, "mean_score", "W_FSTUWT"])
+    subset = subset.dropna(subset=[group_col, "mean_score"])
 
-    # Proficiency thresholds — PISA standard levels
     def get_tier(score):
         if score < 413:   return "Below Basic (<413)"
         elif score < 545: return "Basic/Proficient (413–544)"
@@ -1742,16 +1691,15 @@ def plot_jitter_boxplot(df, subject, cnt, group_col, group_labels,
 
     subset["Tier"] = subset["mean_score"].apply(get_tier)
 
+    tier_order  = ["Below Basic (<413)", "Basic/Proficient (413–544)", "Advanced (545+)"]
+    tier_colors = {
+        "Below Basic (<413)":         "#D85A30",
+        "Basic/Proficient (413–544)": "#cccccc",
+        "Advanced (545+)":            "#0072B2"
+    }
+
     labels = list(group_labels.values())
     codes  = list(group_labels.keys())
-
-    # Tier percentages per group for right panel
-    tier_order = ["Below Basic (<413)", "Basic/Proficient (413–544)", "Advanced (545+)"]
-    tier_colors = {
-        "Below Basic (<413)":        "#D85A30",
-        "Basic/Proficient (413–544)":"#cccccc",
-        "Advanced (545+)":           "#0072B2"
-    }
 
     tier_pct = {}
     for code, label in zip(codes, labels):
@@ -1762,57 +1710,12 @@ def plot_jitter_boxplot(df, subject, cnt, group_col, group_labels,
             for t in tier_order
         }
 
-    fig = make_subplots(
-        rows=1, cols=2,
-        subplot_titles=("Score Distribution", "Proficiency Tiers"),
-        column_widths=[0.5, 0.5],
-        horizontal_spacing=0.15
-    )
+    # Sort groups by Advanced % descending (most advanced at top) — skip for SES
+    is_ses = group_col == "_group_bin" or group_title.lower() in ("socioeconomic status", "ses")
+    if not is_ses:
+        labels = sorted(labels, key=lambda l: tier_pct[l]["Advanced (545+)"], reverse=True)
 
-    for i, (code, label) in enumerate(zip(codes, labels)):
-        color = PALETTE[i % len(PALETTE)]
-        if color.startswith("#") and len(color) == 7:
-            r, g, b = int(color[1:3],16), int(color[3:5],16), int(color[5:7],16)
-        else:
-            r, g, b = 128, 128, 128
-
-        grp = subset[subset[group_col] == code]
-        if len(grp) < min_group_n:
-            continue
-
-        scores = grp["mean_score"].values
-        percs = weighted_percentiles_pv(grp, subject, [10, 25, 50, 75, 90])
-        p10, p25, p50, p75, p90 = [round(p) for p in percs]
-
-        q1, med, q3 = p25, p50, p75
-        iqr = q3 - q1
-        lower_fence = max(scores.min(), q1 - 1.5 * iqr)
-
-        # Left: box plot, no hover
-        fig.add_trace(go.Box(
-            y=scores, name=label,
-            marker_color=color,
-            line=dict(color=color, width=2),
-            fillcolor=f"rgba({r},{g},{b},0.15)",
-            boxpoints=False,
-            hoverinfo="skip",
-            showlegend=False,
-            q1=[p25], median=[p50], q3=[p75],
-            lowerfence=[p10], upperfence=[p90]
-        ), row=1, col=1)
-
-        # Static annotation at lower fence
-        fig.add_annotation(
-            x=label, y=lower_fence,
-            text=f"Q3: {q3}<br>Med: {med}<br>Q1: {q1}",
-            showarrow=False,
-            xanchor="left", yanchor="bottom", xshift=8,
-            align="left",
-            font=dict(color=color, size=10),
-            row=1, col=1
-        )
-
-    # Right: horizontal stacked bars
+    fig = go.Figure()
     for tier in tier_order:
         fig.add_trace(go.Bar(
             y=labels,
@@ -1821,18 +1724,15 @@ def plot_jitter_boxplot(df, subject, cnt, group_col, group_labels,
             orientation="h",
             marker=dict(color=tier_colors[tier]),
             hovertemplate=f"<b>{tier}</b><br>%{{x:.1f}}%<extra></extra>"
-        ), row=1, col=2)
+        ))
 
     fig.update_layout(
-        **_base_layout(title=f"{SUBJECTS[subject]} by {group_title} | {_cnt_label(cnt)}"),
-        barmode="stack",
-        # height=500,
-        # margin=dict(t=80, b=100)
+        **_base_layout(title=f"{SUBJECTS[subject]} Proficiency Tiers by {group_title} | {_cnt_label(cnt)}"),
+        barmode="stack"
     )
-    fig.update_layout(height=500,
-        margin=dict(t=80, b=100)
+    fig.update_layout(
+        margin=dict(t=80, b=60)
     )
-    fig.update_yaxes(title_text=f"{SUBJECTS[subject]} score", row=1, col=1)
-    fig.update_xaxes(title_text="% of students", row=1, col=2)
-
+    fig.update_xaxes(title="% of students")
+    fig.update_yaxes(title=group_title)
     return fig
