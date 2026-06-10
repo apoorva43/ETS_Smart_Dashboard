@@ -643,6 +643,77 @@ def _insight_box(text):
         unsafe_allow_html=True,
     )
 
+def _pullquote_box(text: str):
+    """
+    Render an amber callout for a notably important or surprising finding.
+    Conditional — only call this when the data warrants it, not for every chapter.
+    """
+    st.markdown(
+        f"""
+        <div style="
+            background: #fff8e6;
+            border-left: 3px solid #BA7517;
+            padding: 10px 14px;
+            margin: 8px 0 10px 0;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #633806;
+            line-height: 1.55;
+        ">
+            ⚠ {text}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _policy_box(text: str):
+    """
+    Render a green policy implication callout.
+    Should appear once at the bottom of every chapter section.
+    """
+    st.markdown(
+        f"""
+        <div style="
+            background: #EAF3DE;
+            border-left: 3px solid #3B6D11;
+            padding: 10px 14px;
+            margin: 10px 0 6px 0;
+            font-size: 0.88rem;
+            color: #27500A;
+            line-height: 1.55;
+        ">
+            <strong>For policymakers:</strong> {text}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _chart_expander(label: str, fig, how_to_read: str):
+    """
+    Render a chart inside a collapsible expander with a how-to-read note.
+    Replaces the current pattern of st.plotly_chart() + separate st.expander().
+    The chart and its explanation are always together — never separated.
+    """
+    with st.expander(f"📊 {label}", expanded=False):
+        st.plotly_chart(fig, use_container_width=True,
+                        config={"displayModeBar": False})
+        st.markdown(
+            f"""
+            <div style="
+                font-size: 0.82rem;
+                color: #555;
+                line-height: 1.6;
+                padding: 6px 2px 2px 2px;
+                border-top: 0.5px solid #e0e0e0;
+                margin-top: 6px;
+            ">
+                <strong>How to read:</strong> {how_to_read}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 def render_story_tab(available_years, story_country, story_subject, comparison_countries):
     """
