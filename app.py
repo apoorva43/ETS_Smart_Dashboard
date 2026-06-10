@@ -336,7 +336,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.markdown(country_distribution_text(
+            st.info(country_distribution_text(
                 df, subject, valid_countries, year=selected_year
             ))
 
