@@ -43,7 +43,7 @@ from src.plotting_plotly import (
                           plot_resource_scatter,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
-                                ses_gap_text,
+                                ses_difference_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
@@ -412,7 +412,7 @@ def render_chart(chart_type, subject, selected_countries,
             )
 
             st.markdown(
-                ses_gap_text(
+                ses_difference_text(
                     df,
                     subject,
                     primary_country,
@@ -823,7 +823,7 @@ def render_story_tab(available_years, story_country, story_subject):
             Score differences between demographic groups reflect
             **structural inequalities** in access to resources, language
             support, and school quality — not inherent differences in
-            students' ability or potential. For more guidance, see:
+            students' ability or potential. For more information, see:
             [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf).
         """)
 
