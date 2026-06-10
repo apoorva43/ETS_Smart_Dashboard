@@ -866,63 +866,97 @@ def render_story_tab(available_years, story_country, story_subject):
 
     st.divider()
 
-    # ── Section 2: Score change over time ────────────────────────────────────────
-    _story_section_header(2, "Has performance changed over time?",
-        f"Tracking {_cnt_label(story_country)}'s {subject_label} scores across PISA cycles")
+    # ── Chapter 2: Trend ───────────────────────────────────────────────────
+    _story_section_header(
+        2,
+        "Has performance changed over time?",
+        f"Tracking {_cnt_label(story_country)}'s {subject_label} scores across PISA cycles"
+    )
 
     if len(available_years) < 2:
-        st.info("Only one year of data is currently loaded. Load multiple years (2015, 2018, 2022) to unlock this section.")
+        st.info(
+            "Only one year of data is currently loaded. "
+            "Load 2015, 2018, and 2022 to unlock this section."
+        )
     else:
-        df_s2 = fetch((story_country,), None, tuple(BASE_COLS + pv_cols))
-        
-        country_years = df_s2["YEAR"].dropna().unique() if "YEAR" in df_s2.columns else []
-        
+        df_s2 = fetch(
+            (story_country,), None, tuple(BASE_COLS + pv_cols)
+        )
+        country_years = sorted(
+            df_s2["YEAR"].dropna().unique().tolist()
+        ) if "YEAR" in df_s2.columns else []
+
         if len(country_years) < 2:
-            st.warning(f"⚠️ **Data Unavailable:** {_cnt_label(story_country)} does not have enough historical data to compare changes over time (only {len(country_years)} year on record).")
+            st.warning(
+                f"⚠️ {_cnt_label(story_country)} does not have enough "
+                f"historical data to show trends."
+            )
         else:
-            # Dynamically use the country's actual earliest/latest years
-            reference_year   = min(country_years) 
+            reference_year   = min(country_years)
             comparison_years = [y for y in country_years if y != reference_year]
             latest_year      = max(country_years)
 
             ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
             last_subset = df_s2[df_s2["YEAR"] == latest_year]
-            ref_median  = weighted_percentiles_pv(ref_subset,  story_subject, [50])
-            last_median = weighted_percentiles_pv(last_subset, story_subject, [50])
 
-            if not (np.isnan(ref_median).all() or np.isnan(last_median).all()):
-                delta     = last_median[0] - ref_median[0]
-                direction = "increased" if delta > 0 else "decreased"
+            ref_percs  = weighted_percentiles_pv(
+                ref_subset,  story_subject, [10, 50, 90]
+            )
+            last_percs = weighted_percentiles_pv(
+                last_subset, story_subject, [10, 50, 90]
+            )
+
+            if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
+                delta_p10 = last_percs[0] - ref_percs[0]
+                delta_p50 = last_percs[1] - ref_percs[1]
+                delta_p90 = last_percs[2] - ref_percs[2]
+                direction = "increased" if delta_p50 > 0 else "decreased"
+
                 _insight_box(
-                    f"At the median, {_cnt_label(story_country)}'s {subject_label} score "
-                    f"{direction} by {abs(delta):.0f} points between "
-                    f"{reference_year} and {latest_year}."
+                    f"At the median, {_cnt_label(story_country)}'s "
+                    f"{subject_label} score {direction} by "
+                    f"{abs(delta_p50):.0f} points between "
+                    f"{reference_year} and {latest_year} "
+                    f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
                 )
 
-            with st.expander("📖 How to read this chart"):
-                st.markdown(f"""
-                    This chart tracks score changes across the performance spectrum over time.
+                # Conditional amber — uneven decline/gain across distribution
+                spread = abs(delta_p10 - delta_p90)
+                if spread > 10:
+                    worse_end = "bottom" if delta_p10 < delta_p90 else "top"
+                    better_end = "top" if worse_end == "bottom" else "bottom"
+                    worse_val  = delta_p10 if worse_end == "bottom" else delta_p90
+                    better_val = delta_p90 if worse_end == "bottom" else delta_p10
+                    _pullquote_box(
+                        f"The change is not uniform across the distribution — "
+                        f"students at the {worse_end} lost more "
+                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
+                        f"than those at the {better_end} "
+                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'bottom' else '10'}). "
+                        f"This pattern is invisible in average-only reporting."
+                    )
 
-                    - The **horizontal axis (x-axis)** shows the {reference_year} baseline score at each percentile (from the lowest to the highest achievers).
-                    - The **vertical axis (y-axis)** shows the score for that exact same percentile in a comparison year.
-                    - The **solid diagonal line** represents the {reference_year} baseline (exactly zero change).
-                    - The **dashed lines** represent the comparison years.
-                    - Points **above** the solid diagonal line indicate an **improvement** at that performance level.
-                    - Points **below** the solid diagonal line indicate a **decline** at that performance level.
-                """)
+            fig2 = plot_naep_time_comparison(
+                df=df_s2, subject=story_subject,
+                cnt=story_country, reference_year=reference_year,
+                comparison_years=comparison_years
+            )
+            _chart_expander(
+                "Show full chart",
+                fig2,
+                f"The horizontal axis shows the {reference_year} baseline score "
+                f"at each percentile. The vertical axis shows the score at that "
+                f"same percentile in a later year. Points on the diagonal line "
+                f"mean no change. Points above the diagonal mean improvement; "
+                f"points below mean decline."
+            )
 
-            fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
-                                             reference_year=reference_year,
-                                             comparison_years=comparison_years)
-            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
-
-            with st.expander("🔍 Why might scores change between cycles?"):
-                st.markdown("""
-                    - **Changes in school composition** (e.g. due to immigration, urbanisation)
-                    - **Disruptions** such as economic crises or the COVID-19 pandemic (relevant to 2022)
-                    - **Cohort effects** — the specific group of 15-year-olds tested that year
-                    - **Curriculum or policy reforms** implemented before the cycle
-                """)
+            _policy_box(
+                "A decline that is steeper at the bottom of the distribution "
+                "than at the top suggests that the students who most need "
+                "support have fallen furthest behind. Recovery efforts should "
+                "be targeted, not uniform."
+            )
 
     st.divider()
 
