@@ -25,7 +25,13 @@ import os
 from pathlib import Path
 
 from src.data_loader import query_pisa
-from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
+from src.pisa_stats import (
+    weighted_percentiles_pv,
+    weighted_mean_pv,
+    compute_escs_quartile_percentiles,
+    compute_group_percentiles,
+    get_oecd_percentiles,
+)
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
@@ -715,6 +721,40 @@ def _chart_expander(label: str, fig, how_to_read: str):
             unsafe_allow_html=True,
         )
 
+def _metric_card(col, label, value, delta=None, help_text=None):
+            delta_html = ""
+            if delta is not None:
+                color = "#27500A" if delta >= 0 else "#A32D2D"
+                sign = "▲" if delta >= 0 else "▼"
+                delta_html = f"""
+                    <div style="font-size:12px;color:{color};margin-top:3px">
+                        {sign} {abs(delta):.0f} pts vs OECD
+                    </div>
+                """
+            help_html = ""
+            if help_text:
+                help_html = f"""
+                    <div style="font-size:10px;color:#888;margin-top:3px">
+                        {help_text}
+                    </div>
+                """
+            col.markdown(
+                f"""
+                <div style="
+                    background:#f0f4f8;
+                    border-radius:8px;
+                    padding:14px 16px;
+                    border:0.5px solid #dde3ea;
+                ">
+                    <div style="font-size:11px;color:#666;margin-bottom:4px">{label}</div>
+                    <div style="font-size:22px;font-weight:500;color:#1F4E79">{value}</div>
+                    {delta_html}
+                    {help_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
 def render_story_tab(available_years, story_country, story_subject):
     """
     Render the full Data Story tab content.
@@ -732,6 +772,17 @@ def render_story_tab(available_years, story_country, story_subject):
     story_year    = 2022 if 2022 in available_years else max(available_years)
     subject_label = SUBJECTS[story_subject]
     pv_cols       = PV_BY_SUBJ[story_subject]
+
+    st.markdown("""
+    <style>
+    [data-testid="stMetric"] {
+        border: 0.5px solid #dde3ea;
+        border-radius: 8px;
+        padding: 12px 16px;
+        min-height: 120px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
     # ── Page header ────────────────────────────────────────────────────────
     st.markdown(
@@ -821,26 +872,27 @@ def render_story_tab(available_years, story_country, story_subject):
 
         # Metric cards
         cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
+        p10_p90_spread = (cnt_p10_p90[1] - cnt_p10_p90[0]) if not np.isnan(cnt_p10_p90).all() else None
+        delta_val = cnt_med[0] - oecd_med[0] if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()) else None
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric(
-                f"{_cnt_label(story_country)} median",
-                f"{cnt_med[0]:.0f}" if not np.isnan(cnt_med).all() else "N/A"
+                f"{_cnt_label(story_country)} median score",
+                f"{cnt_med[0]:.0f}" if not np.isnan(cnt_med).all() else "N/A",
+                delta=f"{delta_val:+.0f} pts vs OECD" if delta_val is not None else None,
             )
         with col2:
             st.metric(
                 "OECD average",
                 f"{oecd_med[0]:.0f}" if not np.isnan(oecd_med).all() else "N/A",
-                delta=f"{cnt_med[0]-oecd_med[0]:+.0f}" if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()) else None,
-                delta_color="normal"
+                help="Average median score across all 38 OECD member countries"
             )
         with col3:
-            if not np.isnan(cnt_p10_p90).all():
-                spread = cnt_p10_p90[1] - cnt_p10_p90[0]
-                st.metric("P10 → P90 spread", f"{spread:.0f} pts",
-                          help="Score range between the bottom 10% and top 10% of students")
-            else:
-                st.metric("P10 → P90 spread", "N/A")
+            st.metric(
+                "P10 → P90 spread",
+                f"{p10_p90_spread:.0f} pts" if p10_p90_spread is not None else "N/A",
+                help="Score range between the bottom 10% and top 10% of students"
+            )
 
         # Chart + how to read
         fig1 = plot_country_distributions(
@@ -964,14 +1016,17 @@ def render_story_tab(available_years, story_country, story_subject):
     _story_section_header(
         3,
         "Who scores highest — and who is left behind?",
-        f"Score differences by socioeconomic status and immigration status "
-        f"in {_cnt_label(story_country)}"
+        f"Score differences by student background in {_cnt_label(story_country)}"
     )
 
     st.markdown(
-        "High average scores can mask large differences between student groups."
+        "High average scores can mask large differences between student groups. "
+        "The figures below show the difference in median scores between groups — "
+        "they reflect structural inequalities in access to resources and support, "
+        "not differences in student ability."
     )
 
+    # Fetch all three equity datasets
     df_ses   = fetch(
         (story_country,), story_year,
         tuple(BASE_COLS + pv_cols + ["ESCS"])
@@ -980,116 +1035,188 @@ def render_story_tab(available_years, story_country, story_subject):
         (story_country,), story_year,
         tuple(BASE_COLS + pv_cols + ["IMMIG"])
     )
+    df_gender = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["ST004D01T"])
+    )
 
-    eq_col1, eq_col2 = st.columns(2, gap="large")
+    # ── Compute all three gaps ─────────────────────────────────────────────
+    equity_gaps = []
 
-    with eq_col1:
-        st.markdown("#### By socioeconomic background")
+    # SES gap
+    if not check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
+        curves = compute_escs_quartile_percentiles(
+            df_ses, story_subject, [50], cnt=story_country, year=story_year
+        )
+        q1_med = curves.get("Q1 (low SES)",  [np.nan])[0]
+        q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
+        if not (np.isnan(q1_med) or np.isnan(q4_med)):
+            equity_gaps.append({
+                "label": "Socioeconomic background",
+                "value": q4_med - q1_med,
+                "sub":   "Highest vs lowest SES quartile",
+                "type":  "ses"
+            })
 
-        if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
-            st.warning(
-                f"⚠️ Insufficient socioeconomic data for "
-                f"{_cnt_label(story_country)}."
-            )
-        else:
-            ses_text = ses_gap_text(
-                df_ses, story_subject, story_country, year=story_year
-            )
-            if "Insufficient" not in ses_text:
-                _insight_box(ses_text)
+    # Immigration gap
+    if not check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
+        native_subset = df_immig[
+            (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 1.0)
+        ]
+        gen1_subset = df_immig[
+            (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 3.0)
+        ]
+        nat_med  = weighted_percentiles_pv(native_subset, story_subject, [50])
+        gen1_med = weighted_percentiles_pv(gen1_subset,   story_subject, [50])
+        if not (np.isnan(nat_med).all() or np.isnan(gen1_med).all()):
+            equity_gaps.append({
+                "label": "Immigration status",
+                "value": nat_med[0] - gen1_med[0],
+                "sub":   "Native vs first-generation students",
+                "type":  "immig"
+            })
 
-            # Conditional amber — if SES difference > OECD median difference
-            curves = compute_escs_quartile_percentiles(
-                df_ses, story_subject, [50],
-                cnt=story_country, year=story_year
-            )
-            q1_med = curves.get("Q1 (low SES)",  [np.nan])[0]
-            q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
-            oecd_m = get_oecd_percentiles(
-                df_s1, story_subject, [50], year=story_year
-            )
+    # Gender gap
+    if not check_missing_countries(df_gender, ["ST004D01T"], [story_country], story_year):
+        male_subset   = df_gender[
+            (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 2.0)
+        ]
+        female_subset = df_gender[
+            (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 1.0)
+        ]
+        male_med   = weighted_percentiles_pv(male_subset,   story_subject, [50])
+        female_med = weighted_percentiles_pv(female_subset, story_subject, [50])
+        if not (np.isnan(male_med).all() or np.isnan(female_med).all()):
+            equity_gaps.append({
+                "label": "Gender",
+                "value": abs(male_med[0] - female_med[0]),
+                "sub":   "Boys vs girls at the median",
+                "type":  "gender"
+            })
+
+    # Sort by size — largest first
+    equity_gaps.sort(key=lambda x: x["value"], reverse=True)
+
+    # ── Summary cards ──────────────────────────────────────────────────────
+    if equity_gaps:
+        # Leading insight — biggest gap
+        biggest = equity_gaps[0]
+        _insight_box(
+            f"The largest difference in {_cnt_label(story_country)} is by "
+            f"<strong>{biggest['label'].lower()}</strong> — "
+            f"a {biggest['value']:.0f}-point difference at the median "
+            f"in {subject_label}. {biggest['sub']}."
+        )
+
+        # Summary cards — one per gap, ranked
+        card_cols = st.columns(len(equity_gaps))
+        for i, (col, gap) in enumerate(zip(card_cols, equity_gaps)):
+            with col:
+                label = gap["label"] + (" — largest" if i == 0 else "")
+                st.metric(
+                    label,
+                    f"{gap['value']:.0f} pts",
+                    help=gap["sub"]
+                )
+
+        st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+
+        # Conditional amber — SES diff > country vs OECD diff
+        ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
+        if ses_gap_entry:
             cnt_m  = weighted_percentiles_pv(
-                df_ses[df_ses["CNT"] == story_country],
-                story_subject, [50]
+                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
             )
-
-            if not any(np.isnan(v) for v in [q1_med, q4_med, oecd_m[0], cnt_m[0]]):
-                ses_diff        = q4_med - q1_med
+            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
+            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
                 country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
-                if ses_diff > country_vs_oecd and country_vs_oecd > 5:
+                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
                     _pullquote_box(
                         f"The socioeconomic difference within "
-                        f"{_cnt_label(story_country)} ({ses_diff:.0f} pts) "
-                        f"is larger than the difference between this country "
-                        f"and the OECD average ({country_vs_oecd:.0f} pts). "
+                        f"{_cnt_label(story_country)} "
+                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                        f"the difference between this country and the OECD "
+                        f"average ({country_vs_oecd:.0f} pts). "
                         f"Domestic equity is a bigger lever than "
                         f"international benchmarking."
                     )
 
-            fig3a = plot_escs_gap(
-                df_ses, story_subject, story_country, year=story_year
-            )
-            _chart_expander(
-                "Show socioeconomic chart",
-                fig3a,
-                "Students are split into four equal groups by family "
-                "socioeconomic background — based on parental education, "
-                "occupation, and home resources. Q1 = lowest 25%, "
-                "Q4 = highest 25%. Each line shows the score distribution "
-                "for that group across the performance spectrum."
-            )
-
-            _policy_box(
-                "A large socioeconomic difference suggests that a student's "
-                "background strongly predicts their outcomes. School-based "
-                "interventions that target resources toward students from "
-                "lower-income families can help reduce this."
-            )
-
-    with eq_col2:
-        st.markdown("#### By immigration status")
-
-        if check_missing_countries(
+        # ── Combined chart expander ────────────────────────────────────────
+        ses_ok   = not check_missing_countries(
+            df_ses, ["ESCS"], [story_country], story_year
+        )
+        immig_ok = not check_missing_countries(
             df_immig, ["IMMIG"], [story_country], story_year
-        ):
-            st.warning(
-                f"⚠️ Insufficient immigration data for "
-                f"{_cnt_label(story_country)}."
-            )
-        else:
-            immig_warnings = check_group_sizes(
-                df_immig, "IMMIG", IMMIG_MAP,
-                story_country, year=story_year
-            )
-            for w in immig_warnings:
-                st.warning(w)
+        )
 
-            immig_text = immigration_gap_text(
-                df_immig, story_subject, story_country, year=story_year
-            )
-            if "Insufficient" not in immig_text:
-                _insight_box(immig_text)
+        if ses_ok or immig_ok:
+            with st.expander("📊 Show full charts", expanded=False):
+                chart_col1, chart_col2 = st.columns(2)
 
-            fig3b = plot_immigration_score_distribution(
-                df=df_immig, subject=story_subject,
-                cnt=story_country, year=story_year
-            )
-            _chart_expander(
-                "Show immigration status chart",
-                fig3b,
-                "Native: born in the country, both parents born in the "
-                "country. Second-generation: born in the country, at least "
-                "one parent born abroad. First-generation: born abroad. "
-                "The dotted vertical lines show the median score for each group."
-            )
+                with chart_col1:
+                    st.markdown("**By socioeconomic background**")
+                    if ses_ok:
+                        fig3a = plot_escs_gap(
+                            df_ses, story_subject,
+                            story_country, year=story_year
+                        )
+                        st.plotly_chart(
+                            fig3a, use_container_width=True,
+                            config={"displayModeBar": False}
+                        )
+                    else:
+                        st.warning("Insufficient socioeconomic data.")
 
-            _policy_box(
-                "Differences by immigration status often reflect language "
-                "barriers, school segregation, and uneven access to support "
-                "services — not differences in student ability. Targeted "
-                "language and integration programs have shown impact "
-                "in high-performing systems."
-            )
+                with chart_col2:
+                    st.markdown("**By immigration status**")
+                    if immig_ok:
+                        immig_warnings = check_group_sizes(
+                            df_immig, "IMMIG", IMMIG_MAP,
+                            story_country, year=story_year
+                        )
+                        for w in immig_warnings:
+                            st.warning(w)
+                        fig3b = plot_immigration_score_distribution(
+                            df=df_immig, subject=story_subject,
+                            cnt=story_country, year=story_year
+                        )
+                        st.plotly_chart(
+                            fig3b, use_container_width=True,
+                            config={"displayModeBar": False}
+                        )
+                    else:
+                        st.warning("Insufficient immigration data.")
+
+                st.markdown(
+                    """
+                    <div style="font-size:0.82rem;color:#555;line-height:1.6;
+                                padding:6px 2px 2px 2px;
+                                border-top:0.5px solid #e0e0e0;margin-top:6px">
+                        <strong>How to read:</strong>
+                        <em>Socioeconomic chart:</em> Students split into four equal
+                        groups by family background — parental education, occupation,
+                        and home resources. Q1 = lowest 25%, Q4 = highest 25%.
+                        <em>Immigration chart:</em> Native = born in country, both
+                        parents born in country. Second-generation = born in country,
+                        at least one parent born abroad. First-generation = born abroad.
+                        Dotted lines show the median score for each group.
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        _policy_box(
+            "Score differences by student background point to structural "
+            "inequalities in how resources, language support, and school "
+            "quality are distributed. The largest difference for this "
+            "country is the most actionable starting point for policy."
+        )
+
+    else:
+        st.info(
+            f"Insufficient data to compute equity differences "
+            f"for {_cnt_label(story_country)}."
+        )
 
     st.divider()
 
