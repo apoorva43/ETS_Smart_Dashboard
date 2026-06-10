@@ -1398,6 +1398,7 @@ st.sidebar.markdown("---")
 if app_mode == "📖 Data Story":
     st.sidebar.header("📖 Story Controls")
 
+    """
     story_country_group = st.sidebar.radio(
         "Country group",
         ["All", "OECD members", "Partner countries"],
@@ -1409,12 +1410,13 @@ if app_mode == "📖 Data Story":
         story_pool = partner_countries
     else:
         story_pool = all_countries
+    """
 
-    default_idx = story_pool.index("CAN") if "CAN" in story_pool else 0
+    default_idx = all_countries.index("CAN") if "CAN" in all_countries else 0
 
     story_country = st.sidebar.selectbox(
         "Focus country", 
-        story_pool, 
+        all_countries, 
         index=default_idx, 
         format_func=_cnt_label,
         key="story_country"
