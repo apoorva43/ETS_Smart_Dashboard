@@ -1287,7 +1287,7 @@ if app_mode == "📖 Data Story":
     )
     
     # Draw the main area
-    render_story_tab(available_years, story_country, story_subject, [])
+    render_story_tab(available_years, story_country, story_subject)
 
 
 # ==========================================
