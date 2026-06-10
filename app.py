@@ -27,28 +27,23 @@ from pathlib import Path
 from src.data_loader import query_pisa
 from src.pisa_stats import (
     weighted_percentiles_pv,
-    weighted_mean_pv,
     compute_escs_quartile_percentiles,
     compute_group_percentiles,
     get_oecd_percentiles,
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
-from src.plotting_plotly import (plot_country_distributions,
+from src.plotting_plotly import (
                           plot_group_comparison,
-                          plot_escs_gap,
-                          plot_naep_time_comparison,
-                          plot_year_diff_percentile,
-                          plot_weighted_interval_distribution,
-                          plot_gender_diff_percentile,
-                          plot_belonging_by_immigration,
+                          plot_jitter_boxplot,
+                          plot_country_shaded_density,
+                          plot_percentile_change_from_baseline,
+                          plot_intersectional_heatmap,
+                          plot_immigration_shaded_density,
                           plot_immigration_score_distribution,
-                          plot_school_location_boxplot,
-                          plot_school_type_distribution,
                           plot_resource_scatter,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
                                 ses_gap_text,
-                                immigration_gap_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
@@ -57,7 +52,6 @@ S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 CHART_TYPES = [
     "Percentile score profile",
-    "Score distribution",
     "Score change over time",
     "Belonging by Immigration",
     "Group comparison",
@@ -332,7 +326,7 @@ def render_chart(chart_type, subject, selected_countries,
             
         if valid_countries:
             render_chart_help(chart_type)
-            fig = plot_country_distributions(
+            fig = plot_country_shaded_density(
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
@@ -376,12 +370,14 @@ def render_chart(chart_type, subject, selected_countries,
                 selected_year,
                 tuple(BASE_COLS + pv_cols + ["ST004D01T"])
             )
-            fig = plot_gender_diff_percentile(
+            fig = plot_jitter_boxplot(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
-                year=selected_year,
-                active_countries=selected_countries
+                group_col=group_col, 
+                group_labels=group_vals, 
+                group_title=group_key,
+                year=selected_year
             )
             st.plotly_chart(
                 fig,
@@ -400,10 +396,13 @@ def render_chart(chart_type, subject, selected_countries,
                 tuple(BASE_COLS + pv_cols + ["ESCS"])
             )
 
-            fig = plot_escs_gap(
+            fig = plot_jitter_boxplot(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
+                group_col=group_col, 
+                group_labels=group_vals, 
+                group_title=group_key,
                 year=selected_year,
             )
             st.plotly_chart(
@@ -446,18 +445,22 @@ def render_chart(chart_type, subject, selected_countries,
             render_chart_help(chart_type, group_key)
             df = fetch((primary_country,), selected_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
             
-            fig = plot_school_location_boxplot(
-                df=df, subject=subject, cnt=primary_country, year=selected_year,
+            fig = plot_jitter_boxplot(
+                df=df, subject=subject, cnt=primary_country,
+                group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         elif group_key == "School type":
             df = fetch((primary_country,), selected_year,
                        tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
-            fig = plot_school_type_distribution(
+            fig = plot_jitter_boxplot(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
+                group_col=group_col,
+                group_labels=group_vals,
+                group_title=group_key,
                 year=selected_year,
             )
 
@@ -499,12 +502,11 @@ def render_chart(chart_type, subject, selected_countries,
         reference_year = min(available_years)
         comparison_years = [y for y in available_years if y != reference_year]
         
-        fig = plot_year_diff_percentile(
+        fig = plot_percentile_change_from_baseline(
             df=df,
             subject=subject,
             cnt=primary_country,
-            reference_year=reference_year,
-            comparison_years=comparison_years
+            reference_year=reference_year
         )
 
         st.plotly_chart(fig, use_container_width=True,
@@ -514,32 +516,11 @@ def render_chart(chart_type, subject, selected_countries,
             f"Horizontal axis shows {reference_year} scores. "
             f"Each coloured line shows change relative to {reference_year}."
         )
-        
-    # 4. Score Distribution
-    elif chart_type == "Score distribution":
-        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
-        df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
-        
-        missing_cnts = check_missing_countries(
-            df, required_cols=[f"PV1{subject}"],
-            countries=selected_countries, year=selected_year
-        )
-        valid_countries = [c for c in selected_countries if c not in missing_cnts]
-
-        if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
-            
-        if valid_countries:
-            fig = plot_weighted_interval_distribution(
-                df, subject, valid_countries, year=selected_year
-            )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Distribution showing percentage of students per 20-point score interval.")
 
     # 5. Belonging by Immigration
     elif chart_type == "Belonging by Immigration":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
-        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + extra))
+        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols + extra))
         
         missing_cnts = check_missing_countries(
             df, required_cols=["BELONG", "IMMIG", "REPEAT", "ESCS"], 
@@ -554,11 +535,35 @@ def render_chart(chart_type, subject, selected_countries,
             )
 
         if valid_countries:
-            fig = plot_belonging_by_immigration(
-                df=df, countries=valid_countries, year=selected_year
+            crossing_options = {
+                "School Belonging": "BELONG",
+                "Immigration Status": "IMMIG",
+                "Gender": "ST004D01T",
+            }
+            cross_label = st.selectbox(
+                "Cross SES with:",
+                list(crossing_options.keys()),
+                key=f"cross_{widget_key}"
             )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Left: Grade repetition rate in different SES quartiles. Right: Distribution of school belonging index by immigration status.")
+            cross_col = crossing_options[cross_label]
+
+            # Only fetch cross_col if not already in df
+            if cross_col not in df.columns:
+                df_cross = fetch(
+                    tuple(valid_countries),
+                    selected_year,
+                    tuple(BASE_COLS + pv_cols + ["ESCS", cross_col])
+                )
+            else:
+                df_cross = df  # BELONG, IMMIG, ESCS already fetched above
+
+            fig_hm = plot_intersectional_heatmap(
+                df_cross, subject, primary_country,
+                row_var="ESCS", col_var=cross_col,
+                row_label="SES Quartile", col_label=cross_label,
+                year=selected_year
+            )
+            st.plotly_chart(fig_hm, use_container_width=True, config={"displayModeBar": False})
 
     # 6. Country Scatterplot
     elif chart_type == "Country Scatterplot":
@@ -895,9 +900,9 @@ def render_story_tab(available_years, story_country, story_subject):
             )
 
         # Chart + how to read
-        fig1 = plot_country_distributions(
+        fig1 = plot_country_shaded_density(
             df_s1, story_subject, [story_country],
-            year=story_year, primary_country=story_country
+            year=story_year
         )
         _chart_expander(
             "Show full chart",
@@ -988,10 +993,9 @@ def render_story_tab(available_years, story_country, story_subject):
                         f"This pattern is invisible in average-only reporting."
                     )
 
-            fig2 = plot_naep_time_comparison(
+            fig2 = plot_percentile_change_from_baseline(
                 df=df_s2, subject=story_subject,
-                cnt=story_country, reference_year=reference_year,
-                comparison_years=comparison_years
+                cnt=story_country, reference_year=reference_year
             )
             _chart_expander(
                 "Show full chart",
@@ -1156,9 +1160,12 @@ def render_story_tab(available_years, story_country, story_subject):
                 with chart_col1:
                     st.markdown("**By socioeconomic background**")
                     if ses_ok:
-                        fig3a = plot_escs_gap(
+                        group_col, group_labels = GROUP_OPTIONS["Socioeconomic status"]
+                        fig3a = plot_jitter_boxplot(
                             df_ses, story_subject,
-                            story_country, year=story_year
+                            story_country,
+                            group_col=group_col, group_labels=group_labels, 
+                            group_title="Socioeconomic Status", year=story_year
                         )
                         st.plotly_chart(
                             fig3a, use_container_width=True,
@@ -1176,7 +1183,7 @@ def render_story_tab(available_years, story_country, story_subject):
                         )
                         for w in immig_warnings:
                             st.warning(w)
-                        fig3b = plot_immigration_score_distribution(
+                        fig3b = plot_immigration_shaded_density(
                             df=df_immig, subject=story_subject,
                             cnt=story_country, year=story_year
                         )
@@ -1268,10 +1275,12 @@ def render_story_tab(available_years, story_country, story_subject):
                     f"higher at the median in {subject_label}."
                 )
 
-            fig4b = plot_school_type_distribution(
-                df=df_type, subject=story_subject,
-                cnt=story_country, year=story_year
-            )
+            group_col, group_labels = GROUP_OPTIONS["School type"]
+            fig4b = plot_jitter_boxplot(
+                df=df_type, subject=story_subject, cnt=story_country,
+                group_col=group_col, group_labels=group_labels,
+                group_title="School Type", year=story_year
+                )
             _chart_expander(
                 "Show school type chart",
                 fig4b,
@@ -1318,9 +1327,11 @@ def render_story_tab(available_years, story_country, story_subject):
                     f"in {subject_label} in {_cnt_label(story_country)}."
                 )
 
-            fig4a = plot_school_location_boxplot(
+            group_col, group_labels = GROUP_OPTIONS["School location"]
+            fig4a = plot_jitter_boxplot(
                 df=df_loc, subject=story_subject,
-                cnt=story_country, year=story_year
+                cnt=story_country, group_col=group_col, group_labels=group_labels,
+                group_title="School Location", year=story_year
             )
             _chart_expander(
                 "Show school location chart",
