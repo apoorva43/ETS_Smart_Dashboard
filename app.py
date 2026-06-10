@@ -595,7 +595,7 @@ def render_chart(chart_type, subject, selected_countries,
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        st.markdown(scatter_correlation_text(
+        st.info(scatter_correlation_text(
             df=df, subject=subject, resource_col=selected_col,
             resource_label=selected_resource_label, year=selected_year,
             highlight_countries=valid_countries
