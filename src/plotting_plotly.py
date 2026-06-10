@@ -188,52 +188,6 @@ def plot_escs_gap(df, subject, cnt, year=None):
     return fig
 
 
-# def plot_gender_percentile_line(df, subject: str, cnt: str, year: int = None) -> go.Figure:
-#     subset = df[df["CNT"] == cnt].copy()
-#     if year is not None and "YEAR" in df.columns:
-#         subset = subset[subset["YEAR"] == year]
-
-#     valid_data, error_fig = _check_sufficient_data(
-#         subset, ["ST004D01T"], cnt, msg=f"Insufficient gender data for {cnt}"
-#     )
-#     if error_fig is not None:
-#         return error_fig
-
-#     female = valid_data[valid_data["ST004D01T"] == 1.0]
-#     male   = valid_data[valid_data["ST004D01T"] == 2.0]
-
-#     female_percs = weighted_percentiles_pv(female, subject, PERCENTILES_FINE)
-#     male_percs   = weighted_percentiles_pv(male,   subject, PERCENTILES_FINE)
-
-#     fig = go.Figure()
-#     if np.isnan(female_percs).all():
-#         return fig
-
-#     # Reference diagonal
-#     fig.add_trace(go.Scatter(
-#         x=female_percs, y=female_percs,
-#         mode="lines", name="Female (reference)",
-#         line=dict(color="#cccccc", width=1.5, dash="dot"),
-#         hoverinfo="skip"
-#     ))
-
-#     # Male line
-#     fig.add_trace(go.Scatter(
-#         x=female_percs, y=male_percs,
-#         mode="lines", name="Male",
-#         line=dict(color=COUNTRY_COLORS.get(cnt, "#185FA5"), width=2.5),
-#         customdata=PERCENTILES_FINE,
-#         hovertemplate="Percentile: %{customdata}<br>Female Score: %{x:.0f}<br>Male Score: %{y:.0f}<extra></extra>"
-#     ))
-
-#     fig.update_layout(**_base_layout(
-#         title=f"Gender Gap | {SUBJECTS[subject]} | {_cnt_label(cnt)}<br><sup>(above diagonal = males score higher)</sup>"
-#     ))
-#     fig.update_xaxes(title=f"Female {SUBJECTS[subject]} score (reference)")
-#     fig.update_yaxes(title="Male Score")
-#     return fig
-
-
 def plot_group_comparison(df, subject: str, group_col: str,
                            group_vals: dict, cnt: str,
                            year: int = None, title: str = "") -> go.Figure:
@@ -694,6 +648,68 @@ def plot_gender_diff_percentile(df, subject: str, cnt: str, year: int = None, ac
 
     return fig
 
+def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELONG",
+                                 row_label="SES Quartile", col_label="Belonging Quartile",
+                                 year=None, n_bins=4, min_cell_n=30):
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    subset = subset.dropna(subset=[row_var, col_var, "W_FSTUWT"] + pv_cols)
+
+    if len(subset) < min_cell_n * n_bins:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data for intersectional breakdown.",
+                           xref="paper", yref="paper", x=0.5, y=0.5,
+                           showarrow=False, font=dict(size=14, color="gray"))
+        fig.update_layout(**_base_layout(height=400))
+        return fig
+
+    subset["row_bin"] = pd.qcut(subset[row_var].rank(method="first"), q=n_bins,
+                                 labels=[f"{row_label} Q{i+1}" for i in range(n_bins)])
+    subset["col_bin"] = pd.qcut(subset[col_var].rank(method="first"), q=n_bins,
+                                 labels=[f"{col_label} Q{i+1}" for i in range(n_bins)])
+
+    row_cats = [f"{row_label} Q{i+1}" for i in range(n_bins)]
+    col_cats = [f"{col_label} Q{i+1}" for i in range(n_bins)]
+
+    z = np.full((n_bins, n_bins), np.nan)
+    text = [[""] * n_bins for _ in range(n_bins)]
+
+    for r_idx, r_cat in enumerate(row_cats):
+        for c_idx, c_cat in enumerate(col_cats):
+            cell = subset[(subset["row_bin"] == r_cat) & (subset["col_bin"] == c_cat)]
+            if len(cell) < min_cell_n:
+                text[r_idx][c_idx] = "n/a"
+                continue
+            pv_means = [np.average(cell[pv].values, weights=cell["W_FSTUWT"].values)
+                        for pv in pv_cols if pv in cell.columns]
+            if pv_means:
+                z[r_idx][c_idx] = np.mean(pv_means)
+                text[r_idx][c_idx] = f"{z[r_idx][c_idx]:.0f}"
+
+    fig = go.Figure(go.Heatmap(
+        z=z,
+        x=col_cats,
+        y=row_cats,
+        text=text,
+        texttemplate="%{text}",
+        colorscale="Blues",
+        colorbar=dict(title=f"Mean {SUBJECTS[subject]} score"),
+        hovertemplate=(
+            f"{row_label}: %{{y}}<br>"
+            f"{col_label}: %{{x}}<br>"
+            f"Mean score: %{{z:.0f}}<extra></extra>"
+        )
+    ))
+
+    fig.update_layout(**_base_layout(
+        title=f"Mean {SUBJECTS[subject]} Score | {row_label} × {col_label} | {_cnt_label(cnt)}",
+        height=480
+    ))
+    return fig
+
 def plot_belonging_by_immigration(df, countries: list, year: int = None,
                                 min_group_n: int = 30) -> go.Figure:
                                 
@@ -782,6 +798,453 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
         row=1,
         col=2
     )
+    return fig
+
+def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
+    from scipy.stats import gaussian_kde
+
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"].isin(countries)].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    subset = subset.dropna(subset=["W_FSTUWT"] + pv_cols)
+    if len(subset) < min_group_n:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+        return fig
+
+    quartiles = countries
+    x_grid = np.linspace(100, 900, 500)
+
+    # Percentile bands to shade: (low_p, high_p, opacity)
+    BANDS = [
+        (0,  10,  0.10),
+        (10, 25,  0.20),
+        (25, 75,  0.45),   # IQR — darkest
+        (75, 90,  0.20),
+        (90, 100, 0.10),
+    ]
+
+    fig = go.Figure()
+
+    for row_idx, cnt_code in enumerate(countries):
+        group = subset[subset["CNT"] == cnt_code]
+        q_label = _cnt_label(cnt_code)
+        color = PALETTE[row_idx % len(PALETTE)]
+        if len(group) < min_group_n:
+            continue
+
+        if color.startswith("#") and len(color) == 7:
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+        elif color.startswith("rgb"):
+            # Strip out letters and brackets to just get the numbers
+            clean_rgb = color.replace("rgba", "").replace("rgb", "").replace("(", "").replace(")", "")
+            parts = clean_rgb.split(",")
+            r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
+        else:
+            r, g, b = 128, 128, 128 # Safe fallback gray
+
+        # Average KDE across all 10 plausible values
+        kde_vals = []
+        for pv in pv_cols:
+            scores = group[pv].dropna().values
+            weights = group.loc[group[pv].notna(), "W_FSTUWT"].values
+            if len(scores) < 10:
+                continue
+            try:
+                kde = gaussian_kde(scores, weights=weights, bw_method="scott")
+                kde_vals.append(kde(x_grid))
+            except Exception:
+                continue
+
+        if not kde_vals:
+            continue
+
+        density = np.mean(kde_vals, axis=0)
+        density /= density.max()   # normalise to 1 so all rows same height
+
+        # Compute weighted percentile scores for band boundaries
+        all_scores = np.concatenate([group[pv].values for pv in pv_cols])
+        all_weights = np.tile(group["W_FSTUWT"].values, len(pv_cols))
+        sort_idx = np.argsort(all_scores)
+        sorted_scores = all_scores[sort_idx]
+        sorted_weights = all_weights[sort_idx]
+        cumw = np.cumsum(sorted_weights) / sorted_weights.sum()
+
+        def score_at_p(p):
+            idx = np.searchsorted(cumw, p / 100)
+            return sorted_scores[min(idx, len(sorted_scores) - 1)]
+
+        # Row position: each quartile is a horizontal band on y
+        y_center = len(quartiles) - row_idx   # Q4 on top, Q1 on bottom
+        bar_height = 0.7
+
+        # Draw shaded bands from darkest (IQR) to lightest (tails)
+        for (lo_p, hi_p, alpha) in BANDS:
+            x_lo = score_at_p(lo_p)
+            x_hi = score_at_p(hi_p)
+
+            # Clip density shape to this band's score range
+            mask = (x_grid >= x_lo) & (x_grid <= x_hi)
+            if mask.sum() < 2:
+                continue
+
+            band_x = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
+            band_density = np.concatenate([[0], density[mask], [0]])
+
+            # Scale density shape to bar_height, centred on y_center
+            scaled_y_top = y_center + (band_density / 2) * bar_height
+            scaled_y_bot = y_center - (band_density / 2) * bar_height
+
+            # Build closed polygon path for the filled shape
+            poly_x = np.concatenate([band_x, band_x[::-1]])
+            poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
+
+            fill_color = f"rgba({r},{g},{b},{alpha})"
+            line_color = f"rgba({r},{g},{b},0)"  # no border between bands
+
+            fig.add_trace(go.Scatter(
+                x=poly_x, y=poly_y,
+                fill="toself",
+                fillcolor=fill_color,
+                line=dict(color=line_color, width=0),
+                mode="lines",
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Median line
+        med = score_at_p(50)
+        fig.add_trace(go.Scatter(
+            x=[med, med],
+            y=[y_center - bar_height / 2, y_center + bar_height / 2],
+            mode="lines",
+            line=dict(color=f"rgb({r},{g},{b})", width=2.5),
+            showlegend=False,
+            hovertemplate=f"<b>{q_label}</b><br>Median: {med:.0f}<extra></extra>"
+        ))
+
+        # Dense invisible hover points across the full row
+        hover_x = np.linspace(score_at_p(2), score_at_p(98), 200)
+        hover_y = np.full(200, y_center)
+        fig.add_trace(go.Scatter(
+            x=hover_x,
+            y=hover_y,
+            mode="markers",
+            marker=dict(color="rgba(0,0,0,0)", size=8),
+            name=q_label,
+            showlegend=True,
+            hovertemplate=(
+                f"<b>{q_label}</b><br>"
+                f"P10: {round(score_at_p(10))}<br>"
+                f"P25: {round(score_at_p(25))}<br>"
+                f"Median: {round(score_at_p(50))}<br>"
+                f"P75: {round(score_at_p(75))}<br>"
+                f"P90: {round(score_at_p(90))}<extra></extra>"
+            )
+        ))
+
+        # Visible markers at P10, P25, P50, P75, P90
+        marker_ps = [10, 25, 50, 75, 90]
+        marker_xs = [round(score_at_p(p)) for p in marker_ps]
+        marker_sizes = [6, 6, 10, 6, 6]  # median slightly bigger
+
+        fig.add_trace(go.Scatter(
+            x=marker_xs,
+            y=[y_center] * len(marker_xs),
+            mode="markers",
+            marker=dict(
+                color=f"rgb({r},{g},{b})",
+                size=marker_sizes,
+                symbol="line-ns",           # vertical tick mark
+                line=dict(color=f"rgb({r},{g},{b})", width=2)
+            ),
+            showlegend=False,
+            hoverinfo="skip"
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"Score Distribution | {SUBJECTS[subject]}"
+    ))
+    fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900])
+    fig.update_yaxes(
+        tickvals=list(range(1, len(quartiles) + 1)),
+        ticktext=list(reversed(quartiles)),
+        showgrid=False,
+        zeroline=False,
+        range=[0.3, len(quartiles) + 0.7]
+    )
+    return fig
+
+def plot_escs_shaded_density(df, subject, cnt, year=None, min_group_n=30):
+    from scipy.stats import gaussian_kde
+
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    subset = subset.dropna(subset=["ESCS", "W_FSTUWT"] + pv_cols)
+    if len(subset) < min_group_n:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+        return fig
+
+    subset["ESCS_Q"] = pd.qcut(
+        subset["ESCS"].rank(method="first"), q=4,
+        labels=["Q1 (lowest SES)", "Q2", "Q3", "Q4 (highest SES)"]
+    )
+    quartiles = ["Q1 (lowest SES)", "Q2", "Q3", "Q4 (highest SES)"]
+    x_grid = np.linspace(100, 900, 500)
+
+    # Percentile bands to shade: (low_p, high_p, opacity)
+    BANDS = [
+        (0,  10,  0.10),
+        (10, 25,  0.20),
+        (25, 75,  0.45),   # IQR — darkest
+        (75, 90,  0.20),
+        (90, 100, 0.10),
+    ]
+
+    fig = go.Figure()
+
+    for row_idx, (q_label, color) in enumerate(zip(quartiles, PALETTE)):
+        group = subset[subset["ESCS_Q"] == q_label]
+        if len(group) < min_group_n:
+            continue
+
+        if color.startswith("#") and len(color) == 7:
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+        elif color.startswith("rgb"):
+            # Strip out letters and brackets to just get the numbers
+            clean_rgb = color.replace("rgba", "").replace("rgb", "").replace("(", "").replace(")", "")
+            parts = clean_rgb.split(",")
+            r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
+        else:
+            r, g, b = 128, 128, 128 # Safe fallback gray
+
+        # Average KDE across all 10 plausible values
+        kde_vals = []
+        for pv in pv_cols:
+            scores = group[pv].dropna().values
+            weights = group.loc[group[pv].notna(), "W_FSTUWT"].values
+            if len(scores) < 10:
+                continue
+            try:
+                kde = gaussian_kde(scores, weights=weights, bw_method="scott")
+                kde_vals.append(kde(x_grid))
+            except Exception:
+                continue
+
+        if not kde_vals:
+            continue
+
+        density = np.mean(kde_vals, axis=0)
+        density /= density.max()   # normalise to 1 so all rows same height
+
+        # Compute weighted percentile scores for band boundaries
+        all_scores = np.concatenate([group[pv].values for pv in pv_cols])
+        all_weights = np.tile(group["W_FSTUWT"].values, len(pv_cols))
+        sort_idx = np.argsort(all_scores)
+        sorted_scores = all_scores[sort_idx]
+        sorted_weights = all_weights[sort_idx]
+        cumw = np.cumsum(sorted_weights) / sorted_weights.sum()
+
+        def score_at_p(p):
+            idx = np.searchsorted(cumw, p / 100)
+            return sorted_scores[min(idx, len(sorted_scores) - 1)]
+
+        # Row position: each quartile is a horizontal band on y
+        y_center = len(quartiles) - row_idx   # Q4 on top, Q1 on bottom
+        bar_height = 0.7
+
+        # Draw shaded bands from darkest (IQR) to lightest (tails)
+        for (lo_p, hi_p, alpha) in BANDS:
+            x_lo = score_at_p(lo_p)
+            x_hi = score_at_p(hi_p)
+
+            # Clip density shape to this band's score range
+            mask = (x_grid >= x_lo) & (x_grid <= x_hi)
+            if mask.sum() < 2:
+                continue
+
+            band_x = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
+            band_density = np.concatenate([[0], density[mask], [0]])
+
+            # Scale density shape to bar_height, centred on y_center
+            scaled_y_top = y_center + (band_density / 2) * bar_height
+            scaled_y_bot = y_center - (band_density / 2) * bar_height
+
+            # Build closed polygon path for the filled shape
+            poly_x = np.concatenate([band_x, band_x[::-1]])
+            poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
+
+            fill_color = f"rgba({r},{g},{b},{alpha})"
+            line_color = f"rgba({r},{g},{b},0)"  # no border between bands
+
+            fig.add_trace(go.Scatter(
+                x=poly_x, y=poly_y,
+                fill="toself",
+                fillcolor=fill_color,
+                line=dict(color=line_color, width=0),
+                mode="lines",
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Median line
+        med = score_at_p(50)
+        fig.add_trace(go.Scatter(
+            x=[med, med],
+            y=[y_center - bar_height / 2, y_center + bar_height / 2],
+            mode="lines",
+            line=dict(color=f"rgb({r},{g},{b})", width=2.5),
+            showlegend=False,
+            hovertemplate=f"<b>{q_label}</b><br>Median: {med:.0f}<extra></extra>"
+        ))
+
+        # Invisible wide hover bar for the whole row
+        fig.add_trace(go.Scatter(
+            x=[score_at_p(5), score_at_p(95)],
+            y=[y_center, y_center],
+            mode="lines",
+            line=dict(color="rgba(0,0,0,0)", width=bar_height * 40),
+            name=q_label,
+            showlegend=True,
+            marker=dict(color=f"rgb({r},{g},{b})"),
+            hovertemplate=(
+                f"<b>{q_label}</b><br>"
+                f"P10: {score_at_p(10):.0f} | "
+                f"Median: {med:.0f} | "
+                f"P90: {score_at_p(90):.0f}"
+                "<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"Score Distribution by Socioeconomic Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}"
+    ))
+    fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900])
+    fig.update_yaxes(
+        tickvals=list(range(1, len(quartiles) + 1)),
+        ticktext=list(reversed(quartiles)),
+        showgrid=False,
+        zeroline=False,
+        range=[0.3, len(quartiles) + 0.7]
+    )
+    return fig
+
+def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
+    subset = df[df["CNT"] == cnt].copy()
+    years = sorted(subset["YEAR"].dropna().unique())
+
+    ref_subset = subset[subset["YEAR"] == reference_year]
+    ref_percs = weighted_percentiles_pv(ref_subset, subject, PERCENTILES_COARSE)
+
+    if np.isnan(ref_percs).all():
+        return _check_sufficient_data(pd.DataFrame(), [], cnt,
+            msg=f"No data for baseline year {reference_year}")[1]
+
+    percentile_labels = {
+        0: "10th percentile", 1: "25th percentile",
+        2: "50th (median)", 3: "75th percentile", 4: "90th percentile"
+    }
+
+    fig = go.Figure()
+    fig.add_hline(y=0, line_dash="solid", line_color=OKABE_ITO["vermillion"],
+                  line_width=1.5, annotation_text=f"{reference_year} baseline",
+                  annotation_position="top left")
+
+    for p_idx, (p_val, p_label) in enumerate(zip(PERCENTILES_COARSE, percentile_labels.values())):
+        color = PALETTE[p_idx % len(PALETTE)]
+        x_years, y_deltas = [], []
+
+        for yr in years:
+            yr_subset = subset[subset["YEAR"] == yr]
+            yr_percs = weighted_percentiles_pv(yr_subset, subject, PERCENTILES_COARSE)
+            if np.isnan(yr_percs).all():
+                continue
+            x_years.append(yr)
+            y_deltas.append(float(yr_percs[p_idx] - ref_percs[p_idx]))
+
+        if not x_years:
+            continue
+
+        fig.add_trace(go.Scatter(
+            x=x_years, y=y_deltas,
+            mode="lines+markers",
+            name=p_label,
+            line=dict(color=color, width=2.5),
+            marker=dict(size=9, color=color, line=dict(color="white", width=1)),
+            customdata=[[yr, f"{d:+.0f}"] for yr, d in zip(x_years, y_deltas)],
+            hovertemplate=(
+                f"<b>{p_label}</b><br>"
+                "Year: %{customdata[0]}<br>"
+                "Change from baseline: %{customdata[1]}<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"{SUBJECTS[subject]} score change by percentile | {_cnt_label(cnt)}<br>"
+              f"<sup>Relative to {reference_year} baseline</sup>"
+    ))
+    fig.update_xaxes(title="Year", tickvals=years, tickformat="d")
+    fig.update_yaxes(title=f"Score change from {reference_year}")
+    return fig
+
+def plot_immigration_kde(df, subject, cnt, year=None, min_group_n=30):
+    from scipy.stats import gaussian_kde
+
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    x_grid = np.linspace(100, 900, 400)
+    fig = go.Figure()
+
+    for color, (code, label) in zip(PALETTE, IMMIG_MAP.items()):
+        group = subset[subset["IMMIG"] == code].dropna(subset=pv_cols + ["W_FSTUWT"])
+        if len(group) < min_group_n:
+            continue
+
+        kde_vals = []
+        for pv in pv_cols:
+            scores = group[pv].values
+            weights = group["W_FSTUWT"].values
+            try:
+                kde = gaussian_kde(scores, weights=weights, bw_method="scott") # change scott to 0.4 if not smooth
+                kde_vals.append(kde(x_grid))
+            except Exception:
+                continue
+
+        if not kde_vals:
+            continue
+
+        density = np.mean(kde_vals, axis=0)
+
+        med_val = weighted_percentiles_pv(group, subject, [50])
+        med_label = f" (Median: {med_val[0]:.0f})" if not np.isnan(med_val).all() else ""
+
+        if not np.isnan(med_val).all():
+            fig.add_vline(x=med_val[0], line_width=1.5, line_dash="dot",
+                          line_color=color, opacity=0.7)
+
+        fig.add_trace(go.Scatter(
+            x=x_grid, y=density,
+            mode="lines", name=f"{label}{med_label}",
+            line=dict(color=color, width=2.5),
+            hovertemplate=f"<b>{label}</b><br>Score: %{{x:.0f}}<extra></extra>"
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"Score Distribution by Immigration Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}"
+    ), showlegend=True)
+    fig.update_xaxes(title="Score")
+    fig.update_yaxes(title="Density", showticklabels=False, showgrid=False)
     return fig
 
 
@@ -1066,6 +1529,23 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
            customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
        ))
 
+    # Quadrant label annotations — positioned at 10th/90th percentile corners of data
+    x_lo = float(np.nanpercentile(plot_df["resource"], 12))
+    x_hi = float(np.nanpercentile(plot_df["resource"], 88))
+    y_lo = float(np.nanpercentile(plot_df["score"], 12))
+    y_hi = float(np.nanpercentile(plot_df["score"], 88))
+
+    quadrant_labels = [
+        (x_hi, y_hi, "High Performance /<br>High " + resource_label.split(" ")[0]),
+        (x_lo, y_hi, "High Performance /<br>Low " + resource_label.split(" ")[0]),
+        (x_hi, y_lo, "Low Performance /<br>High " + resource_label.split(" ")[0]),
+        (x_lo, y_lo, "Low Performance /<br>Low " + resource_label.split(" ")[0]),
+    ]
+    for qx, qy, qtext in quadrant_labels:
+        fig.add_annotation(x=qx, y=qy, text=qtext, showarrow=False,
+                           font=dict(size=10, color="#999999"),
+                           align="center", xanchor="center", yanchor="middle")
+
     fig.update_layout(**_base_layout(
         title=f"{resource_label} vs {SUBJECTS[subject]} performance<br><sup>(each point = one country)</sup>"
     ))
@@ -1073,5 +1553,289 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
     
     fig.update_layout(hovermode="closest")
+
+    return fig
+
+def plot_immigration_shaded_density(df, subject, cnt, year=None, min_group_n=30):
+    from scipy.stats import gaussian_kde
+
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    subset = subset.dropna(subset=["IMMIG", "W_FSTUWT"] + pv_cols)
+    if len(subset) < min_group_n:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+        return fig
+
+    quartiles = list(IMMIG_MAP.values())   # ["Native", "Second-generation", "First-generation"]
+    x_grid = np.linspace(100, 900, 500)
+
+    # Percentile bands to shade: (low_p, high_p, opacity)
+    BANDS = [
+        (0,  10,  0.10),
+        (10, 25,  0.20),
+        (25, 75,  0.45),   # IQR — darkest
+        (75, 90,  0.20),
+        (90, 100, 0.10),
+    ]
+
+    fig = go.Figure()
+
+    for row_idx, (q_label, color) in enumerate(zip(quartiles, PALETTE)):
+        code = list(IMMIG_MAP.keys())[row_idx]
+        group = subset[subset["IMMIG"] == code]
+        if len(group) < min_group_n:
+            continue
+
+        if color.startswith("#") and len(color) == 7:
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+        elif color.startswith("rgb"):
+            # Strip out letters and brackets to just get the numbers
+            clean_rgb = color.replace("rgba", "").replace("rgb", "").replace("(", "").replace(")", "")
+            parts = clean_rgb.split(",")
+            r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
+        else:
+            r, g, b = 128, 128, 128 # Safe fallback gray
+
+        # Average KDE across all 10 plausible values
+        kde_vals = []
+        for pv in pv_cols:
+            scores = group[pv].dropna().values
+            weights = group.loc[group[pv].notna(), "W_FSTUWT"].values
+            if len(scores) < 10:
+                continue
+            try:
+                kde = gaussian_kde(scores, weights=weights, bw_method="scott")
+                kde_vals.append(kde(x_grid))
+            except Exception:
+                continue
+
+        if not kde_vals:
+            continue
+
+        density = np.mean(kde_vals, axis=0)
+        density /= density.max()   # normalise to 1 so all rows same height
+
+        # Compute weighted percentile scores for band boundaries
+        all_scores = np.concatenate([group[pv].values for pv in pv_cols])
+        all_weights = np.tile(group["W_FSTUWT"].values, len(pv_cols))
+        sort_idx = np.argsort(all_scores)
+        sorted_scores = all_scores[sort_idx]
+        sorted_weights = all_weights[sort_idx]
+        cumw = np.cumsum(sorted_weights) / sorted_weights.sum()
+
+        def score_at_p(p):
+            idx = np.searchsorted(cumw, p / 100)
+            return sorted_scores[min(idx, len(sorted_scores) - 1)]
+
+        # Row position: each quartile is a horizontal band on y
+        y_center = len(quartiles) - row_idx   # Q4 on top, Q1 on bottom
+        bar_height = 0.7
+
+        # Draw shaded bands from darkest (IQR) to lightest (tails)
+        for (lo_p, hi_p, alpha) in BANDS:
+            x_lo = score_at_p(lo_p)
+            x_hi = score_at_p(hi_p)
+
+            # Clip density shape to this band's score range
+            mask = (x_grid >= x_lo) & (x_grid <= x_hi)
+            if mask.sum() < 2:
+                continue
+
+            band_x = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
+            band_density = np.concatenate([[0], density[mask], [0]])
+
+            # Scale density shape to bar_height, centred on y_center
+            scaled_y_top = y_center + (band_density / 2) * bar_height
+            scaled_y_bot = y_center - (band_density / 2) * bar_height
+
+            # Build closed polygon path for the filled shape
+            poly_x = np.concatenate([band_x, band_x[::-1]])
+            poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
+
+            fill_color = f"rgba({r},{g},{b},{alpha})"
+            line_color = f"rgba({r},{g},{b},0)"  # no border between bands
+
+            fig.add_trace(go.Scatter(
+                x=poly_x, y=poly_y,
+                fill="toself",
+                fillcolor=fill_color,
+                line=dict(color=line_color, width=0),
+                mode="lines",
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Median line
+        med = score_at_p(50)
+        fig.add_trace(go.Scatter(
+            x=[med, med],
+            y=[y_center - bar_height / 2, y_center + bar_height / 2],
+            mode="lines",
+            line=dict(color=f"rgb({r},{g},{b})", width=2.5),
+            showlegend=False,
+            hovertemplate=f"<b>{q_label}</b><br>Median: {med:.0f}<extra></extra>"
+        ))
+
+        # Invisible wide hover bar for the whole row
+        fig.add_trace(go.Scatter(
+            x=[score_at_p(5), score_at_p(95)],
+            y=[y_center, y_center],
+            mode="lines",
+            line=dict(color="rgba(0,0,0,0)", width=bar_height * 40),
+            name=q_label,
+            showlegend=True,
+            marker=dict(color=f"rgb({r},{g},{b})"),
+            hovertemplate=(
+                f"<b>{q_label}</b><br>"
+                f"P10: {score_at_p(10):.0f} | "
+                f"Median: {med:.0f} | "
+                f"P90: {score_at_p(90):.0f}"
+                "<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"Score Distribution by Immigration Status | {SUBJECTS[subject]} | {_cnt_label(cnt)}"
+    ))
+    fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900])
+    fig.update_yaxes(
+        tickvals=list(range(1, len(quartiles) + 1)),
+        ticktext=list(reversed(quartiles)),
+        showgrid=False,
+        zeroline=False,
+        range=[0.3, len(quartiles) + 0.7]
+    )
+    return fig
+
+def plot_jitter_boxplot(df, subject, cnt, group_col, group_labels,
+                         group_title, year=None, min_group_n=30):
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    # Handle continuous variables (e.g. ESCS) by binning
+    if group_labels is None:
+        subset = subset.dropna(subset=[group_col])
+        subset["_group_bin"] = pd.qcut(
+            subset[group_col].rank(method="first"), q=4,
+            labels=["Q1 (lowest)", "Q2", "Q3", "Q4 (highest)"]
+        )
+        group_col = "_group_bin"
+        group_labels = {
+            "Q1 (lowest)": "Q1 (lowest)",
+            "Q2": "Q2",
+            "Q3": "Q3",
+            "Q4 (highest)": "Q4 (highest)"
+        }
+
+    subset["mean_score"] = subset[pv_cols].mean(axis=1)
+    subset = subset.dropna(subset=[group_col, "mean_score", "W_FSTUWT"])
+
+    # Proficiency thresholds — PISA standard levels
+    def get_tier(score):
+        if score < 413:   return "Below Basic (<413)"
+        elif score < 545: return "Basic/Proficient (413–544)"
+        else:             return "Advanced (545+)"
+
+    subset["Tier"] = subset["mean_score"].apply(get_tier)
+
+    labels = list(group_labels.values())
+    codes  = list(group_labels.keys())
+
+    # Tier percentages per group for right panel
+    tier_order = ["Below Basic (<413)", "Basic/Proficient (413–544)", "Advanced (545+)"]
+    tier_colors = {
+        "Below Basic (<413)":        "#D85A30",
+        "Basic/Proficient (413–544)":"#cccccc",
+        "Advanced (545+)":           "#0072B2"
+    }
+
+    tier_pct = {}
+    for code, label in zip(codes, labels):
+        grp = subset[subset[group_col] == code]
+        total = len(grp)
+        tier_pct[label] = {
+            t: round(len(grp[grp["Tier"] == t]) / total * 100, 1) if total > 0 else 0
+            for t in tier_order
+        }
+
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=("Score Distribution", "Proficiency Tiers"),
+        column_widths=[0.5, 0.5],
+        horizontal_spacing=0.15
+    )
+
+    for i, (code, label) in enumerate(zip(codes, labels)):
+        color = PALETTE[i % len(PALETTE)]
+        if color.startswith("#") and len(color) == 7:
+            r, g, b = int(color[1:3],16), int(color[3:5],16), int(color[5:7],16)
+        else:
+            r, g, b = 128, 128, 128
+
+        grp = subset[subset[group_col] == code]
+        if len(grp) < min_group_n:
+            continue
+
+        scores = grp["mean_score"].values
+        percs = weighted_percentiles_pv(grp, subject, [10, 25, 50, 75, 90])
+        p10, p25, p50, p75, p90 = [round(p) for p in percs]
+
+        q1, med, q3 = p25, p50, p75
+        iqr = q3 - q1
+        lower_fence = max(scores.min(), q1 - 1.5 * iqr)
+
+        # Left: box plot, no hover
+        fig.add_trace(go.Box(
+            y=scores, name=label,
+            marker_color=color,
+            line=dict(color=color, width=2),
+            fillcolor=f"rgba({r},{g},{b},0.15)",
+            boxpoints=False,
+            hoverinfo="skip",
+            showlegend=False,
+            q1=[p25], median=[p50], q3=[p75],
+            lowerfence=[p10], upperfence=[p90]
+        ), row=1, col=1)
+
+        # Static annotation at lower fence
+        fig.add_annotation(
+            x=label, y=lower_fence,
+            text=f"Q3: {q3}<br>Med: {med}<br>Q1: {q1}",
+            showarrow=False,
+            xanchor="left", yanchor="bottom", xshift=8,
+            align="left",
+            font=dict(color=color, size=10),
+            row=1, col=1
+        )
+
+    # Right: horizontal stacked bars
+    for tier in tier_order:
+        fig.add_trace(go.Bar(
+            y=labels,
+            x=[tier_pct[label][tier] for label in labels],
+            name=tier,
+            orientation="h",
+            marker=dict(color=tier_colors[tier]),
+            hovertemplate=f"<b>{tier}</b><br>%{{x:.1f}}%<extra></extra>"
+        ), row=1, col=2)
+
+    fig.update_layout(
+        **_base_layout(title=f"{SUBJECTS[subject]} by {group_title} | {_cnt_label(cnt)}"),
+        barmode="stack",
+        # height=500,
+        # margin=dict(t=80, b=100)
+    )
+    fig.update_layout(height=500,
+        margin=dict(t=80, b=100)
+    )
+    fig.update_yaxes(title_text=f"{SUBJECTS[subject]} score", row=1, col=1)
+    fig.update_xaxes(title_text="% of students", row=1, col=2)
 
     return fig
