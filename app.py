@@ -960,104 +960,260 @@ def render_story_tab(available_years, story_country, story_subject):
 
     st.divider()
 
-    # ── Section 3: Equity gaps ─────────────────────────────────────────────
-    _story_section_header(3, "Who scores highest — and who is left behind?",
-        f"This section examines two key dimensions of equity: score differences by socioeconomic status and immigration status in {_cnt_label(story_country)}")
+    # ── Chapter 3: Equity ──────────────────────────────────────────────────
+    _story_section_header(
+        3,
+        "Who scores highest — and who is left behind?",
+        f"Score differences by socioeconomic status and immigration status "
+        f"in {_cnt_label(story_country)}"
+    )
 
-    st.markdown("High average scores can mask large differences between student groups.")
+    st.markdown(
+        "High average scores can mask large differences between student groups."
+    )
 
-    df_ses  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["ESCS"]))
-    df_immig = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["IMMIG"]))
+    df_ses   = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["ESCS"])
+    )
+    df_immig = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["IMMIG"])
+    )
 
     eq_col1, eq_col2 = st.columns(2, gap="large")
+
     with eq_col1:
-        st.markdown("#### Scores by Socioeconomic Status")
-        
-        # Check if data exists before doing any math
+        st.markdown("#### By socioeconomic background")
+
         if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {_cnt_label(story_country)}.")
+            st.warning(
+                f"⚠️ Insufficient socioeconomic data for "
+                f"{_cnt_label(story_country)}."
+            )
         else:
-            # Only runs if data is safe
-            ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
+            ses_text = ses_gap_text(
+                df_ses, story_subject, story_country, year=story_year
+            )
             if "Insufficient" not in ses_text:
                 _insight_box(ses_text)
-            
-            with st.expander("📖 How to read the chart showing scores by socioeconomic status"):
-                st.markdown("""
-                    Students are divided into **four equal-sized groups** (quartiles) based on 
-                    the PISA ESCS index — a composite of parental education, occupational status, 
-                    and home possessions. **Q1** = bottom 25%, **Q4** = top 25%.
-                """)
 
-            fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
-            st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
+            # Conditional amber — if SES difference > OECD median difference
+            curves = compute_escs_quartile_percentiles(
+                df_ses, story_subject, [50],
+                cnt=story_country, year=story_year
+            )
+            q1_med = curves.get("Q1 (low SES)",  [np.nan])[0]
+            q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
+            oecd_m = get_oecd_percentiles(
+                df_s1, story_subject, [50], year=story_year
+            )
+            cnt_m  = weighted_percentiles_pv(
+                df_ses[df_ses["CNT"] == story_country],
+                story_subject, [50]
+            )
+
+            if not any(np.isnan(v) for v in [q1_med, q4_med, oecd_m[0], cnt_m[0]]):
+                ses_diff        = q4_med - q1_med
+                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
+                if ses_diff > country_vs_oecd and country_vs_oecd > 5:
+                    _pullquote_box(
+                        f"The socioeconomic difference within "
+                        f"{_cnt_label(story_country)} ({ses_diff:.0f} pts) "
+                        f"is larger than the difference between this country "
+                        f"and the OECD average ({country_vs_oecd:.0f} pts). "
+                        f"Domestic equity is a bigger lever than "
+                        f"international benchmarking."
+                    )
+
+            fig3a = plot_escs_gap(
+                df_ses, story_subject, story_country, year=story_year
+            )
+            _chart_expander(
+                "Show socioeconomic chart",
+                fig3a,
+                "Students are split into four equal groups by family "
+                "socioeconomic background — based on parental education, "
+                "occupation, and home resources. Q1 = lowest 25%, "
+                "Q4 = highest 25%. Each line shows the score distribution "
+                "for that group across the performance spectrum."
+            )
+
+            _policy_box(
+                "A large socioeconomic difference suggests that a student's "
+                "background strongly predicts their outcomes. School-based "
+                "interventions that target resources toward students from "
+                "lower-income families can help reduce this."
+            )
 
     with eq_col2:
-        st.markdown("#### Scores by Immigration Status")
-        if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {_cnt_label(story_country)}.")
+        st.markdown("#### By immigration status")
+
+        if check_missing_countries(
+            df_immig, ["IMMIG"], [story_country], story_year
+        ):
+            st.warning(
+                f"⚠️ Insufficient immigration data for "
+                f"{_cnt_label(story_country)}."
+            )
         else:
-            immig_warnings = check_group_sizes(df_immig, "IMMIG", IMMIG_MAP, story_country, year=story_year)
+            immig_warnings = check_group_sizes(
+                df_immig, "IMMIG", IMMIG_MAP,
+                story_country, year=story_year
+            )
             for w in immig_warnings:
                 st.warning(w)
 
-            immig_text = immigration_gap_text(df_immig, story_subject, story_country, year=story_year)
+            immig_text = immigration_gap_text(
+                df_immig, story_subject, story_country, year=story_year
+            )
             if "Insufficient" not in immig_text:
                 _insight_box(immig_text)
 
-            with st.expander("📖 How to read this chart"):
-                st.markdown("""
-                    - **Native:** born in the country, both parents born in the country
-                    - **Second-generation:** born in the country, at least one parent born abroad
-                    - **First-generation:** born abroad, came to the country before or during school age
-                    - The **dotted vertical lines** show the exact median (middle) score for each group.
-                """)                
             fig3b = plot_immigration_score_distribution(
-                df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
-            st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
+                df=df_immig, subject=story_subject,
+                cnt=story_country, year=story_year
+            )
+            _chart_expander(
+                "Show immigration status chart",
+                fig3b,
+                "Native: born in the country, both parents born in the "
+                "country. Second-generation: born in the country, at least "
+                "one parent born abroad. First-generation: born abroad. "
+                "The dotted vertical lines show the median score for each group."
+            )
+
+            _policy_box(
+                "Differences by immigration status often reflect language "
+                "barriers, school segregation, and uneven access to support "
+                "services — not differences in student ability. Targeted "
+                "language and integration programs have shown impact "
+                "in high-performing systems."
+            )
 
     st.divider()
 
-    # ── Section 4: School context ──────────────────────────────────────────
-    _story_section_header(4, "Does school context matter?",
-        f"How school location and whether school is public or private relate to {subject_label} scores in {_cnt_label(story_country)}")
+    # ── Chapter 4: School context ──────────────────────────────────────────
+    _story_section_header(
+        4,
+        "Does school context matter?",
+        f"How school location and type relate to {subject_label} scores "
+        f"in {_cnt_label(story_country)}"
+    )
 
-    df_loc  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
-    df_type = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
+    df_loc  = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["SC001Q01TA"])
+    )
+    df_type = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["SCHLTYPE"])
+    )
 
     ctx_col1, ctx_col2 = st.columns(2, gap="large")
+
     with ctx_col1:
-        st.markdown("#### Scores by School Location")
-        if check_missing_countries(df_loc, ["SC001Q01TA"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {_cnt_label(story_country)}.")
+        st.markdown("#### Public vs private")
+
+        if check_missing_countries(
+            df_type, ["SCHLTYPE"], [story_country], story_year
+        ):
+            st.warning(
+                f"⚠️ Insufficient school type data for "
+                f"{_cnt_label(story_country)}."
+            )
         else:
-            with st.expander("📖 How to read the school location chart"):
-                st.markdown("""
-                    - The **box** spans the middle 50% of students (P25–P75)
-                    - The **line** inside the box is the median score (P50)
-                    - The **whiskers** extend to P10 and P90
-                """)
-            fig4a = plot_school_location_boxplot(
-                df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
-            st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
+            # Compute insight for school type
+            type_curves = compute_group_percentiles(
+                df_type, story_subject, "SCHLTYPE",
+                {3: "Public", 1: "Independent private"},
+                [50], cnt=story_country, year=story_year
+            )
+            pub_med  = type_curves.get("Public",              [np.nan])[0]
+            priv_med = type_curves.get("Independent private", [np.nan])[0]
+
+            if not (np.isnan(pub_med) or np.isnan(priv_med)):
+                diff = abs(priv_med - pub_med)
+                higher = "private" if priv_med > pub_med else "public"
+                _insight_box(
+                    f"Students in {higher} schools in "
+                    f"{_cnt_label(story_country)} score {diff:.0f} points "
+                    f"higher at the median in {subject_label}."
+                )
+
+            fig4b = plot_school_type_distribution(
+                df=df_type, subject=story_subject,
+                cnt=story_country, year=story_year
+            )
+            _chart_expander(
+                "Show school type chart",
+                fig4b,
+                "Each curve shows the score distribution for one school "
+                "type. Public = government-operated. "
+                "Government-dependent private = privately managed but "
+                "significantly government funded. "
+                "Independent private = primarily privately funded."
+            )
+
+            _policy_box(
+                "Differences between public and private school scores "
+                "often reflect the socioeconomic composition of each "
+                "school type rather than school quality itself. "
+                "Interpreting these figures alongside the SES data "
+                "in Chapter 3 is important."
+            )
 
     with ctx_col2:
-        st.markdown("#### Scores by School Type")
-        if check_missing_countries(df_type, ["SCHLTYPE"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {_cnt_label(story_country)}.")
+        st.markdown("#### Urban vs rural")
+
+        if check_missing_countries(
+            df_loc, ["SC001Q01TA"], [story_country], story_year
+        ):
+            st.warning(
+                f"⚠️ Insufficient school location data for "
+                f"{_cnt_label(story_country)}."
+            )
         else:
-            with st.expander("📖 How to read the school type chart"):
-                st.markdown("""
-                    - **Public:** government-operated and funded
-                    - **Government-dependent private:** privately managed, significant government funding
-                    - **Independent private:** privately managed and primarily privately funded
-                """)
-            fig4b = plot_school_type_distribution(
-                df=df_type, subject=story_subject, cnt=story_country, year=story_year)
-            st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
+            # Compute insight for school location
+            loc_curves = compute_group_percentiles(
+                df_loc, story_subject, "SC001Q01TA",
+                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
+                [50], cnt=story_country, year=story_year
+            )
+            city_med    = loc_curves.get("City",    [np.nan])[0]
+            village_med = loc_curves.get("Village", [np.nan])[0]
+
+            if not (np.isnan(city_med) or np.isnan(village_med)):
+                diff = abs(city_med - village_med)
+                _insight_box(
+                    f"Students in city schools score {diff:.0f} points "
+                    f"higher than those in villages at the median "
+                    f"in {subject_label} in {_cnt_label(story_country)}."
+                )
+
+            fig4a = plot_school_location_boxplot(
+                df=df_loc, subject=story_subject,
+                cnt=story_country, year=story_year
+            )
+            _chart_expander(
+                "Show school location chart",
+                fig4a,
+                "The box spans the middle 50% of students (P25–P75). "
+                "The line inside is the median (P50). "
+                "The whiskers extend to P10 and P90. "
+                "Dots show a representative sample of individual students."
+            )
+
+            _policy_box(
+                "Urban–rural score differences in PISA typically reflect "
+                "resource allocation across school systems — teacher "
+                "quality, infrastructure, and support services. "
+                "These are addressable through targeted policy."
+            )
 
     st.divider()
 
+    # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
         <div style="background:#f0f4f8; border-radius:8px; padding:20px 24px;
                     margin-top:16px; text-align:center;">
@@ -1065,8 +1221,8 @@ def render_story_tab(available_years, story_country, story_subject):
                 <strong>Want to dig deeper?</strong>
             </p>
             <p style="font-size:0.9rem; color:#555;">
-                Switch to the <strong>🔍 Explore</strong> tab to choose any country, 
-                subject, year, and chart type — and compare two views side by side.
+                Switch to the <strong>🔍 Explore</strong> tab to choose any
+                country, subject, year, and chart type.
             </p>
         </div>
     """, unsafe_allow_html=True)
