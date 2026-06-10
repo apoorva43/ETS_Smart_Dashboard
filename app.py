@@ -1398,20 +1398,6 @@ st.sidebar.markdown("---")
 if app_mode == "📖 Data Story":
     st.sidebar.header("📖 Story Controls")
 
-    """
-    story_country_group = st.sidebar.radio(
-        "Country group",
-        ["All", "OECD members", "Partner countries"],
-        key="story_country_group"
-    )
-    if story_country_group == "OECD members":
-        story_pool = oecd_countries
-    elif story_country_group == "Partner countries":
-        story_pool = partner_countries
-    else:
-        story_pool = all_countries
-    """
-
     default_idx = all_countries.index("CAN") if "CAN" in all_countries else 0
 
     story_country = st.sidebar.selectbox(
@@ -1449,15 +1435,7 @@ elif app_mode == "🔍 Explore":
 
     st.sidebar.markdown("---")
 
-    country_group = st.sidebar.radio(
-        "Country group", ["All", "OECD members", "Partner countries"]
-    )
-    if country_group == "OECD members":
-        country_pool = oecd_countries
-    elif country_group == "Partner countries":
-        country_pool = partner_countries
-    else:
-        country_pool = all_countries
+    country_pool = all_countries
 
     DEFAULT_COUNTRIES = ["CAN", "USA"]
     SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
