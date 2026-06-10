@@ -1048,20 +1048,32 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
         ))
 
     if not hi.empty:
-        # Highlighting adds a border and text label directly to the plot
-        fig.add_trace(go.Scatter(
-            x=hi["resource"], y=hi["score"],
-            mode="markers+text", name="Selected",
-            marker=dict(
-                color=OKABE_ITO.get("vermillion", "#D85A30"), 
-                size=14, 
-                line=dict(width=2, color="white")
-            ),
-            text=hi["CNT_LABEL"], 
-            textposition="top center", 
-            textfont=dict(size=11, color=OKABE_ITO.get("vermillion", "#D85A30")),
-            customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
-        ))
+        # Alternate label positions so close points don't collide.
+        # Sort by x so alternation is spatially meaningful.
+        hi_sorted = hi.sort_values("resource").reset_index(drop=True)
+        text_positions = [
+            "top center" if i % 2 == 0 else "bottom center"
+            for i in range(len(hi_sorted))
+        ]
+
+        for idx, row in hi_sorted.iterrows():
+            fig.add_trace(go.Scatter(
+                x=[row["resource"]], y=[row["score"]],
+                mode="markers+text",
+                name="Selected" if idx == 0 else None,
+                showlegend=(idx == 0),
+                legendgroup="selected",
+                marker=dict(
+                    color=OKABE_ITO.get("vermillion", "#D85A30"),
+                    size=14,
+                    line=dict(width=2, color="white")
+                ),
+                text=[row["CNT_LABEL"]],
+                textposition=text_positions[idx],
+                textfont=dict(size=11, color=OKABE_ITO.get("vermillion", "#D85A30")),
+                customdata=[[row["CNT_LABEL"]]],
+                hovertemplate=htemp
+            ))
 
     fig.update_layout(**_base_layout(
         title=f"{resource_label} vs {SUBJECTS[subject]} performance<br><sup>(each point = one country)</sup>"
