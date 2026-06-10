@@ -221,12 +221,6 @@ CHART_HELP_TEXT = {
 **How to read this scatterplot:**
 * **The Dots:** Each dot represents an entire country's national average.
 * **The Trend:** If the dots generally slope upwards from left to right, it means higher levels of the resource (like Belonging or SES) correlate with higher test scores globally.
-    """,
-    "Belonging by Immigration": """
-**How to read these charts:**
-* **Grade repetition rate by SES quartile:** Shows the percentage of students in each socioeconomic quartile (Q1 = lowest 25%, Q4 = highest 25%) who repeated at least one school grade.
-
-* **School belonging index by immigration status:** Measures how connected students feel to their school — whether they feel liked, included, and at home. The index is **centered at 0 (OECD average)**, so positive values mean above-average belonging and negative values mean below-average belonging.
     """
 }
 
@@ -243,8 +237,6 @@ def render_chart_help(chart_type, group_key=None):
         help_key = "Country Scatterplot"
     elif chart_type == "Group comparison" and group_key == "School location":
         help_key = "Box Plot"
-    elif chart_type == "Belonging by Immigration":
-        help_key = "Belonging by Immigration"
 
     # Render it if it exists
     if help_key and help_key in CHART_HELP_TEXT:
@@ -294,8 +286,7 @@ def apply_compact_plotly_layout(fig, hide_legend=False):
 def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
-                 compact=False, widget_key="main",
-                 panel_countries=None):
+                 compact=False, widget_key="main"):
     """
     Render a single chart panel and its accompanying text/info blocks.
 
@@ -319,18 +310,16 @@ def render_chart(chart_type, subject, selected_countries,
     """
     pv_cols = PV_BY_SUBJ[subject]
 
-    display_countries = panel_countries if panel_countries is not None else selected_countries
-
     # 1. Percentile Profile
     if chart_type == "Percentile score profile":
-        fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
+        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"], 
-            countries=display_countries, year=selected_year
+            countries=selected_countries, year=selected_year
         )
-        valid_countries = [c for c in display_countries if c not in missing_cnts]
+        valid_countries = [c for c in selected_countries if c not in missing_cnts]
         
         if missing_cnts:
             st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
@@ -535,9 +524,9 @@ def render_chart(chart_type, subject, selected_countries,
         
         missing_cnts = check_missing_countries(
             df, required_cols=["BELONG", "IMMIG", "REPEAT", "ESCS"], 
-            countries=display_countries, year=selected_year
+            countries=selected_countries, year=selected_year
         )
-        valid_countries = [c for c in display_countries if c not in missing_cnts]
+        valid_countries = [c for c in selected_countries if c not in missing_cnts]
         
         if missing_cnts:
             st.warning(
@@ -1564,8 +1553,7 @@ elif app_mode == "🔍 Explore":
                 ref_year=ref_year, 
                 comp_year=comp_year,
                 compact=True,
-                widget_key="left",
-                panel_countries=[country_left]
+                widget_key="left"
             )
         with right_col:
             st.subheader(chart_type_right)
@@ -1579,8 +1567,7 @@ elif app_mode == "🔍 Explore":
                 ref_year=ref_year, 
                 comp_year=comp_year,
                 compact=True,
-                widget_key="right",
-                panel_countries=[country_right]
+                widget_key="right"
             )
     else:
         render_chart(
