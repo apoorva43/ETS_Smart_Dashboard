@@ -300,7 +300,8 @@ def apply_compact_plotly_layout(fig, hide_legend=False):
 def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
-                 compact=False, widget_key="main"):
+                 compact=False, widget_key="main",
+                 panel_countries=None):
     """
     Render a single chart panel and its accompanying text/info blocks.
 
@@ -324,16 +325,18 @@ def render_chart(chart_type, subject, selected_countries,
     """
     pv_cols = PV_BY_SUBJ[subject]
 
+    display_countries = panel_countries if panel_countries is not None else selected_countries
+
     # 1. Percentile Profile
     if chart_type == "Percentile score profile":
-        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
+        fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"], 
-            countries=selected_countries, year=selected_year
+            countries=display_countries, year=selected_year
         )
-        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+        valid_countries = [c for c in display_countries if c not in missing_cnts]
         
         if missing_cnts:
             st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
@@ -525,14 +528,14 @@ def render_chart(chart_type, subject, selected_countries,
         
     # 4. Score Distribution
     elif chart_type == "Score distribution":
-        fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
+        fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
         missing_cnts = check_missing_countries(
             df, required_cols=[f"PV1{subject}"],
-            countries=selected_countries, year=selected_year
+            countries=display_countries, year=selected_year
         )
-        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+        valid_countries = [c for c in display_countries if c not in missing_cnts]
 
         if missing_cnts:
             st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
@@ -547,13 +550,13 @@ def render_chart(chart_type, subject, selected_countries,
     # 5. Belonging by Immigration
     elif chart_type == "Belonging by Immigration":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
-        df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + extra))
+        df = fetch(tuple(display_countries), selected_year, tuple(BASE_COLS + extra))
         
         missing_cnts = check_missing_countries(
             df, required_cols=["BELONG", "IMMIG", "REPEAT", "ESCS"], 
-            countries=selected_countries, year=selected_year
+            countries=display_countries, year=selected_year
         )
-        valid_countries = [c for c in selected_countries if c not in missing_cnts]
+        valid_countries = [c for c in display_countries if c not in missing_cnts]
         
         if missing_cnts:
             st.warning(
@@ -1554,7 +1557,8 @@ elif app_mode == "🔍 Explore":
                 ref_year=ref_year, 
                 comp_year=comp_year,
                 compact=True,
-                widget_key="left"
+                widget_key="left",
+                panel_countries=[country_left]
             )
         with right_col:
             st.subheader(chart_type_right)
@@ -1568,7 +1572,8 @@ elif app_mode == "🔍 Explore":
                 ref_year=ref_year, 
                 comp_year=comp_year,
                 compact=True,
-                widget_key="right"
+                widget_key="right",
+                panel_countries=[country_right]
             )
     else:
         render_chart(
