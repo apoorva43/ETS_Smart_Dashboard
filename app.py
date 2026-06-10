@@ -25,7 +25,13 @@ import os
 from pathlib import Path
 
 from src.data_loader import query_pisa
-from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
+from src.pisa_stats import (
+    weighted_percentiles_pv,
+    weighted_mean_pv,
+    compute_escs_quartile_percentiles,
+    compute_group_percentiles,
+    get_oecd_percentiles,
+)
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (plot_country_distributions,
                           plot_group_comparison,
@@ -643,268 +649,698 @@ def _insight_box(text):
         unsafe_allow_html=True,
     )
 
+def _pullquote_box(text: str):
+    """
+    Render an amber callout for a notably important or surprising finding.
+    Conditional — only call this when the data warrants it, not for every chapter.
+    """
+    st.markdown(
+        f"""
+        <div style="
+            background: #fff8e6;
+            border-left: 3px solid #BA7517;
+            padding: 10px 14px;
+            margin: 8px 0 10px 0;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #633806;
+            line-height: 1.55;
+        ">
+            ⚠ {text}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-def render_story_tab(available_years, story_country, story_subject, comparison_countries):
+
+def _policy_box(text: str):
+    """
+    Render a green policy implication callout.
+    Should appear once at the bottom of every chapter section.
+    """
+    st.markdown(
+        f"""
+        <div style="
+            background: #EAF3DE;
+            border-left: 3px solid #3B6D11;
+            padding: 10px 14px;
+            margin: 10px 0 6px 0;
+            font-size: 0.88rem;
+            color: #27500A;
+            line-height: 1.55;
+        ">
+            <strong>For policymakers:</strong> {text}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _chart_expander(label: str, fig, how_to_read: str):
+    """
+    Render a chart inside a collapsible expander with a how-to-read note.
+    Replaces the current pattern of st.plotly_chart() + separate st.expander().
+    The chart and its explanation are always together — never separated.
+    """
+    with st.expander(f"📊 {label}", expanded=False):
+        st.plotly_chart(fig, use_container_width=True,
+                        config={"displayModeBar": False})
+        st.markdown(
+            f"""
+            <div style="
+                font-size: 0.82rem;
+                color: #555;
+                line-height: 1.6;
+                padding: 6px 2px 2px 2px;
+                border-top: 0.5px solid #e0e0e0;
+                margin-top: 6px;
+            ">
+                <strong>How to read:</strong> {how_to_read}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+def _metric_card(col, label, value, delta=None, help_text=None):
+            delta_html = ""
+            if delta is not None:
+                color = "#27500A" if delta >= 0 else "#A32D2D"
+                sign = "▲" if delta >= 0 else "▼"
+                delta_html = f"""
+                    <div style="font-size:12px;color:{color};margin-top:3px">
+                        {sign} {abs(delta):.0f} pts vs OECD
+                    </div>
+                """
+            help_html = ""
+            if help_text:
+                help_html = f"""
+                    <div style="font-size:10px;color:#888;margin-top:3px">
+                        {help_text}
+                    </div>
+                """
+            col.markdown(
+                f"""
+                <div style="
+                    background:#f0f4f8;
+                    border-radius:8px;
+                    padding:14px 16px;
+                    border:0.5px solid #dde3ea;
+                ">
+                    <div style="font-size:11px;color:#666;margin-bottom:4px">{label}</div>
+                    <div style="font-size:22px;font-weight:500;color:#1F4E79">{value}</div>
+                    {delta_html}
+                    {help_html}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+def render_story_tab(available_years, story_country, story_subject):
     """
     Render the full Data Story tab content.
 
     Structure
     ---------
-    Intro → Section 1: Global standing → Section 2: Score change over time
-          → Section 3: Equity gaps     → Section 4: School context
+    Intro → Ch 1: Standing → Ch 2: Trend → Ch 3: Equity → Ch 4: School context
+    
+    Callout hierarchy:
+    - Blue _insight_box     : key finding, always present, leads each chapter
+    - Amber _pullquote_box  : conditional, only when data is notably uneven
+    - Green _policy_box     : always present, closes each chapter
+    - _chart_expander       : chart + how-to-read, collapsed by default
     """
-    story_year        = 2022 if 2022 in available_years else max(available_years)
-    subject_label     = SUBJECTS[story_subject]
-    display_countries = [story_country] + comparison_countries
-    pv_cols           = PV_BY_SUBJ[story_subject]
+    story_year    = 2022 if 2022 in available_years else max(available_years)
+    subject_label = SUBJECTS[story_subject]
+    pv_cols       = PV_BY_SUBJ[story_subject]
 
-    # Page header
-    st.markdown(f"## PISA {story_year}: {subject_label} Performance — {_cnt_label(story_country)}")
+    st.markdown("""
+    <style>
+    [data-testid="stMetric"] {
+        border: 0.5px solid #dde3ea;
+        border-radius: 8px;
+        padding: 12px 16px;
+        min-height: 120px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+    # ── Page header ────────────────────────────────────────────────────────
     st.markdown(
-        "This story walks you through what PISA data reveals about student performance "
-        "— from how countries compare to the OECD average, to whether results have changed over time, "
-        "to which groups of students face the largest opportunity differences."
+        f"## PISA {story_year}: {subject_label} Performance "
+        f"— {_cnt_label(story_country)}"
+    )
+    st.markdown(
+        "This report walks you through what PISA data reveals about student "
+        "performance — from how this country compares to the OECD average, "
+        "to whether results have changed over time, to which groups of "
+        "students face the largest opportunity differences."
     )
 
     with st.expander("ℹ️ What is PISA?"):
         st.markdown("""
-            **PISA** (Programme for International Student Assessment) is a global study run by 
-            the OECD every three years. It measures 15-year-olds' ability to apply reading, 
-            mathematics, and science knowledge to real-world problems — not just recall facts.
+            **PISA** (Programme for International Student Assessment) is a
+            global study run by the OECD every three years. It measures
+            15-year-olds' ability to apply reading, mathematics, and science
+            knowledge to real-world problems — not just recall facts.
 
-            - **Why it matters:** International data from PISA allows policymakers to compare 
-              education systems on a common scale and track country-level learning outcomes over time.
-            - **Who takes it:** ~700,000 students across 80+ countries and economies
+            - **Why it matters:** International data from PISA allows
+              policymakers to compare education systems on a common scale
+              and track country-level learning outcomes over time.
+            - **Who takes it:** ~700,000 students across 80+ countries
             - **Cycles:** 2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022
-            - **Terminology:** The "OECD Average" serves as a benchmark representing the 38 member 
-              countries. Non-member participants are referred to as "Partner" economies.
+            - **OECD average:** The benchmark representing the 38 OECD member
+              countries. Non-member participants are referred to as Partner
+              economies.
         """)
 
     with st.expander("🔍 Language note: interpreting score differences"):
         st.markdown("""
-            When reviewing this data, it is important to use specific language that avoids deficit framing. 
-            Score differences between demographic groups reflect **structural inequalities** in access to 
-            resources, language support, school quality etc. — not inherent differences in students' ability.
-            For more information, see: [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf).
+            Score differences between demographic groups reflect
+            **structural inequalities** in access to resources, language
+            support, and school quality — not inherent differences in
+            students' ability or potential. For more guidance, see:
+            [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf).
         """)
 
     st.divider()
 
-    # ── Section 1: Global standing ─────────────────────────────────────────
-    _story_section_header(1, "How does this compare to the OECD average?",
-        f"Comparing the {subject_label} performance in {_cnt_label(story_country)} to the OECD baseline")
+    # ── Chapter 1: Standing ────────────────────────────────────────────────
+    _story_section_header(
+        1,
+        "Where does this country stand?",
+        f"Comparing {_cnt_label(story_country)} to the OECD average in {subject_label}"
+    )
 
-    fetch_cnts = tuple(set(display_countries) | set(oecd_countries))
+    fetch_cnts = tuple(set([story_country]) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
 
-    missing_cnts = check_missing_countries(
-        df_s1, required_cols=[f"PV1{story_subject}"], 
-        countries=display_countries, year=story_year
+    missing_s1 = check_missing_countries(
+        df_s1, [f"PV1{story_subject}"], [story_country], story_year
     )
-    valid_countries = [c for c in display_countries if c not in missing_cnts]
 
-    if missing_cnts:
-        st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {subject_label} scores.")
+    if missing_s1:
+        st.warning(
+            f"⚠️ Data unavailable for {_cnt_label(story_country)} "
+            f"in {subject_label}."
+        )
+    else:
+        # Insight box — claims not labels
+        dist_text = country_distribution_text(
+            df_s1, story_subject, [story_country], year=story_year
+        )
+        if dist_text:
+            _insight_box(dist_text)
 
-    if valid_countries:
-        mean_text = country_distribution_text(df_s1, story_subject, valid_countries, year=story_year)
-        if mean_text:
-            _insight_box(mean_text)
+        # Conditional amber — if difference > 30 points at median
+        cnt_subset = df_s1[df_s1["CNT"] == story_country]
+        if story_year:
+            cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
+        cnt_med  = weighted_percentiles_pv(cnt_subset,  story_subject, [50])
+        oecd_med = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
 
-        with st.expander("📖 How to read this chart"):
-            st.markdown("""
-                - The **x-axis** is the percentile (P10 = bottom 10%, P90 = top 10%).
-                - The **y-axis** is the PISA score for students at that position.
-                - A **steeper curve** means more spread in scores — greater inequality within the country.
-                - The **dashed black line** is the OECD average across all member countries.
-                - If a country's curve sits **above** the OECD line, its students score higher at 
-                  every point in the distribution.
-            """)
+        if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()):
+            diff = abs(cnt_med[0] - oecd_med[0])
+            if diff >= 30:
+                direction = "above" if cnt_med[0] > oecd_med[0] else "below"
+                _pullquote_box(
+                    f"A difference of {diff:.0f} points represents a "
+                    f"meaningful distance from the OECD average — "
+                    f"equivalent to more than one year of schooling "
+                    f"{direction} the international benchmark. "
+                    f"*(Source: OECD PISA 2022 Results, Volume I)*"
+                )
 
-        fig1 = plot_country_distributions(df_s1, story_subject, valid_countries, year=story_year, primary_country=story_country)
-        st.plotly_chart(fig1, use_container_width=True, config={'displayModeBar': False})
-
-    ctx_col1, ctx_col2 = st.columns(2)
-    
-    with ctx_col1:
-        with st.expander("🌍 Which countries are OECD members?"):
-            st.markdown(
-                "The OECD is an international organization of 38 member countries. "
-                "PISA reports often use the OECD average as a global benchmark. "
-                "Non-member participating nations are referred to as Partner economies."
+        # Metric cards
+        cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
+        p10_p90_spread = (cnt_p10_p90[1] - cnt_p10_p90[0]) if not np.isnan(cnt_p10_p90).all() else None
+        delta_val = cnt_med[0] - oecd_med[0] if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()) else None
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(
+                f"{_cnt_label(story_country)} median score",
+                f"{cnt_med[0]:.0f}" if not np.isnan(cnt_med).all() else "N/A",
+                delta=f"{delta_val:+.0f} pts vs OECD" if delta_val is not None else None,
             )
-            
-    with ctx_col2:
-        with st.expander("🔍 What does a 20-point difference actually mean?"):
-            st.markdown("""
-                According to the OECD, **20 PISA score points** represents the average 
-                annual pace of learning for 15-year-olds. So if two countries differ by 
-                40 points at the median, that's approximately two school years of difference 
-                in learning outcomes.
-                
-                *(Source: [PISA 2022 Results (Volume I), OECD](https://www.oecd.org/content/dam/oecd/en/publications/reports/2023/12/pisa-2022-results-volume-i_76772a36/53f23881-en.pdf))*
-            """)
+        with col2:
+            st.metric(
+                "OECD average",
+                f"{oecd_med[0]:.0f}" if not np.isnan(oecd_med).all() else "N/A",
+                help="Average median score across all 38 OECD member countries"
+            )
+        with col3:
+            st.metric(
+                "P10 → P90 spread",
+                f"{p10_p90_spread:.0f} pts" if p10_p90_spread is not None else "N/A",
+                help="Score range between the bottom 10% and top 10% of students"
+            )
+
+        # Chart + how to read
+        fig1 = plot_country_distributions(
+            df_s1, story_subject, [story_country],
+            year=story_year, primary_country=story_country
+        )
+        _chart_expander(
+            "Show full chart",
+            fig1,
+            "The x-axis is the percentile (P10 = bottom 10%, P90 = top 10%). "
+            "The y-axis is the PISA score at that position. "
+            "The dashed line is the OECD average. "
+            "If the country's curve sits above the OECD line, students score "
+            "higher at every point in the distribution."
+        )
+
+        _policy_box(
+            f"{_cnt_label(story_country)}'s position relative to the OECD average "
+            f"is one signal, but the spread within the country often tells a more "
+            f"important story for domestic policy. A large internal spread suggests "
+            f"that raising the floor — not just the average — is the priority."
+        )
 
     st.divider()
 
-    # ── Section 2: Score change over time ────────────────────────────────────────
-    _story_section_header(2, "Has performance changed over time?",
-        f"Tracking {_cnt_label(story_country)}'s {subject_label} scores across PISA cycles")
+    # ── Chapter 2: Trend ───────────────────────────────────────────────────
+    _story_section_header(
+        2,
+        "Has performance changed over time?",
+        f"Tracking {_cnt_label(story_country)}'s {subject_label} scores across PISA cycles"
+    )
 
     if len(available_years) < 2:
-        st.info("Only one year of data is currently loaded. Load multiple years (2015, 2018, 2022) to unlock this section.")
+        st.info(
+            "Only one year of data is currently loaded. "
+            "Load 2015, 2018, and 2022 to unlock this section."
+        )
     else:
-        df_s2 = fetch((story_country,), None, tuple(BASE_COLS + pv_cols))
-        
-        country_years = df_s2["YEAR"].dropna().unique() if "YEAR" in df_s2.columns else []
-        
+        df_s2 = fetch(
+            (story_country,), None, tuple(BASE_COLS + pv_cols)
+        )
+        country_years = sorted(
+            df_s2["YEAR"].dropna().unique().tolist()
+        ) if "YEAR" in df_s2.columns else []
+
         if len(country_years) < 2:
-            st.warning(f"⚠️ **Data Unavailable:** {_cnt_label(story_country)} does not have enough historical data to compare changes over time (only {len(country_years)} year on record).")
+            st.warning(
+                f"⚠️ {_cnt_label(story_country)} does not have enough "
+                f"historical data to show trends."
+            )
         else:
-            # Dynamically use the country's actual earliest/latest years
-            reference_year   = min(country_years) 
+            reference_year   = min(country_years)
             comparison_years = [y for y in country_years if y != reference_year]
             latest_year      = max(country_years)
 
             ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
             last_subset = df_s2[df_s2["YEAR"] == latest_year]
-            ref_median  = weighted_percentiles_pv(ref_subset,  story_subject, [50])
-            last_median = weighted_percentiles_pv(last_subset, story_subject, [50])
 
-            if not (np.isnan(ref_median).all() or np.isnan(last_median).all()):
-                delta     = last_median[0] - ref_median[0]
-                direction = "increased" if delta > 0 else "decreased"
+            ref_percs  = weighted_percentiles_pv(
+                ref_subset,  story_subject, [10, 50, 90]
+            )
+            last_percs = weighted_percentiles_pv(
+                last_subset, story_subject, [10, 50, 90]
+            )
+
+            if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
+                delta_p10 = last_percs[0] - ref_percs[0]
+                delta_p50 = last_percs[1] - ref_percs[1]
+                delta_p90 = last_percs[2] - ref_percs[2]
+                direction = "increased" if delta_p50 > 0 else "decreased"
+
                 _insight_box(
-                    f"At the median, {_cnt_label(story_country)}'s {subject_label} score "
-                    f"{direction} by {abs(delta):.0f} points between "
-                    f"{reference_year} and {latest_year}."
+                    f"At the median, {_cnt_label(story_country)}'s "
+                    f"{subject_label} score {direction} by "
+                    f"{abs(delta_p50):.0f} points between "
+                    f"{reference_year} and {latest_year} "
+                    f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
                 )
 
-            with st.expander("📖 How to read this chart"):
-                st.markdown(f"""
-                    This chart tracks score changes across the performance spectrum over time.
+                # Conditional amber — uneven decline/gain across distribution
+                spread = abs(delta_p10 - delta_p90)
+                if spread > 10:
+                    worse_end = "bottom" if delta_p10 < delta_p90 else "top"
+                    better_end = "top" if worse_end == "bottom" else "bottom"
+                    worse_val  = delta_p10 if worse_end == "bottom" else delta_p90
+                    better_val = delta_p90 if worse_end == "bottom" else delta_p10
+                    _pullquote_box(
+                        f"The change is not uniform across the distribution — "
+                        f"students at the {worse_end} lost more "
+                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
+                        f"than those at the {better_end} "
+                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'bottom' else '10'}). "
+                        f"This pattern is invisible in average-only reporting."
+                    )
 
-                    - The **horizontal axis (x-axis)** shows the {reference_year} baseline score at each percentile (from the lowest to the highest achievers).
-                    - The **vertical axis (y-axis)** shows the score for that exact same percentile in a comparison year.
-                    - The **solid diagonal line** represents the {reference_year} baseline (exactly zero change).
-                    - The **dashed lines** represent the comparison years.
-                    - Points **above** the solid diagonal line indicate an **improvement** at that performance level.
-                    - Points **below** the solid diagonal line indicate a **decline** at that performance level.
-                """)
+            fig2 = plot_naep_time_comparison(
+                df=df_s2, subject=story_subject,
+                cnt=story_country, reference_year=reference_year,
+                comparison_years=comparison_years
+            )
+            _chart_expander(
+                "Show full chart",
+                fig2,
+                f"The horizontal axis shows the {reference_year} baseline score "
+                f"at each percentile. The vertical axis shows the score at that "
+                f"same percentile in a later year. Points on the diagonal line "
+                f"mean no change. Points above the diagonal mean improvement; "
+                f"points below mean decline."
+            )
 
-            fig2 = plot_naep_time_comparison(df=df_s2, subject=story_subject, cnt=story_country,
-                                             reference_year=reference_year,
-                                             comparison_years=comparison_years)
-            st.plotly_chart(fig2, use_container_width=True, config={'displayModeBar': False})
-
-            with st.expander("🔍 Why might scores change between cycles?"):
-                st.markdown("""
-                    - **Changes in school composition** (e.g. due to immigration, urbanisation)
-                    - **Disruptions** such as economic crises or the COVID-19 pandemic (relevant to 2022)
-                    - **Cohort effects** — the specific group of 15-year-olds tested that year
-                    - **Curriculum or policy reforms** implemented before the cycle
-                """)
-
-    st.divider()
-
-    # ── Section 3: Equity gaps ─────────────────────────────────────────────
-    _story_section_header(3, "Who scores highest — and who is left behind?",
-        f"This section examines two key dimensions of equity: score differences by socioeconomic status and immigration status in {_cnt_label(story_country)}")
-
-    st.markdown("High average scores can mask large differences between student groups.")
-
-    df_ses  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["ESCS"]))
-    df_immig = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["IMMIG"]))
-
-    eq_col1, eq_col2 = st.columns(2, gap="large")
-    with eq_col1:
-        st.markdown("#### Scores by Socioeconomic Status")
-        
-        # Check if data exists before doing any math
-        if check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient SES data for {_cnt_label(story_country)}.")
-        else:
-            # Only runs if data is safe
-            ses_text = ses_gap_text(df_ses, story_subject, story_country, year=story_year)
-            if "Insufficient" not in ses_text:
-                _insight_box(ses_text)
-            
-            with st.expander("📖 How to read the chart showing scores by socioeconomic status"):
-                st.markdown("""
-                    Students are divided into **four equal-sized groups** (quartiles) based on 
-                    the PISA ESCS index — a composite of parental education, occupational status, 
-                    and home possessions. **Q1** = bottom 25%, **Q4** = top 25%.
-                """)
-
-            fig3a = plot_escs_gap(df_ses, story_subject, story_country, year=story_year)
-            st.plotly_chart(fig3a, use_container_width=True, config={'displayModeBar': False})
-
-    with eq_col2:
-        st.markdown("#### Scores by Immigration Status")
-        if check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient Immigration data for {_cnt_label(story_country)}.")
-        else:
-            immig_warnings = check_group_sizes(df_immig, "IMMIG", IMMIG_MAP, story_country, year=story_year)
-            for w in immig_warnings:
-                st.warning(w)
-
-            immig_text = immigration_gap_text(df_immig, story_subject, story_country, year=story_year)
-            if "Insufficient" not in immig_text:
-                _insight_box(immig_text)
-
-            with st.expander("📖 How to read this chart"):
-                st.markdown("""
-                    - **Native:** born in the country, both parents born in the country
-                    - **Second-generation:** born in the country, at least one parent born abroad
-                    - **First-generation:** born abroad, came to the country before or during school age
-                    - The **dotted vertical lines** show the exact median (middle) score for each group.
-                """)                
-            fig3b = plot_immigration_score_distribution(
-                df=df_immig, subject=story_subject, cnt=story_country, year=story_year)
-            st.plotly_chart(fig3b, use_container_width=True, config={'displayModeBar': False})
+            _policy_box(
+                "A decline that is steeper at the bottom of the distribution "
+                "than at the top suggests that the students who most need "
+                "support have fallen furthest behind. Recovery efforts should "
+                "be targeted, not uniform."
+            )
 
     st.divider()
 
-    # ── Section 4: School context ──────────────────────────────────────────
-    _story_section_header(4, "Does school context matter?",
-        f"How school location and whether school is public or private relate to {subject_label} scores in {_cnt_label(story_country)}")
+    # ── Chapter 3: Equity ──────────────────────────────────────────────────
+    _story_section_header(
+        3,
+        "Who scores highest — and who is left behind?",
+        f"Score differences by student background in {_cnt_label(story_country)}"
+    )
 
-    df_loc  = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
-    df_type = fetch((story_country,), story_year, tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
+    st.markdown(
+        "High average scores can mask large differences between student groups. "
+        "The figures below show the difference in median scores between groups — "
+        "they reflect structural inequalities in access to resources and support, "
+        "not differences in student ability."
+    )
+
+    # Fetch all three equity datasets
+    df_ses   = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["ESCS"])
+    )
+    df_immig = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["IMMIG"])
+    )
+    df_gender = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["ST004D01T"])
+    )
+
+    # ── Compute all three gaps ─────────────────────────────────────────────
+    equity_gaps = []
+
+    # SES gap
+    if not check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
+        curves = compute_escs_quartile_percentiles(
+            df_ses, story_subject, [50], cnt=story_country, year=story_year
+        )
+        q1_med = curves.get("Q1 (low SES)",  [np.nan])[0]
+        q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
+        if not (np.isnan(q1_med) or np.isnan(q4_med)):
+            equity_gaps.append({
+                "label": "Socioeconomic background",
+                "value": q4_med - q1_med,
+                "sub":   "Highest vs lowest SES quartile",
+                "type":  "ses"
+            })
+
+    # Immigration gap
+    if not check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
+        native_subset = df_immig[
+            (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 1.0)
+        ]
+        gen1_subset = df_immig[
+            (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 3.0)
+        ]
+        nat_med  = weighted_percentiles_pv(native_subset, story_subject, [50])
+        gen1_med = weighted_percentiles_pv(gen1_subset,   story_subject, [50])
+        if not (np.isnan(nat_med).all() or np.isnan(gen1_med).all()):
+            equity_gaps.append({
+                "label": "Immigration status",
+                "value": nat_med[0] - gen1_med[0],
+                "sub":   "Native vs first-generation students",
+                "type":  "immig"
+            })
+
+    # Gender gap
+    if not check_missing_countries(df_gender, ["ST004D01T"], [story_country], story_year):
+        male_subset   = df_gender[
+            (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 2.0)
+        ]
+        female_subset = df_gender[
+            (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 1.0)
+        ]
+        male_med   = weighted_percentiles_pv(male_subset,   story_subject, [50])
+        female_med = weighted_percentiles_pv(female_subset, story_subject, [50])
+        if not (np.isnan(male_med).all() or np.isnan(female_med).all()):
+            equity_gaps.append({
+                "label": "Gender",
+                "value": abs(male_med[0] - female_med[0]),
+                "sub":   "Boys vs girls at the median",
+                "type":  "gender"
+            })
+
+    # Sort by size — largest first
+    equity_gaps.sort(key=lambda x: x["value"], reverse=True)
+
+    # ── Summary cards ──────────────────────────────────────────────────────
+    if equity_gaps:
+        # Leading insight — biggest gap
+        biggest = equity_gaps[0]
+        _insight_box(
+            f"The largest difference in {_cnt_label(story_country)} is by "
+            f"<strong>{biggest['label'].lower()}</strong> — "
+            f"a {biggest['value']:.0f}-point difference at the median "
+            f"in {subject_label}. {biggest['sub']}."
+        )
+
+        # Summary cards — one per gap, ranked
+        card_cols = st.columns(len(equity_gaps))
+        for i, (col, gap) in enumerate(zip(card_cols, equity_gaps)):
+            with col:
+                label = gap["label"] + (" — largest" if i == 0 else "")
+                st.metric(
+                    label,
+                    f"{gap['value']:.0f} pts",
+                    help=gap["sub"]
+                )
+
+        st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+
+        # Conditional amber — SES diff > country vs OECD diff
+        ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
+        if ses_gap_entry:
+            cnt_m  = weighted_percentiles_pv(
+                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
+            )
+            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
+            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
+                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
+                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
+                    _pullquote_box(
+                        f"The socioeconomic difference within "
+                        f"{_cnt_label(story_country)} "
+                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                        f"the difference between this country and the OECD "
+                        f"average ({country_vs_oecd:.0f} pts). "
+                        f"Domestic equity is a bigger lever than "
+                        f"international benchmarking."
+                    )
+
+        # ── Combined chart expander ────────────────────────────────────────
+        ses_ok   = not check_missing_countries(
+            df_ses, ["ESCS"], [story_country], story_year
+        )
+        immig_ok = not check_missing_countries(
+            df_immig, ["IMMIG"], [story_country], story_year
+        )
+
+        if ses_ok or immig_ok:
+            with st.expander("📊 Show full charts", expanded=False):
+                chart_col1, chart_col2 = st.columns(2)
+
+                with chart_col1:
+                    st.markdown("**By socioeconomic background**")
+                    if ses_ok:
+                        fig3a = plot_escs_gap(
+                            df_ses, story_subject,
+                            story_country, year=story_year
+                        )
+                        st.plotly_chart(
+                            fig3a, use_container_width=True,
+                            config={"displayModeBar": False}
+                        )
+                    else:
+                        st.warning("Insufficient socioeconomic data.")
+
+                with chart_col2:
+                    st.markdown("**By immigration status**")
+                    if immig_ok:
+                        immig_warnings = check_group_sizes(
+                            df_immig, "IMMIG", IMMIG_MAP,
+                            story_country, year=story_year
+                        )
+                        for w in immig_warnings:
+                            st.warning(w)
+                        fig3b = plot_immigration_score_distribution(
+                            df=df_immig, subject=story_subject,
+                            cnt=story_country, year=story_year
+                        )
+                        st.plotly_chart(
+                            fig3b, use_container_width=True,
+                            config={"displayModeBar": False}
+                        )
+                    else:
+                        st.warning("Insufficient immigration data.")
+
+                st.markdown(
+                    """
+                    <div style="font-size:0.82rem;color:#555;line-height:1.6;
+                                padding:6px 2px 2px 2px;
+                                border-top:0.5px solid #e0e0e0;margin-top:6px">
+                        <strong>How to read:</strong>
+                        <em>Socioeconomic chart:</em> Students split into four equal
+                        groups by family background — parental education, occupation,
+                        and home resources. Q1 = lowest 25%, Q4 = highest 25%.
+                        <em>Immigration chart:</em> Native = born in country, both
+                        parents born in country. Second-generation = born in country,
+                        at least one parent born abroad. First-generation = born abroad.
+                        Dotted lines show the median score for each group.
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        _policy_box(
+            "Score differences by student background point to structural "
+            "inequalities in how resources, language support, and school "
+            "quality are distributed. The largest difference for this "
+            "country is the most actionable starting point for policy."
+        )
+
+    else:
+        st.info(
+            f"Insufficient data to compute equity differences "
+            f"for {_cnt_label(story_country)}."
+        )
+
+    st.divider()
+
+    # ── Chapter 4: School context ──────────────────────────────────────────
+    _story_section_header(
+        4,
+        "Does school context matter?",
+        f"How school location and type relate to {subject_label} scores "
+        f"in {_cnt_label(story_country)}"
+    )
+
+    df_loc  = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["SC001Q01TA"])
+    )
+    df_type = fetch(
+        (story_country,), story_year,
+        tuple(BASE_COLS + pv_cols + ["SCHLTYPE"])
+    )
 
     ctx_col1, ctx_col2 = st.columns(2, gap="large")
+
     with ctx_col1:
-        st.markdown("#### Scores by School Location")
-        if check_missing_countries(df_loc, ["SC001Q01TA"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Location data for {_cnt_label(story_country)}.")
+        st.markdown("#### Public vs private")
+
+        if check_missing_countries(
+            df_type, ["SCHLTYPE"], [story_country], story_year
+        ):
+            st.warning(
+                f"⚠️ Insufficient school type data for "
+                f"{_cnt_label(story_country)}."
+            )
         else:
-            with st.expander("📖 How to read the school location chart"):
-                st.markdown("""
-                    - The **box** spans the middle 50% of students (P25–P75)
-                    - The **line** inside the box is the median score (P50)
-                    - The **whiskers** extend to P10 and P90
-                """)
-            fig4a = plot_school_location_boxplot(
-                df=df_loc, subject=story_subject, cnt=story_country, year=story_year)
-            st.plotly_chart(fig4a, use_container_width=True, config={'displayModeBar': False})
+            # Compute insight for school type
+            type_curves = compute_group_percentiles(
+                df_type, story_subject, "SCHLTYPE",
+                {3: "Public", 1: "Independent private"},
+                [50], cnt=story_country, year=story_year
+            )
+            pub_med  = type_curves.get("Public",              [np.nan])[0]
+            priv_med = type_curves.get("Independent private", [np.nan])[0]
+
+            if not (np.isnan(pub_med) or np.isnan(priv_med)):
+                diff = abs(priv_med - pub_med)
+                higher = "private" if priv_med > pub_med else "public"
+                _insight_box(
+                    f"Students in {higher} schools in "
+                    f"{_cnt_label(story_country)} score {diff:.0f} points "
+                    f"higher at the median in {subject_label}."
+                )
+
+            fig4b = plot_school_type_distribution(
+                df=df_type, subject=story_subject,
+                cnt=story_country, year=story_year
+            )
+            _chart_expander(
+                "Show school type chart",
+                fig4b,
+                "Each curve shows the score distribution for one school "
+                "type. Public = government-operated. "
+                "Government-dependent private = privately managed but "
+                "significantly government funded. "
+                "Independent private = primarily privately funded."
+            )
+
+            _policy_box(
+                "Differences between public and private school scores "
+                "often reflect the socioeconomic composition of each "
+                "school type rather than school quality itself. "
+                "Interpreting these figures alongside the SES data "
+                "in Chapter 3 is important."
+            )
 
     with ctx_col2:
-        st.markdown("#### Scores by School Type")
-        if check_missing_countries(df_type, ["SCHLTYPE"], [story_country], story_year):
-            st.warning(f"⚠️ **Data Unavailable:** Insufficient School Type data for {_cnt_label(story_country)}.")
+        st.markdown("#### Urban vs rural")
+
+        if check_missing_countries(
+            df_loc, ["SC001Q01TA"], [story_country], story_year
+        ):
+            st.warning(
+                f"⚠️ Insufficient school location data for "
+                f"{_cnt_label(story_country)}."
+            )
         else:
-            with st.expander("📖 How to read the school type chart"):
-                st.markdown("""
-                    - **Public:** government-operated and funded
-                    - **Government-dependent private:** privately managed, significant government funding
-                    - **Independent private:** privately managed and primarily privately funded
-                """)
-            fig4b = plot_school_type_distribution(
-                df=df_type, subject=story_subject, cnt=story_country, year=story_year)
-            st.plotly_chart(fig4b, use_container_width=True, config={'displayModeBar': False})
+            # Compute insight for school location
+            loc_curves = compute_group_percentiles(
+                df_loc, story_subject, "SC001Q01TA",
+                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
+                [50], cnt=story_country, year=story_year
+            )
+            city_med    = loc_curves.get("City",    [np.nan])[0]
+            village_med = loc_curves.get("Village", [np.nan])[0]
+
+            if not (np.isnan(city_med) or np.isnan(village_med)):
+                diff = abs(city_med - village_med)
+                _insight_box(
+                    f"Students in city schools score {diff:.0f} points "
+                    f"higher than those in villages at the median "
+                    f"in {subject_label} in {_cnt_label(story_country)}."
+                )
+
+            fig4a = plot_school_location_boxplot(
+                df=df_loc, subject=story_subject,
+                cnt=story_country, year=story_year
+            )
+            _chart_expander(
+                "Show school location chart",
+                fig4a,
+                "The box spans the middle 50% of students (P25–P75). "
+                "The line inside is the median (P50). "
+                "The whiskers extend to P10 and P90. "
+                "Dots show a representative sample of individual students."
+            )
+
+            _policy_box(
+                "Urban–rural score differences in PISA typically reflect "
+                "resource allocation across school systems — teacher "
+                "quality, infrastructure, and support services. "
+                "These are addressable through targeted policy."
+            )
 
     st.divider()
 
+    # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
         <div style="background:#f0f4f8; border-radius:8px; padding:20px 24px;
                     margin-top:16px; text-align:center;">
@@ -912,8 +1348,8 @@ def render_story_tab(available_years, story_country, story_subject, comparison_c
                 <strong>Want to dig deeper?</strong>
             </p>
             <p style="font-size:0.9rem; color:#555;">
-                Switch to the <strong>🔍 Explore</strong> tab to choose any country, 
-                subject, year, and chart type — and compare two views side by side.
+                Switch to the <strong>🔍 Explore</strong> tab to choose any
+                country, subject, year, and chart type.
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -978,7 +1414,7 @@ if app_mode == "📖 Data Story":
     )
     
     # Draw the main area
-    render_story_tab(available_years, story_country, story_subject, [])
+    render_story_tab(available_years, story_country, story_subject)
 
 
 # ==========================================
