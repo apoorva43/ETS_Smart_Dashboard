@@ -227,6 +227,12 @@ CHART_HELP_TEXT = {
 **How to read this scatterplot:**
 * **The Dots:** Each dot represents an entire country's national average.
 * **The Trend:** If the dots generally slope upwards from left to right, it means higher levels of the resource (like Belonging or SES) correlate with higher test scores globally.
+    """,
+    "Belonging by Immigration": """
+**How to read these charts:**
+* **Grade repetition rate by SES quartile:** Shows the percentage of students in each socioeconomic quartile (Q1 = lowest 25%, Q4 = highest 25%) who repeated at least one school grade.
+
+* **School belonging index by immigration status:** Measures how connected students feel to their school — whether they feel liked, included, and at home. The index is **centered at 0 (OECD average)**, so positive values mean above-average belonging and negative values mean below-average belonging.
     """
 }
 
@@ -243,6 +249,8 @@ def render_chart_help(chart_type, group_key=None):
         help_key = "Country Scatterplot"
     elif chart_type == "Group comparison" and group_key == "School location":
         help_key = "Box Plot"
+    elif chart_type == "Belonging by Immigration":
+        help_key = "Belonging by Immigration"
 
     # Render it if it exists
     if help_key and help_key in CHART_HELP_TEXT:
@@ -558,16 +566,11 @@ def render_chart(chart_type, subject, selected_countries,
                 df=df, countries=valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            with st.expander("**How to read this chart**"):
-                st.markdown("""
-                            **Left panel — Grade repetition rate by SES quartile**
-                            Grade repetition means a student repeated at least one school grade. The bars show the percentage of students in each socioeconomic quartile (Q1 = lowest 25%, Q4 = highest 25%) who have repeated a grade. Higher rates in lower quartiles reflect structural inequalities in early educational support.
-                            
-                            **Right panel — School belonging index by immigration status**
-                            The PISA School Belonging index measures how connected students feel to their school community — whether they feel like they belong, are liked by classmates, and feel at home at school. It is constructed so that **the OECD average equals 0**, meaning:
-                            - **Positive values** → students feel *more* belonging than the average OECD student
-                            - **Negative values** → students feel *less* belonging than the average OECD student
-                            """)
+            render_chart_help(chart_type)
+            st.info(
+                "Grade repetition rates are consistently higher in lower SES quartiles. "
+                "Belonging scores vary by immigration status — 1st-generation students often report lower belonging than native-born peers."
+            )
 
     # 6. Country Scatterplot
     elif chart_type == "Country Scatterplot":
