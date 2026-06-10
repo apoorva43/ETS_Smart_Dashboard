@@ -562,11 +562,11 @@ def render_chart(chart_type, subject, selected_countries,
             )
 
         if valid_countries:
+            render_chart_help(chart_type)
             fig = plot_belonging_by_immigration(
                 df=df, countries=valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            render_chart_help(chart_type)
             st.info(
                 "Grade repetition rates are consistently higher in lower SES quartiles. "
                 "Belonging scores vary by immigration status — 1st-generation students often report lower belonging than native-born peers."
