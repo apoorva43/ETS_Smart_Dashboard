@@ -344,7 +344,11 @@ def render_chart(chart_type, subject, selected_countries,
         if valid_countries:
             render_chart_help(chart_type)
             fig = plot_country_distributions(
-                df, subject, valid_countries, year=selected_year
+                df, 
+                subject, 
+                valid_countries, 
+                year=selected_year,
+                active_countries=selected_countries
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(country_distribution_text(
@@ -542,7 +546,11 @@ def render_chart(chart_type, subject, selected_countries,
             
         if valid_countries:
             fig = plot_weighted_interval_distribution(
-                df, subject, valid_countries, year=selected_year
+                df, 
+                subject, 
+                valid_countries, 
+                year=selected_year,
+                active_countries=selected_countries
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info("Distribution showing percentage of students per 20-point score interval.")
