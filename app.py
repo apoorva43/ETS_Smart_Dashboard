@@ -558,7 +558,16 @@ def render_chart(chart_type, subject, selected_countries,
                 df=df, countries=valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info("Left: Grade repetition rate in different SES quartiles. Right: Distribution of school belonging index by immigration status.")
+            with st.expander("**How to read this chart**"):
+                st.markdown("""
+                            **Left panel — Grade repetition rate by SES quartile**
+                            Grade repetition means a student repeated at least one school grade. The bars show the percentage of students in each socioeconomic quartile (Q1 = lowest 25%, Q4 = highest 25%) who have repeated a grade. Higher rates in lower quartiles reflect structural inequalities in early educational support.
+                            
+                            **Right panel — School belonging index by immigration status**
+                            The PISA School Belonging index measures how connected students feel to their school community — whether they feel like they belong, are liked by classmates, and feel at home at school. It is constructed so that **the OECD average equals 0**, meaning:
+                            - **Positive values** → students feel *more* belonging than the average OECD student
+                            - **Negative values** → students feel *less* belonging than the average OECD student
+                            """)
 
     # 6. Country Scatterplot
     elif chart_type == "Country Scatterplot":
