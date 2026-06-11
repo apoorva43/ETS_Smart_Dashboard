@@ -111,3 +111,76 @@ def get_oecd_percentiles(df: pd.DataFrame, subject: str,
             country_curves.append(curve)
 
     return np.nanmean(country_curves, axis=0) if country_curves else np.full(len(percentiles), np.nan)
+
+
+def compute_weighted_se_pv(
+    df: pd.DataFrame,
+    subject: str,
+    weight_col: str = "W_FSTUWT"
+) -> float:
+    """
+    Standard error of the weighted mean score based on the PISA Data
+    Analysis Manual with 10 PVs and 80 Fay BRR replicates.
+
+    Formula
+    -------
+    stderr² = sampling_var + (1 + 1/M) * imputation_var
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Student-level rows for a SINGLE country and year, already filtered.
+        Must contain weight_col, W_FSTURWT1-W_FSTURWT80, and PV1-PV10{subject}.
+    subject : str
+        One of "MATH", "READ", "SCIE".
+    weight_col : str
+        Final student weight column. Default "W_FSTUWT".
+
+    Returns
+    -------
+    float
+        Estimated standard error in score points.
+        Returns np.nan if fewer than MIN_GROUP_N rows or replicate weights
+        are absent from df.
+    """
+    pv_cols  = [f"PV{i}{subject}" for i in range(1, 11)]
+    rep_cols = [f"W_FSTURWT{r}" for r in range(1, 81)]
+
+    # Drop rows missing the main weight or any PV
+    valid = df.dropna(subset=[weight_col] + pv_cols)
+    if len(valid) < MIN_GROUP_N:
+        return np.nan
+
+    # Replicate weights must be present 
+    missing_reps = [c for c in rep_cols if c not in valid.columns]
+    if missing_reps:
+        return np.nan
+
+    w_full = valid[weight_col].values
+    rep_matrix = valid[rep_cols].values   # (n_students, 80)
+    M = 10
+
+    # Imputation variance: variance across 10 PV weighted means 
+    pv_means = np.array([
+        np.average(valid[col].values, weights=w_full)
+        for col in pv_cols
+    ])
+    imputation_var = float(np.var(pv_means, ddof=1))   
+
+    # Sampling variance: Fay BRR averaged across 10 PVs
+    pv_sampling_vars = []
+    for col in pv_cols:
+        scores    = valid[col].values
+        mean_full = np.average(scores, weights=w_full)
+        rep_means = np.array([
+            np.average(scores, weights=rep_matrix[:, r])
+            for r in range(80)
+        ])
+        pv_sampling_vars.append(
+            np.sum((1.0 / 20.0) * (rep_means - mean_full) ** 2)
+        )
+    sampling_var = float(np.mean(pv_sampling_vars))
+
+    # Combine
+    stderr2 = sampling_var + (1.0 + 1.0 / M) * imputation_var
+    return float(np.sqrt(stderr2))
