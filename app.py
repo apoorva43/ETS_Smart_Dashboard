@@ -44,7 +44,7 @@ from src.plotting_plotly import (
                           plot_resource_scatter,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
-                                ses_gap_text,
+                                ses_difference_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
@@ -334,9 +334,6 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(country_distribution_text(
-                df, subject, valid_countries, year=selected_year
-            ))
 
     # 2. Group Comparison
     elif chart_type == "Group comparison":
@@ -416,7 +413,7 @@ def render_chart(chart_type, subject, selected_countries,
             )
 
             st.markdown(
-                ses_gap_text(
+                ses_difference_text(
                     df,
                     subject,
                     primary_country,
@@ -832,7 +829,7 @@ def render_story_tab(available_years, story_country, story_subject):
             Score differences between demographic groups reflect
             **structural inequalities** in access to resources, language
             support, and school quality — not inherent differences in
-            students' ability or potential. For more guidance, see:
+            students' ability or potential. For more information, see:
             [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf).
         """)
 
@@ -871,18 +868,46 @@ def render_story_tab(available_years, story_country, story_subject):
         )
         if dist_text:
             _insight_box(dist_text)
+            st.markdown(
+                "<small>**Note:** Averages reflect mean scores across students, "
+                "reported equally across OECD member countries per PISA's official methodology. "
+                "See [OECD PISA 2022 Results, Volume I](https://www.oecd.org/en/publications/pisa-2022-results-volume-i_53f23881-en.html).</small>",
+                unsafe_allow_html=True
+            )
 
-        # Conditional amber — if difference > 30 points at median
+        # Conditional amber — if difference > 20 points at median
         cnt_subset = df_s1[df_s1["CNT"] == story_country]
         if story_year:
             cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
-        cnt_med  = weighted_percentiles_pv(cnt_subset,  story_subject, [50])
-        oecd_med = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
-
-        if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()):
-            diff = abs(cnt_med[0] - oecd_med[0])
-            if diff >= 30:
-                direction = "above" if cnt_med[0] > oecd_med[0] else "below"
+        
+        # Compute mean scores
+        s1_pv_cols = [
+            f"PV{i}{story_subject}" for i in range(1, 11)
+            if f"PV{i}{story_subject}" in df_s1.columns
+        ]
+        cnt_mean_score = np.mean([
+            np.average(cnt_subset[pv].values, weights=cnt_subset["W_FSTUWT"].values)
+            for pv in s1_pv_cols
+            if pv in cnt_subset.columns
+        ])        
+        oecd_country_means = []
+        for oecd_cnt in df_s1[ds_s1["OECD"] == 1]["CNT"].unique():
+            c = df_s1[
+                (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
+            ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
+            if len(c) < 30:
+                continue
+            oecd_country_means.append(np.mean([
+                np.average(c[pv].values, weights=c["W_FSTUWT"].values)
+                for pv in s1_pv_cols
+            ]))
+        oecd_mean_score = np.mean(oecd_country_means) if oecd_country_means else np.nan
+        
+        # Conditional amber box
+        if not (np.isnan(cnt_mean_score).all() or np.isnan(oecd_mean_score)):
+            diff = abs(cnt_mean_score - oecd_mean_score)
+            if diff >= 20:
+                direction = "above" if cnt_mean_score > oecd_mean_score else "below"
                 _pullquote_box(
                     f"A difference of {diff:.0f} points represents a "
                     f"meaningful distance from the OECD average — "
@@ -893,8 +918,14 @@ def render_story_tab(available_years, story_country, story_subject):
 
         # Metric cards
         cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
-        p10_p90_spread = (cnt_p10_p90[1] - cnt_p10_p90[0]) if not np.isnan(cnt_p10_p90).all() else None
-        delta_val = cnt_med[0] - oecd_med[0] if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()) else None
+        p10_p90_spread = (
+            cnt_p10_p90[1] - cnt_p10_p90[0]
+            if not np.isnan(cnt_p10_p90).all() else None
+        )
+        delta_val = (
+            cnt_mean_score - oecd_mean_score 
+            if not np.isnan(cnt_mean_score) else None
+        )
 
         # Calculate standard error and 95% CI
         cnt_se = compute_weighted_se_pv(
@@ -909,20 +940,20 @@ def render_story_tab(available_years, story_country, story_subject):
         # Dynamic column layout: 4 cards if SE is high, 3 otherwise
         cols = st.columns(4 if show_se_card else 3)
 
-        # Card 1: country median
+        # Card 1: country average score
         with cols[0]:
             st.metric(
-                f"{_cnt_label(story_country)} Median Score",
-                f"{cnt_med[0]:.0f}" if not np.isnan(cnt_med).all() else "N/A",
+                f"{_cnt_label(story_country)} average score",
+                f"{cnt_mean_score:.0f}" if not np.isnan(cnt_mean_score) else "N/A",
                 delta=f"{delta_val:+.0f} pts vs OECD" if delta_val is not None else None,
             )
 
-        # Card 2: OECD median
+        # Card 2: OECD average
         with cols[1]:
             st.metric(
-                "OECD Median Average",
-                f"{oecd_med[0]:.0f}" if not np.isnan(oecd_med).all() else "N/A",
-                help="Average median score across all 38 OECD member countries"
+                "OECD average",
+                f"{oecd_mean_score:.0f}" if not np.isnan(oecd_mean_score) else "N/A",
+                help="Mean score averaged equally across all OECD member countries"
             )
 
         # Card 3: spread
@@ -937,12 +968,12 @@ def render_story_tab(available_years, story_country, story_subject):
         if show_se_card:
             with cols[3]:
                 ci_str = (
-                    f"[{cnt_med[0] - ci_margin:.0f}, {cnt_med[0] + ci_margin:.0f}]"
-                    if not np.isnan(ci_margin) and not np.isnan(cnt_med).all()
+                    f"[{cnt_mean_score - ci_margin:.0f}, {cnt_mean_score + ci_margin:.0f}]"
+                    if not np.isnan(ci_margin) and not np.isnan(cnt_mean_score)
                     else "N/A"
                 )
                 st.metric(
-                    label="Standard Error",
+                    label="Standard error",
                     value=f"±{cnt_se:.1f} pts",
                     help=(
                         f"Sampling and measurement uncertainty around the mean score "
@@ -958,11 +989,12 @@ def render_story_tab(available_years, story_country, story_subject):
         _chart_expander(
             "Show full chart",
             fig1,
-            "The x-axis is the percentile (P10 = bottom 10%, P90 = top 10%). "
-            "The y-axis is the PISA score at that position. "
-            "The dashed line is the OECD average. "
-            "If the country's curve sits above the OECD line, students score "
-            "higher at every point in the distribution."
+            f"The bar shows the score distribution for {_cnt_label(story_country)}. "
+            "Darker shading shows where most students are concentrated (the middle 50%), "
+            "lighter shading towards the tails. "
+            "The solid vertical line marks the median score (midpoint of the distribution). "
+            "The dashed vertical line is the OECD average. "
+            "Hover over the bar to see the score and percentile at that point."
         )
 
         _policy_box(
