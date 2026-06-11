@@ -892,22 +892,59 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             p_vals_clean,
         ], axis=1)
 
-        fig.add_trace(go.Scatter(
-            x=score_vals,
-            y=np.full(len(score_vals), y_center),
-            mode="markers",
-            marker=dict(color="rgba(0,0,0,0)", size=6),
-            name=q_label,
-            showlegend=True,
-            customdata=custom,
-            hovertemplate=(
-                f"<b>{q_label}</b><br>"
-                "Score: %{x:.0f}<br>"
-                "Percentile: %{customdata[0]:.0f}"
-                "<extra></extra>"
-            )
-        ))
+        # Multiple y-rows so hover fires anywhere within bar height, not just midline
+        y_offsets = np.linspace(-bar_height / 2 + 0.05, bar_height / 2 - 0.05, 5)
 
+        for y_idx, y_off in enumerate(y_offsets):
+            fig.add_trace(go.Scatter(
+                x=score_vals,
+                y=np.full(len(score_vals), y_center + y_off),
+                mode="markers",
+                marker=dict(color="rgba(0,0,0,0)", size=6),
+                name=q_label,
+                legendgroup=q_label,
+                showlegend=True if y_idx == 0 else False,
+                customdata=custom,
+                hovertemplate=(
+                    f"<b>{q_label}</b><br>"
+                    "Score: %{x:.0f}<br>"
+                    "Percentile: %{customdata[0]:.0f}"
+                    "<extra></extra>"
+                )
+            ))
+    
+    # OECD average median line
+    oecd_data = df[df["OECD"] == 1].copy()
+    if year is not None and "YEAR" in oecd_data.columns:
+        oecd_data = oecd_data[oecd_data["YEAR"] == year]
+    oecd_data = oecd_data.dropna(subset=["W_FSTUWT"] + pv_cols)
+
+    if len(oecd_data) > 30:
+        country_means = []
+        for oecd_cnt in oecd_data["CNT"].unique():
+            cnt_data = oecd_data[oecd_data["CNT"] == oecd_cnt].dropna(subset=["W_FSTUWT"] + pv_cols)
+            if len(cnt_data) < 30:
+                continue
+            # Weighted mean per country, averaged across PVs
+            pv_means = [
+                np.average(cnt_data[pv].values, weights=cnt_data["W_FSTUWT"].values)
+                for pv in pv_cols
+            ]
+            country_means.append(np.mean(pv_means))
+
+    if country_means:
+        oecd_mean = np.mean(country_means)  # equal weight per country
+
+        fig.add_vline(
+            x=oecd_mean,
+            line_dash="dash",
+            line_color="#555555",
+            line_width=1.5,
+            annotation_text=f"OECD average: {round(oecd_mean)}",
+            annotation_position="top",
+            annotation_font=dict(size=11, color="#555555")
+        )
+    
     fig.update_layout(**_base_layout(
         title=f"Score Distribution | {SUBJECTS[subject]}"
     ))
