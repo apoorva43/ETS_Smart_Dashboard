@@ -111,7 +111,8 @@ def plot_country_distributions(df, subject: str,
                                countries: list,
                                year: int = None,
                                show_oecd: bool = True,
-                               primary_country: str = None) -> go.Figure:
+                               primary_country: str = None,
+                               active_countries = None) -> go.Figure:
     fig = go.Figure()
 
     for i, cnt in enumerate(countries):
@@ -123,7 +124,7 @@ def plot_country_distributions(df, subject: str,
         if np.isnan(percs).all():
             continue
             
-        color = _country_color(cnt, countries)
+        color = _country_color(cnt, active_countries if active_countries is not None else countries)
         
         line_width = 3 if cnt == primary_country else 2
         marker_size = 10 if cnt == primary_country else 8
@@ -425,7 +426,9 @@ def plot_year_diff_percentile(df, subject: str, cnt: str,
 
 # score distribution
 def plot_weighted_interval_distribution(df, subject: str, countries: list,
-                                        year: int = None, interval_width: int = 20,
+                                        year: int = None,
+                                        active_countries = None, 
+                                        interval_width: int = 20,
                                         score_range: tuple = (0, 1000),
                                         show_oecd: bool = True) -> go.Figure:
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
@@ -452,7 +455,7 @@ def plot_weighted_interval_distribution(df, subject: str, countries: list,
             subset = subset[subset["YEAR"] == year]
         
         props = _country_proportions(subset)
-        color = _country_color(cnt, countries)
+        color = _country_color(cnt, active_countries if active_countries is not None else countries)
 
         fig.add_trace(go.Scatter(
             x=midpoints, y=props,
@@ -1511,20 +1514,20 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
         ))
 
     if not hi.empty:
-        # Highlighting adds a border and text label directly to the plot
-        fig.add_trace(go.Scatter(
-            x=hi["resource"], y=hi["score"],
-            mode="markers+text", name="Selected",
-            marker=dict(
-                color=OKABE_ITO.get("vermillion", "#D85A30"), 
-                size=14, 
-                line=dict(width=2, color="white")
-            ),
-            text=hi["CNT_LABEL"], 
-            textposition="top center", 
-            textfont=dict(size=11, color=OKABE_ITO.get("vermillion", "#D85A30")),
-            customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
-        ))
+       # Highlighting adds a border and text label directly to the plot
+       fig.add_trace(go.Scatter(
+           x=hi["resource"], y=hi["score"],
+           mode="markers+text", name="Selected",
+           marker=dict(
+               color=OKABE_ITO.get("vermillion", "#D85A30"),
+               size=14,
+               line=dict(width=2, color="white")
+           ),
+           text=hi["CNT_LABEL"],
+           textposition="top center",
+           textfont=dict(size=11, color=OKABE_ITO.get("vermillion", "#D85A30")),
+           customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
+       ))
 
     # Quadrant label annotations — positioned at 10th/90th percentile corners of data
     x_lo = float(np.nanpercentile(plot_df["resource"], 12))
