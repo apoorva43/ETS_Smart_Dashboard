@@ -800,47 +800,34 @@ def plot_belonging_by_immigration(df, countries: list, year: int = None,
     )
     return fig
 
-def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
+def _parse_color(color):
+    if color.startswith("#") and len(color) == 7:
+        return int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    elif color.startswith("rgb"):
+        clean = color.replace("rgba","").replace("rgb","").replace("(","").replace(")","")
+        parts = clean.split(",")
+        return int(parts[0]), int(parts[1]), int(parts[2])
+    return 128, 128, 128
+
+def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_percentile_text=True):
+    """
+    rows: list of dicts with keys:
+        - group: DataFrame (already filtered)
+        - label: str (y-axis label)
+        - color_rgb: tuple (r, g, b)
+        - y_center: float
+        - pv_cols: list
+        - legendgroup: str
+    """
     from scipy.stats import gaussian_kde
 
-    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
-    subset = df[df["CNT"].isin(countries)].copy()
-    if year is not None and "YEAR" in subset.columns:
-        subset = subset[subset["YEAR"] == year]
-
-    subset = subset.dropna(subset=["W_FSTUWT"] + pv_cols)
-    if len(subset) < min_group_n:
-        fig = go.Figure()
-        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
-        return fig
-
-    x_grid = np.linspace(100, 900, 500)
-    BANDS = [
-        (0,  10,  0.10),
-        (10, 25,  0.20),
-        (25, 75,  0.45),
-        (75, 90,  0.20),
-        (90, 100, 0.10),
-    ]
-    bar_height = 0.7
-    fig = go.Figure()
-
-    for row_idx, cnt_code in enumerate(countries):
-        group = subset[subset["CNT"] == cnt_code]
-        q_label = _cnt_label(cnt_code)
-        color = PALETTE[row_idx % len(PALETTE)]
-        if len(group) < min_group_n:
-            continue
-
-        if color.startswith("#") and len(color) == 7:
-            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
-        elif color.startswith("rgb"):
-            clean_rgb = color.replace("rgba","").replace("rgb","").replace("(","").replace(")","")
-            parts = clean_rgb.split(",")
-            r, g, b = int(parts[0]), int(parts[1]), int(parts[2])
-        else:
-            r, g, b = 128, 128, 128
+    for row in rows:
+        group = row["group"]
+        q_label = row["label"]
+        r, g, b = row["color_rgb"]
+        y_center = row["y_center"]
+        pv_cols = row["pv_cols"]
+        legendgroup = row["legendgroup"]
 
         kde_vals = []
         for pv in pv_cols:
@@ -873,9 +860,6 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             idx = np.searchsorted(cumw, p / 100)
             return float(sorted_scores[min(idx, len(sorted_scores) - 1)])
 
-        y_center = len(countries) - row_idx
-
-        # Shaded bands — legendgroup so toggle works
         for (lo_p, hi_p, alpha) in BANDS:
             x_lo = score_at_p(lo_p)
             x_hi = score_at_p(hi_p)
@@ -895,46 +879,26 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
                 fillcolor=f"rgba({r},{g},{b},{alpha})",
                 line=dict(color=f"rgba({r},{g},{b},0)", width=0),
                 mode="lines",
-                legendgroup=q_label,
+                legendgroup=legendgroup,
                 showlegend=False,
                 hoverinfo="skip"
             ))
 
-        # Median line
         med = score_at_p(50)
         fig.add_trace(go.Scatter(
             x=[med, med],
             y=[y_center - bar_height / 2, y_center + bar_height / 2],
             mode="lines",
             line=dict(color=f"rgb({r},{g},{b})", width=3),
-            legendgroup=q_label,
+            legendgroup=legendgroup,
             showlegend=False,
             hoverinfo="skip"
         ))
 
-        # All percentile labels as a single text trace to the right of the teardrop
-        p_annotate = [10, 25, 50, 75, 90]
-        p_labels = [f"P{p}: {round(score_at_p(p))}" for p in p_annotate]
-        p_xs = [round(score_at_p(p)) for p in p_annotate]
-
-        fig.add_trace(go.Scatter(
-            x=p_xs,
-            y=[y_center] * len(p_xs),
-            mode="text",
-            text=p_labels,
-            textposition="top center",
-            textfont=dict(size=9, color=f"rgba({r},{g},{b},0.85)"),
-            legendgroup=q_label,
-            showlegend=False,
-            hoverinfo="skip"
-        ))
-
-        # Percentile tick markers
         marker_ps = [10, 25, 50, 75, 90]
-        marker_xs = [round(score_at_p(p)) for p in marker_ps]
         fig.add_trace(go.Scatter(
-            x=marker_xs,
-            y=[y_center] * len(marker_xs),
+            x=[round(score_at_p(p)) for p in marker_ps],
+            y=[y_center] * len(marker_ps),
             mode="markers",
             marker=dict(
                 color=f"rgb({r},{g},{b})",
@@ -942,12 +906,25 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
                 symbol="line-ns",
                 line=dict(color=f"rgb({r},{g},{b})", width=2)
             ),
-            legendgroup=q_label,
+            legendgroup=legendgroup,
             showlegend=False,
             hoverinfo="skip"
         ))
 
-        # Hover trace
+        if show_percentile_text:
+            p_annotate = [10, 25, 50, 75, 90]
+            fig.add_trace(go.Scatter(
+                x=[round(score_at_p(p)) for p in p_annotate],
+                y=[y_center] * len(p_annotate),
+                mode="text",
+                text=[f"P{p}: {round(score_at_p(p))}" for p in p_annotate],
+                textposition="top center",
+                textfont=dict(size=9, color=f"rgba({r},{g},{b},0.85)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
         p_vals = np.arange(2, 98.2, 0.2)
         score_vals_raw = np.array([score_at_p(p) for p in p_vals])
         unique_mask = np.concatenate([[True], np.diff(score_vals_raw.round(0)) != 0])
@@ -960,7 +937,7 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             mode="markers",
             marker=dict(color="rgba(0,0,0,0)", size=8),
             name=q_label,
-            legendgroup=q_label,
+            legendgroup=legendgroup,
             showlegend=True,
             customdata=np.stack([p_vals_clean], axis=1),
             hovertemplate=(
@@ -971,160 +948,144 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             )
         ))
 
-    # OECD distribution row
+def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"].isin(countries)].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+    subset = subset.dropna(subset=["W_FSTUWT"] + pv_cols)
+
+    if len(subset) < min_group_n:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+        return fig
+
+    x_grid = np.linspace(100, 900, 500)
+    BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
+    bar_height = 0.7
+    fig = go.Figure()
+
+    rows = []
+    for row_idx, cnt_code in enumerate(countries):
+        group = subset[subset["CNT"] == cnt_code]
+        if len(group) < min_group_n:
+            continue
+        q_label = _cnt_label(cnt_code)
+        color = PALETTE[row_idx % len(PALETTE)]
+        r, g, b = _parse_color(color)
+        rows.append(dict(
+            group=group, label=q_label, color_rgb=(r, g, b),
+            y_center=len(countries) - row_idx,
+            pv_cols=pv_cols, legendgroup=q_label
+        ))
+
+    _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height)
+
+    # OECD row — same helper, y=0
     oecd_df = df[df["OECD"] == 1].copy()
     if year is not None and "YEAR" in oecd_df.columns:
         oecd_df = oecd_df[oecd_df["YEAR"] == year]
     oecd_df = oecd_df.dropna(subset=["W_FSTUWT"] + pv_cols)
 
     if len(oecd_df) > 30:
-        oecd_kde_vals = []
-        for pv in pv_cols:
-            scores = oecd_df[pv].dropna().values
-            weights = oecd_df.loc[oecd_df[pv].notna(), "W_FSTUWT"].values
-            if len(scores) < 10:
-                continue
-            try:
-                kde = gaussian_kde(scores, weights=weights, bw_method="scott")
-                oecd_kde_vals.append(kde(x_grid))
-            except Exception:
-                continue
+        _render_shaded_density_rows(fig, [dict(
+            group=oecd_df, label="OECD Average", color_rgb=(85, 85, 85),
+            y_center=0, pv_cols=pv_cols, legendgroup="OECD Average"
+        )], x_grid, BANDS, bar_height)
 
-        if oecd_kde_vals:
-            oecd_density = np.mean(oecd_kde_vals, axis=0)
-            oecd_density /= oecd_density.max()
+    all_tickvals = list(range(len(countries), 0, -1)) + [0]
+    all_ticktext = [_cnt_label(c) for c in countries] + ["OECD Average"]
 
-            oecd_y = 0
-            oecd_label = "OECD Average"
-            r_o, g_o, b_o = 85, 85, 85
-
-            all_oecd_scores = np.concatenate([oecd_df[pv].values for pv in pv_cols])
-            all_oecd_weights = np.tile(oecd_df["W_FSTUWT"].values, len(pv_cols))
-            valid = np.isfinite(all_oecd_scores) & np.isfinite(all_oecd_weights)
-            sort_idx = np.argsort(all_oecd_scores[valid])
-            s_scores = all_oecd_scores[valid][sort_idx]
-            s_weights = all_oecd_weights[valid][sort_idx]
-            cumw_oecd = np.cumsum(s_weights) / s_weights.sum()
-
-            def oecd_score_at_p(p):
-                idx = np.searchsorted(cumw_oecd, p / 100)
-                return float(s_scores[min(idx, len(s_scores) - 1)])
-
-            for (lo_p, hi_p, alpha) in BANDS:
-                x_lo = oecd_score_at_p(lo_p)
-                x_hi = oecd_score_at_p(hi_p)
-                mask = (x_grid >= x_lo) & (x_grid <= x_hi)
-                if mask.sum() < 2:
-                    continue
-                band_x = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
-                band_density = np.concatenate([[0], oecd_density[mask], [0]])
-                scaled_y_top = oecd_y + (band_density / 2) * bar_height
-                scaled_y_bot = oecd_y - (band_density / 2) * bar_height
-                poly_x = np.concatenate([band_x, band_x[::-1]])
-                poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
-
-                fig.add_trace(go.Scatter(
-                    x=poly_x, y=poly_y,
-                    fill="toself",
-                    fillcolor=f"rgba({r_o},{g_o},{b_o},{alpha})",
-                    line=dict(color=f"rgba({r_o},{g_o},{b_o},0)", width=0),
-                    mode="lines",
-                    legendgroup=oecd_label,
-                    showlegend=False,
-                    hoverinfo="skip"
-                ))
-
-            oecd_med = oecd_score_at_p(50)
-            fig.add_trace(go.Scatter(
-                x=[oecd_med, oecd_med],
-                y=[oecd_y - bar_height / 2, oecd_y + bar_height / 2],
-                mode="lines",
-                line=dict(color=f"rgb({r_o},{g_o},{b_o})", width=2.5, dash="dash"),
-                legendgroup=oecd_label,
-                showlegend=False,
-                hoverinfo="skip"
-            ))
-
-            p_annotate_o = [10, 25, 50, 75, 90]
-            p_labels_o = [f"P{p}: {round(oecd_score_at_p(p))}" for p in p_annotate_o]
-            p_xs_o = [round(oecd_score_at_p(p)) for p in p_annotate_o]
-
-            fig.add_trace(go.Scatter(
-                x=p_xs_o,
-                y=[oecd_y] * len(p_xs_o),
-                mode="text",
-                text=p_labels_o,
-                textposition="top center",
-                textfont=dict(size=9, color=f"rgba({r_o},{g_o},{b_o},0.85)"),
-                legendgroup=oecd_label,
-                showlegend=False,
-                hoverinfo="skip"
-            ))
-
-            # OECD hover trace
-            p_vals_o = np.arange(2, 98.2, 0.2)
-            sv_raw = np.array([oecd_score_at_p(p) for p in p_vals_o])
-            umask = np.concatenate([[True], np.diff(sv_raw.round(0)) != 0])
-            sv = sv_raw[umask]
-            pv_clean = p_vals_o[umask]
-
-            fig.add_trace(go.Scatter(
-                x=sv,
-                y=[oecd_y] * len(sv),
-                mode="markers",
-                marker=dict(color="rgba(0,0,0,0)", size=8),
-                name=oecd_label,
-                legendgroup=oecd_label,
-                showlegend=True,
-                customdata=np.stack([pv_clean], axis=1),
-                hovertemplate=(
-                    f"<b>{oecd_label}</b><br>"
-                    "Score: %{x:.0f}<br>"
-                    "Percentile: %{customdata[0]:.0f}"
-                    "<extra></extra>"
-                )
-            ))
-
-        # Update y-axis to include OECD row
-        all_tickvals = list(range(len(countries), 0, -1)) + [0]
-        all_ticktext = [_cnt_label(c) for c in countries] + ["OECD Average"]
-
-        fig.update_layout(**_base_layout(
-            title=f"Score Distribution | {SUBJECTS[subject]}"
-        ))
-        fig.update_layout(
-            hovermode="closest",
-            hoverlabel=dict(namelength=-1)
-        )
-        fig.update_xaxes(
-            title=f"{SUBJECTS[subject]} score",
-            range=[100, 900],
-            showspikes=True,
-            spikemode="across",
-            spikesnap="data",
-            tickformat="d",
-            hoverformat="d"
-        )
-        fig.update_yaxes(
-            tickvals=all_tickvals,
-            ticktext=all_ticktext,
-            showgrid=False,
-            zeroline=False,
-            range=[-0.7, len(countries) + 0.7]
-        )
-        return fig
-    
-    # Fallback layout if OECD data missing
     fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
     fig.update_layout(hovermode="closest", hoverlabel=dict(namelength=-1))
     fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900],
+                     showspikes=True, spikemode="across", spikesnap="data",
                      tickformat="d", hoverformat="d")
-    fig.update_yaxes(
-        tickvals=list(range(len(countries), 0, -1)),
-        ticktext=[_cnt_label(c) for c in countries],
-        showgrid=False, zeroline=False,
-        range=[0.3, len(countries) + 0.7]
-    )
+    fig.update_yaxes(tickvals=all_tickvals, ticktext=all_ticktext,
+                     showgrid=False, zeroline=False,
+                     range=[-0.7, len(countries) + 0.7])
+    return fig
+
+def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
+                               group_title, year=None, min_group_n=30):
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    subset = df[df["CNT"] == cnt].copy()
+    if year is not None and "YEAR" in subset.columns:
+        subset = subset[subset["YEAR"] == year]
+
+    # Handle continuous variables (ESCS) by binning into quartiles
+    if group_labels is None:
+        subset = subset.dropna(subset=[group_col])
+        subset["_group_bin"] = pd.qcut(
+            subset[group_col].rank(method="first"), q=4,
+            labels=["Q1 (lowest)", "Q2", "Q3", "Q4 (highest)"]
+        )
+        group_col = "_group_bin"
+        group_labels = {
+            "Q1 (lowest)": "Q1 (lowest)", "Q2": "Q2",
+            "Q3": "Q3", "Q4 (highest)": "Q4 (highest)"
+        }
+
+    subset = subset.dropna(subset=["W_FSTUWT"] + pv_cols)
+
+    if len(subset) < min_group_n:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+        return fig
+
+    # Compute group sizes and percentages for y-axis labels
+    total = len(subset)
+    group_sizes = {
+        code: len(subset[subset[group_col] == code])
+        for code in group_labels
+    }
+
+    # Sort by group size descending (largest group on top), skip for SES quartiles
+    is_ses = group_col == "_group_bin"
+    codes = list(group_labels.keys())
+    if not is_ses:
+        codes = sorted(codes, key=lambda c: group_sizes.get(c, 0), reverse=True)
+
+    x_grid = np.linspace(100, 900, 500)
+    BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
+    bar_height = 0.7
+    fig = go.Figure()
+
+    rows = []
+    ticktext = []
+    for row_idx, code in enumerate(codes):
+        group = subset[subset[group_col] == code]
+        if len(group) < min_group_n:
+            continue
+        pct = group_sizes.get(code, 0) / total * 100
+        base_label = group_labels[code]
+        y_label = f"{base_label} ({pct:.0f}%)"   # e.g. "Males (62%)"
+        color = PALETTE[row_idx % len(PALETTE)]
+        r, g, b = _parse_color(color)
+
+        rows.append(dict(
+            group=group, label=y_label, color_rgb=(r, g, b),
+            y_center=len(codes) - row_idx,
+            pv_cols=pv_cols, legendgroup=y_label
+        ))
+        ticktext.append(y_label)
+
+    _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height)
+
+    tickvals = list(range(len(codes), 0, -1))
+
+    fig.update_layout(**_base_layout(
+        title=f"{SUBJECTS[subject]} by {group_title} | {_cnt_label(cnt)}"
+    ))
+    fig.update_layout(hovermode="closest", hoverlabel=dict(namelength=-1))
+    fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900],
+                     showspikes=True, spikemode="across", spikesnap="data",
+                     tickformat="d", hoverformat="d")
+    fig.update_yaxes(tickvals=tickvals, ticktext=ticktext,
+                     showgrid=False, zeroline=False,
+                     range=[0.3, len(codes) + 0.7])
     return fig
 
 def plot_escs_shaded_density(df, subject, cnt, year=None, min_group_n=30):
