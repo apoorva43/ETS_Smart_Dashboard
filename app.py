@@ -42,6 +42,7 @@ from src.plotting_plotly import (
                           plot_immigration_shaded_density,
                           plot_immigration_score_distribution,
                           plot_resource_scatter,
+                          plot_group_shaded_density,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
                                 ses_difference_text,
@@ -371,7 +372,7 @@ def render_chart(chart_type, subject, selected_countries,
                 selected_year,
                 tuple(BASE_COLS + pv_cols + ["ST004D01T"])
             )
-            fig = plot_jitter_boxplot(
+            fig = plot_group_shaded_density(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
@@ -397,7 +398,7 @@ def render_chart(chart_type, subject, selected_countries,
                 tuple(BASE_COLS + pv_cols + ["ESCS"])
             )
 
-            fig = plot_jitter_boxplot(
+            fig = plot_group_shaded_density(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
@@ -446,7 +447,7 @@ def render_chart(chart_type, subject, selected_countries,
             render_chart_help(chart_type, group_key)
             df = fetch((primary_country,), selected_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
             
-            fig = plot_jitter_boxplot(
+            fig = plot_group_shaded_density(
                 df=df, subject=subject, cnt=primary_country,
                 group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year
             )
@@ -455,7 +456,7 @@ def render_chart(chart_type, subject, selected_countries,
         elif group_key == "School type":
             df = fetch((primary_country,), selected_year,
                        tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
-            fig = plot_jitter_boxplot(
+            fig = plot_group_shaded_density(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
@@ -1244,7 +1245,7 @@ def render_story_tab(available_years, story_country, story_subject):
                     st.markdown("**By socioeconomic background**")
                     if ses_ok:
                         group_col, group_labels = GROUP_OPTIONS["Socioeconomic status"]
-                        fig3a = plot_jitter_boxplot(
+                        fig3a = plot_group_shaded_density(
                             df_ses, story_subject,
                             story_country,
                             group_col=group_col, group_labels=group_labels, 
@@ -1359,7 +1360,7 @@ def render_story_tab(available_years, story_country, story_subject):
                 )
 
             group_col, group_labels = GROUP_OPTIONS["School type"]
-            fig4b = plot_jitter_boxplot(
+            fig4b = plot_group_shaded_density(
                 df=df_type, subject=story_subject, cnt=story_country,
                 group_col=group_col, group_labels=group_labels,
                 group_title="School Type", year=story_year
@@ -1411,7 +1412,7 @@ def render_story_tab(available_years, story_country, story_subject):
                 )
 
             group_col, group_labels = GROUP_OPTIONS["School location"]
-            fig4a = plot_jitter_boxplot(
+            fig4a = plot_group_shaded_density(
                 df=df_loc, subject=story_subject,
                 cnt=story_country, group_col=group_col, group_labels=group_labels,
                 group_title="School Location", year=story_year
