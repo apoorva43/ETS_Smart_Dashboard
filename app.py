@@ -54,7 +54,7 @@ S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 CHART_TYPES = [
     "Percentile score profile",
     "Score change over time",
-    "Belonging by Immigration",
+    "Intersectional Heatmap",
     "Group comparison",
     "Country Scatterplot"
 ]
@@ -521,8 +521,8 @@ def render_chart(chart_type, subject, selected_countries,
             f"Each coloured line shows change relative to {reference_year}."
         )
 
-    # 5. Belonging by Immigration
-    elif chart_type == "Belonging by Immigration":
+    # 5. Intersectional Heatmap
+    elif chart_type == "Intersectional Heatmap":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols + extra))
         
@@ -531,6 +531,11 @@ def render_chart(chart_type, subject, selected_countries,
             countries=selected_countries, year=selected_year
         )
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
+
+        if len(selected_countries) > 1:
+            st.info(
+                f"Intersectional heatmap shows one country at a time — displaying {_cnt_label(primary_country)}."
+            )
         
         if missing_cnts:
             st.warning(
@@ -1483,7 +1488,7 @@ elif app_mode == "🔍 Explore":
     country_pool = all_countries
 
     DEFAULT_COUNTRIES = ["CAN", "USA"]
-    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
+    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison", "Intersectional Heatmap"]
 
     if "memory_countries" not in st.session_state:
         st.session_state.memory_countries = [
