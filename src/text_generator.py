@@ -29,6 +29,22 @@ def _cnt_label(code: str) -> str:
     """
     return COUNTRY_NAMES.get(str(code), str(code))
 
+def _oecd_mean_score(df, subject, year=None):
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
+    oecd_df = df[df["OECD"] == 1].copy()
+    if year is not None and "YEAR" in oecd_df.columns:
+        oecd_df = oecd_df[oecd_df["YEAR"] == year]
+    country_means = []
+    for cnt in oecd_df["CNT"].unique():
+        c = oecd_df[oecd_df["CNT"] == cnt].dropna(subset=["W_FSTUWT"] + pv_cols)
+        if len(c) < 30:
+            continue
+        country_means.append(np.mean([
+            np.average(c[pv].values, weights=c["W_FSTUWT"].values)
+            for pv in pv_cols
+        ]))
+    return np.mean(country_means) if country_means else np.nan
+
 def country_distribution_text(df, subject: str, countries: list, year: int = None) -> str:
     """
     Generates insight text comparing the primary country's score distribution
@@ -44,40 +60,47 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
         subset = subset[subset["YEAR"] == year]
 
     cnt_percs = weighted_percentiles_pv(subset, subject, [10, 50, 90])
+    pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in subset.columns]
+    cnt_mean = np.mean([
+        np.average(subset[pv].values, weights=subset["W_FSTUWT"].values)
+        for pv in pv_cols if len(subset[pv].dropna()) > 0
+    ])
+    oecd_mean = _oecd_mean_score(df, subject, year=year)
     oecd_percs = get_oecd_percentiles(df, subject, [10, 50, 90], year=year)
 
-    if np.isnan(cnt_percs).all() or np.isnan(oecd_percs).all():
+    if np.isnan(cnt_percs).all() or np.isnan(oecd_mean) or np.isnan(cnt_mean):
         return "Insufficient data to compare scores."
 
-    cnt_p10,  cnt_p50,  cnt_p90  = cnt_percs
+    cnt_p10, cnt_p50, cnt_p90 = cnt_percs
     oecd_p10, oecd_p50, oecd_p90 = oecd_percs
-
-    diff_p50 = cnt_p50 - oecd_p50
+    diff_mean = cnt_mean - oecd_mean
+    diff_mean_abs = abs(diff_mean)
     diff_p10 = cnt_p10 - oecd_p10
     diff_p90 = cnt_p90 - oecd_p90
-
     subject_label = SUBJECTS.get(subject, subject)
-    direction_p50 = "above" if diff_p50 >= 0 else "below"
-    diff_p50_abs  = abs(diff_p50)
 
-    # Main sentence — median comparison
-    if diff_p50_abs < 3:
+    # Main sentence — country median vs OECD mean
+    if diff_mean_abs < 3:
         main = (
-            f"At the median, students in {_cnt_label(cnt)} score in line with "
-            f"the OECD average in {subject_label} ({cnt_p50:.0f} points)."
+            f"On average, students in {_cnt_label(cnt)} score in line with "
+            f"the OECD average in {subject_label} (mean: {cnt_mean:.0f} vs OECD: {oecd_mean:.0f}; "
+            f"median: {cnt_p50:.0f})."
         )
+        direction_general = "in line with"
     else:
+        direction = "above" if diff_mean > 0 else "below"
         main = (
-            f"At the median, students in {_cnt_label(cnt)} score "
-            f"{diff_p50_abs:.0f} points {direction_p50} the OECD average "
-            f"in {subject_label} ({cnt_p50:.0f} vs {oecd_p50:.0f})."
+            f"On average, students in {_cnt_label(cnt)} score "
+            f"{diff_mean_abs:.0f} points {direction} the OECD average "
+            f"in {subject_label} (mean: {cnt_mean:.0f} vs OECD: {oecd_mean:.0f}; "
+            f"median: {cnt_p50:.0f})."
         )
+        direction_general = direction
 
-    # Spectrum sentence — does the pattern hold across the distribution?
+    # Spectrum sentence
     diff_spread = abs(diff_p90 - diff_p10)
-    if diff_spread > 15:
-        # The gap is meaningfully different at different points in the distribution
-        if diff_p10 < diff_p90:
+    if not np.isnan(oecd_percs).all() and diff_spread > 15:
+        if abs(diff_p10) < abs(diff_p90):
             spectrum = (
                 f" The difference is larger at the top of the distribution "
                 f"({diff_p90:+.0f} pts at P90) than at the bottom "
@@ -90,13 +113,17 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
                 f"({diff_p90:+.0f} pts at P90)."
             )
     else:
-        # Pattern is consistent
-        direction_general = "above" if diff_p50 >= 0 else "below"
-        spectrum = (
-            f" This pattern is consistent across the distribution — "
-            f"students at all performance levels score similarly "
-            f"{direction_general} the OECD average."
-        )
+        if direction_general == "in line with":
+            spectrum = (
+                " This pattern is consistent across the distribution — "
+                "students at all performance levels score similarly to the OECD average."
+            )
+        else:
+            spectrum = (
+                f" This pattern is consistent across the distribution — "
+                f"students at all performance levels score similarly "
+                f"{direction_general} the OECD average."
+            )
 
     return main + spectrum
 
@@ -166,7 +193,7 @@ def gender_gap_text(df, subject, cnt, year=None):
     return f"{overall} {spread}"
 
 
-def ses_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
+def ses_difference_text(df, subject: str, cnt: str, year: int = None) -> str:
     """
     Generates insight text for the SES chart.
     Makes a claim across the spectrum, not just the median.
@@ -176,12 +203,8 @@ def ses_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
         df, subject, [10, 50, 90], cnt=cnt, year=year
     )
 
-    q1_p10 = curves.get("Q1 (low SES)",  [np.nan, np.nan, np.nan])[0]
-    q1_p50 = curves.get("Q1 (low SES)",  [np.nan, np.nan, np.nan])[1]
-    q1_p90 = curves.get("Q1 (low SES)",  [np.nan, np.nan, np.nan])[2]
-    q4_p10 = curves.get("Q4 (high SES)", [np.nan, np.nan, np.nan])[0]
-    q4_p50 = curves.get("Q4 (high SES)", [np.nan, np.nan, np.nan])[1]
-    q4_p90 = curves.get("Q4 (high SES)", [np.nan, np.nan, np.nan])[2]
+    q1_p10, q1_p50, q1_p90 = curves.get("Q1 (low SES)",  [np.nan, np.nan, np.nan])
+    q4_p10, q4_p50, q4_p90 = curves.get("Q4 (high SES)", [np.nan, np.nan, np.nan])
 
     if np.isnan(q1_p50) or np.isnan(q4_p50):
         return "Insufficient data to compute socioeconomic differences."
@@ -189,35 +212,42 @@ def ses_gap_text(df, subject: str, cnt: str, year: int = None) -> str:
     diff_p50 = q4_p50 - q1_p50
     diff_p10 = q4_p10 - q1_p10
     diff_p90 = q4_p90 - q1_p90
+    
     subject_label = SUBJECTS[subject]
+    
+    # Use absolute values
+    diff_p50_abs = abs(diff_p50)
+    direction_p50 = "higher" if diff_p50 >= 0 else "lower"
 
     # Main sentence
     main = (
         f"In {_cnt_label(cnt)}, students from the highest socioeconomic backgrounds "
-        f"score {diff_p50:.0f} points higher than those from the lowest backgrounds "
+        f"score {diff_p50_abs:.0f} points {direction_p50} than those from the lowest backgrounds "
         f"at the median in {subject_label}."
     )
 
     # Spectrum — does the difference widen or narrow across the distribution?
     if not (np.isnan(diff_p10) or np.isnan(diff_p90)):
-        spread = abs(diff_p90 - diff_p10)
+        # Compare the absolute magnitudes just in case of negative differences
+        spread = abs(abs(diff_p90) - abs(diff_p10))
+        
         if spread > 15:
-            if diff_p90 > diff_p10:
+            if abs(diff_p90) > abs(diff_p10):
                 spectrum = (
                     f" This difference widens at the top of the distribution "
-                    f"({diff_p90:.0f} pts at P90 vs {diff_p10:.0f} pts at P10), "
+                    f"({abs(diff_p90):.0f} pts at P90 vs {abs(diff_p10):.0f} pts at P10), "
                     f"suggesting that high-SES students particularly pull ahead "
                     f"among the highest achievers."
                 )
             else:
                 spectrum = (
                     f" This difference is largest among lower-performing students "
-                    f"({diff_p10:.0f} pts at P10 vs {diff_p90:.0f} pts at P90)."
+                    f"({abs(diff_p10):.0f} pts at P10 vs {abs(diff_p90):.0f} pts at P90)."
                 )
         else:
             spectrum = (
                 f" This difference is fairly consistent across the performance "
-                f"spectrum ({diff_p10:.0f} pts at P10, {diff_p90:.0f} pts at P90)."
+                f"spectrum ({abs(diff_p10):.0f} pts at P10, {abs(diff_p90):.0f} pts at P90)."
             )
     else:
         spectrum = ""

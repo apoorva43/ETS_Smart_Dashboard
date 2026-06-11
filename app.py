@@ -30,6 +30,7 @@ from src.pisa_stats import (
     compute_escs_quartile_percentiles,
     compute_group_percentiles,
     get_oecd_percentiles,
+    compute_weighted_se_pv
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
@@ -43,7 +44,7 @@ from src.plotting_plotly import (
                           plot_resource_scatter,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
-                                ses_gap_text,
+                                ses_difference_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
@@ -53,7 +54,7 @@ S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 CHART_TYPES = [
     "Percentile score profile",
     "Score change over time",
-    "Belonging by Immigration",
+    "Intersectional Heatmap",
     "Group comparison",
     "Country Scatterplot"
 ]
@@ -70,6 +71,9 @@ EQUITY_COLS = ["ESCS", "HISEI", "PAREDINT", "HOMEPOS",
                "SC001Q01TA", "SCHLTYPE", "STRATUM", "CNTSCHID", "CNTSTUID"]
 
 PV_BY_SUBJ = {"MATH": PV_MATH, "READ": PV_READ, "SCIE": PV_SCIE}
+REP_COLS = [f"W_FSTURWT{r}" for r in range(1, 81)]
+SE_THRESHOLD = 3.5 
+CI_Z = 1.96 # 95% confidence interval
 
 # Helper function to load data with caching
 @st.cache_data(ttl=3600)
@@ -330,9 +334,6 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(country_distribution_text(
-                df, subject, valid_countries, year=selected_year
-            ))
 
     # 2. Group Comparison
     elif chart_type == "Group comparison":
@@ -412,7 +413,7 @@ def render_chart(chart_type, subject, selected_countries,
             )
 
             st.markdown(
-                ses_gap_text(
+                ses_difference_text(
                     df,
                     subject,
                     primary_country,
@@ -517,8 +518,8 @@ def render_chart(chart_type, subject, selected_countries,
             f"Each coloured line shows change relative to {reference_year}."
         )
 
-    # 5. Belonging by Immigration
-    elif chart_type == "Belonging by Immigration":
+    # 5. Intersectional Heatmap
+    elif chart_type == "Intersectional Heatmap":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols + extra))
         
@@ -527,6 +528,11 @@ def render_chart(chart_type, subject, selected_countries,
             countries=selected_countries, year=selected_year
         )
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
+
+        if len(selected_countries) > 1:
+            st.info(
+                f"Intersectional heatmap shows one country at a time — displaying {_cnt_label(primary_country)}."
+            )
         
         if missing_cnts:
             st.warning(
@@ -701,13 +707,13 @@ def _policy_box(text: str):
     )
 
 
-def _chart_expander(label: str, fig, how_to_read: str):
+def _chart_expander(label: str, fig, how_to_read: str, expanded: bool = True):
     """
     Render a chart inside a collapsible expander with a how-to-read note.
     Replaces the current pattern of st.plotly_chart() + separate st.expander().
     The chart and its explanation are always together — never separated.
     """
-    with st.expander(f"📊 {label}", expanded=False):
+    with st.expander(f"📊 {label}", expanded=expanded):
         st.plotly_chart(fig, use_container_width=True,
                         config={"displayModeBar": False})
         st.markdown(
@@ -823,7 +829,7 @@ def render_story_tab(available_years, story_country, story_subject):
             Score differences between demographic groups reflect
             **structural inequalities** in access to resources, language
             support, and school quality — not inherent differences in
-            students' ability or potential. For more guidance, see:
+            students' ability or potential. For more information, see:
             [Avoiding Deficit Narratives in Education Research](https://files.eric.ed.gov/fulltext/EJ1348584.pdf).
         """)
 
@@ -838,6 +844,13 @@ def render_story_tab(available_years, story_country, story_subject):
 
     fetch_cnts = tuple(set([story_country]) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
+
+    # Fetch replicate weights for standard error computation
+    df_s1_rep = fetch(
+        (story_country,),
+        story_year,
+        tuple(BASE_COLS + pv_cols + REP_COLS)
+    )
 
     missing_s1 = check_missing_countries(
         df_s1, [f"PV1{story_subject}"], [story_country], story_year
@@ -855,18 +868,46 @@ def render_story_tab(available_years, story_country, story_subject):
         )
         if dist_text:
             _insight_box(dist_text)
+            st.markdown(
+                "<small>**Note:** Averages reflect mean scores across students, "
+                "reported equally across OECD member countries per PISA's official methodology. "
+                "See [OECD PISA 2022 Results, Volume I](https://www.oecd.org/en/publications/pisa-2022-results-volume-i_53f23881-en.html).</small>",
+                unsafe_allow_html=True
+            )
 
-        # Conditional amber — if difference > 30 points at median
+        # Conditional amber — if difference > 20 points at median
         cnt_subset = df_s1[df_s1["CNT"] == story_country]
         if story_year:
             cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
-        cnt_med  = weighted_percentiles_pv(cnt_subset,  story_subject, [50])
-        oecd_med = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
-
-        if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()):
-            diff = abs(cnt_med[0] - oecd_med[0])
-            if diff >= 30:
-                direction = "above" if cnt_med[0] > oecd_med[0] else "below"
+        
+        # Compute mean scores
+        s1_pv_cols = [
+            f"PV{i}{story_subject}" for i in range(1, 11)
+            if f"PV{i}{story_subject}" in df_s1.columns
+        ]
+        cnt_mean_score = np.mean([
+            np.average(cnt_subset[pv].values, weights=cnt_subset["W_FSTUWT"].values)
+            for pv in s1_pv_cols
+            if pv in cnt_subset.columns
+        ])        
+        oecd_country_means = []
+        for oecd_cnt in df_s1[df_s1["OECD"] == 1]["CNT"].unique():
+            c = df_s1[
+                (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
+            ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
+            if len(c) < 30:
+                continue
+            oecd_country_means.append(np.mean([
+                np.average(c[pv].values, weights=c["W_FSTUWT"].values)
+                for pv in s1_pv_cols
+            ]))
+        oecd_mean_score = np.mean(oecd_country_means) if oecd_country_means else np.nan
+        
+        # Conditional amber box
+        if not (np.isnan(cnt_mean_score).all() or np.isnan(oecd_mean_score)):
+            diff = abs(cnt_mean_score - oecd_mean_score)
+            if diff >= 20:
+                direction = "above" if cnt_mean_score > oecd_mean_score else "below"
                 _pullquote_box(
                     f"A difference of {diff:.0f} points represents a "
                     f"meaningful distance from the OECD average — "
@@ -877,27 +918,68 @@ def render_story_tab(available_years, story_country, story_subject):
 
         # Metric cards
         cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
-        p10_p90_spread = (cnt_p10_p90[1] - cnt_p10_p90[0]) if not np.isnan(cnt_p10_p90).all() else None
-        delta_val = cnt_med[0] - oecd_med[0] if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()) else None
-        col1, col2, col3 = st.columns(3)
-        with col1:
+        p10_p90_spread = (
+            cnt_p10_p90[1] - cnt_p10_p90[0]
+            if not np.isnan(cnt_p10_p90).all() else None
+        )
+        delta_val = (
+            cnt_mean_score - oecd_mean_score 
+            if not np.isnan(cnt_mean_score) else None
+        )
+
+        # Calculate standard error and 95% CI
+        cnt_se = compute_weighted_se_pv(
+            df_s1_rep[df_s1_rep["CNT"] == story_country],
+            story_subject
+        )
+        
+        show_se_card = (not np.isnan(cnt_se)) and (cnt_se > SE_THRESHOLD)
+
+        ci_margin = CI_Z * cnt_se if not np.isnan(cnt_se) else np.nan
+
+        # Dynamic column layout: 4 cards if SE is high, 3 otherwise
+        cols = st.columns(4 if show_se_card else 3)
+
+        # Card 1: country average score
+        with cols[0]:
             st.metric(
-                f"{_cnt_label(story_country)} median score",
-                f"{cnt_med[0]:.0f}" if not np.isnan(cnt_med).all() else "N/A",
+                f"{_cnt_label(story_country)} average score",
+                f"{cnt_mean_score:.0f}" if not np.isnan(cnt_mean_score) else "N/A",
                 delta=f"{delta_val:+.0f} pts vs OECD" if delta_val is not None else None,
             )
-        with col2:
+
+        # Card 2: OECD average
+        with cols[1]:
             st.metric(
                 "OECD average",
-                f"{oecd_med[0]:.0f}" if not np.isnan(oecd_med).all() else "N/A",
-                help="Average median score across all 38 OECD member countries"
+                f"{oecd_mean_score:.0f}" if not np.isnan(oecd_mean_score) else "N/A",
+                help="Mean score averaged equally across all OECD member countries"
             )
-        with col3:
+
+        # Card 3: spread
+        with cols[2]:
             st.metric(
-                "P10 → P90 spread",
+                "P10 → P90 Spread",
                 f"{p10_p90_spread:.0f} pts" if p10_p90_spread is not None else "N/A",
                 help="Score range between the bottom 10% and top 10% of students"
             )
+
+        # Card 4: SE + 95% CI, only when SE > SE_THRESHOLD
+        if show_se_card:
+            with cols[3]:
+                ci_str = (
+                    f"[{cnt_mean_score - ci_margin:.0f}, {cnt_mean_score + ci_margin:.0f}]"
+                    if not np.isnan(ci_margin) and not np.isnan(cnt_mean_score)
+                    else "N/A"
+                )
+                st.metric(
+                    label="Standard error",
+                    value=f"±{cnt_se:.1f} pts",
+                    help=(
+                        f"Sampling and measurement uncertainty around the mean score "
+                        f"exceeds {SE_THRESHOLD} pts. The 95% confidence interval is {ci_str}. "
+                    )
+                )
 
         # Chart + how to read
         fig1 = plot_country_shaded_density(
@@ -907,11 +989,12 @@ def render_story_tab(available_years, story_country, story_subject):
         _chart_expander(
             "Show full chart",
             fig1,
-            "The x-axis is the percentile (P10 = bottom 10%, P90 = top 10%). "
-            "The y-axis is the PISA score at that position. "
-            "The dashed line is the OECD average. "
-            "If the country's curve sits above the OECD line, students score "
-            "higher at every point in the distribution."
+            f"The bar shows the score distribution for {_cnt_label(story_country)}. "
+            "Darker shading shows where most students are concentrated (the middle 50%), "
+            "lighter shading towards the tails. "
+            "The solid vertical line marks the median score (midpoint of the distribution). "
+            "The dashed vertical line is the OECD average. "
+            "Hover over the bar to see the score and percentile at that point."
         )
 
         _policy_box(
@@ -984,7 +1067,7 @@ def render_story_tab(available_years, story_country, story_subject):
                     better_end = "top" if worse_end == "bottom" else "bottom"
                     worse_val  = delta_p10 if worse_end == "bottom" else delta_p90
                     better_val = delta_p90 if worse_end == "bottom" else delta_p10
-                    _pullquote_box(
+                    _insight_box(
                         f"The change is not uniform across the distribution — "
                         f"students at the {worse_end} lost more "
                         f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
@@ -1154,7 +1237,7 @@ def render_story_tab(available_years, story_country, story_subject):
         )
 
         if ses_ok or immig_ok:
-            with st.expander("📊 Show full charts", expanded=False):
+            with st.expander("📊 Show full charts", expanded=True):
                 chart_col1, chart_col2 = st.columns(2)
 
                 with chart_col1:
@@ -1437,7 +1520,7 @@ elif app_mode == "🔍 Explore":
     country_pool = all_countries
 
     DEFAULT_COUNTRIES = ["CAN", "USA"]
-    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
+    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison", "Intersectional Heatmap"]
 
     if "memory_countries" not in st.session_state:
         st.session_state.memory_countries = [
