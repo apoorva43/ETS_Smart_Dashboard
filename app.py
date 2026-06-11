@@ -1030,7 +1030,7 @@ def render_story_tab(available_years, story_country, story_subject):
                     better_end = "top" if worse_end == "bottom" else "bottom"
                     worse_val  = delta_p10 if worse_end == "bottom" else delta_p90
                     better_val = delta_p90 if worse_end == "bottom" else delta_p10
-                    _pullquote_box(
+                    _insight_box(
                         f"The change is not uniform across the distribution — "
                         f"students at the {worse_end} lost more "
                         f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
