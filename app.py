@@ -891,7 +891,7 @@ def render_story_tab(available_years, story_country, story_subject):
             if pv in cnt_subset.columns
         ])        
         oecd_country_means = []
-        for oecd_cnt in df_s1[ds_s1["OECD"] == 1]["CNT"].unique():
+        for oecd_cnt in df_s1[df_s1["OECD"] == 1]["CNT"].unique():
             c = df_s1[
                 (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
             ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
