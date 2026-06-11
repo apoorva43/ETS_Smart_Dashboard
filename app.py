@@ -30,6 +30,7 @@ from src.pisa_stats import (
     compute_escs_quartile_percentiles,
     compute_group_percentiles,
     get_oecd_percentiles,
+    compute_weighted_se_pv
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
@@ -70,6 +71,9 @@ EQUITY_COLS = ["ESCS", "HISEI", "PAREDINT", "HOMEPOS",
                "SC001Q01TA", "SCHLTYPE", "STRATUM", "CNTSCHID", "CNTSTUID"]
 
 PV_BY_SUBJ = {"MATH": PV_MATH, "READ": PV_READ, "SCIE": PV_SCIE}
+REP_COLS = [f"W_FSTURWT{r}" for r in range(1, 81)]
+SE_THRESHOLD = 3.5 
+CI_Z = 1.96 # 95% confidence interval
 
 # Helper function to load data with caching
 @st.cache_data(ttl=3600)
@@ -839,6 +843,13 @@ def render_story_tab(available_years, story_country, story_subject):
     fetch_cnts = tuple(set([story_country]) | set(oecd_countries))
     df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
 
+    # Fetch replicate weights for standard error computation
+    df_s1_rep = fetch(
+        (story_country,),
+        story_year,
+        tuple(BASE_COLS + pv_cols + REP_COLS)
+    )
+
     missing_s1 = check_missing_countries(
         df_s1, [f"PV1{story_subject}"], [story_country], story_year
     )
@@ -879,25 +890,61 @@ def render_story_tab(available_years, story_country, story_subject):
         cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
         p10_p90_spread = (cnt_p10_p90[1] - cnt_p10_p90[0]) if not np.isnan(cnt_p10_p90).all() else None
         delta_val = cnt_med[0] - oecd_med[0] if not (np.isnan(cnt_med).all() or np.isnan(oecd_med).all()) else None
-        col1, col2, col3 = st.columns(3)
-        with col1:
+
+        # Calculate standard error and 95% CI
+        cnt_se = compute_weighted_se_pv(
+            df_s1_rep[df_s1_rep["CNT"] == story_country],
+            story_subject
+        )
+        
+        show_se_card = (not np.isnan(cnt_se)) and (cnt_se > SE_THRESHOLD)
+
+        ci_margin = CI_Z * cnt_se if not np.isnan(cnt_se) else np.nan
+
+        # Dynamic column layout: 4 cards if SE is high, 3 otherwise
+        cols = st.columns(4 if show_se_card else 3)
+
+        # Card 1: country median
+        with cols[0]:
             st.metric(
-                f"{_cnt_label(story_country)} median score",
+                f"{_cnt_label(story_country)} Median Score",
                 f"{cnt_med[0]:.0f}" if not np.isnan(cnt_med).all() else "N/A",
                 delta=f"{delta_val:+.0f} pts vs OECD" if delta_val is not None else None,
             )
-        with col2:
+
+        # Card 2: OECD median
+        with cols[1]:
             st.metric(
-                "OECD average",
+                "OECD Median Average",
                 f"{oecd_med[0]:.0f}" if not np.isnan(oecd_med).all() else "N/A",
                 help="Average median score across all 38 OECD member countries"
             )
-        with col3:
+
+        # Card 3: spread
+        with cols[2]:
             st.metric(
-                "P10 → P90 spread",
+                "P10 → P90 Spread",
                 f"{p10_p90_spread:.0f} pts" if p10_p90_spread is not None else "N/A",
                 help="Score range between the bottom 10% and top 10% of students"
             )
+
+        # Card 4: SE + 95% CI, only when SE > SE_THRESHOLD
+        if show_se_card:
+            with cols[3]:
+                ci_str = (
+                    f"[{cnt_med[0] - ci_margin:.0f}, {cnt_med[0] + ci_margin:.0f}]"
+                    if not np.isnan(ci_margin) and not np.isnan(cnt_med).all()
+                    else "N/A"
+                )
+                st.metric(
+                    label="Standard Error",
+                    value=f"±{cnt_se:.1f} pts",
+                    delta=f"95% CI {ci_str}",
+                    delta_color="off",
+                    help=(
+                        f"Add help message!!!"
+                    )
+                )
 
         # Chart + how to read
         fig1 = plot_country_shaded_density(
