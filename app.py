@@ -705,13 +705,13 @@ def _policy_box(text: str):
     )
 
 
-def _chart_expander(label: str, fig, how_to_read: str):
+def _chart_expander(label: str, fig, how_to_read: str, expanded: bool = True):
     """
     Render a chart inside a collapsible expander with a how-to-read note.
     Replaces the current pattern of st.plotly_chart() + separate st.expander().
     The chart and its explanation are always together — never separated.
     """
-    with st.expander(f"📊 {label}", expanded=False):
+    with st.expander(f"📊 {label}", expanded=expanded):
         st.plotly_chart(fig, use_container_width=True,
                         config={"displayModeBar": False})
         st.markdown(
