@@ -939,10 +939,9 @@ def render_story_tab(available_years, story_country, story_subject):
                 st.metric(
                     label="Standard Error",
                     value=f"±{cnt_se:.1f} pts",
-                    delta=f"95% CI {ci_str}",
-                    delta_color="off",
                     help=(
-                        f"Add help message!!!"
+                        f"Sampling and measurement uncertainty around the mean score "
+                        f"exceeds {SE_THRESHOLD} pts. The 95% confidence interval is {ci_str}. "
                     )
                 )
 
