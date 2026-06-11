@@ -862,24 +862,31 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             x_hi = score_at_p(hi_p)
             fill_color = f"rgba({r},{g},{b},{alpha})"
 
-            fig.add_shape(
-                type="rect",
-                x0=x_lo, x1=x_hi,
-                y0=y_center - bar_height / 2,
-                y1=y_center + bar_height / 2,
+            fig.add_trace(go.Scatter(
+                x=[x_lo, x_hi, x_hi, x_lo, x_lo],
+                y=[y_center - bar_height/2, y_center - bar_height/2,
+                   y_center + bar_height/2, y_center + bar_height/2,
+                   y_center - bar_height/2],
+                fill="toself",
                 fillcolor=fill_color,
-                line=dict(width=0),
-            )
+                line=dict(width=0, color="rgba(0,0,0,0)"),
+                mode="lines",
+                legendgroup=q_label,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
 
         # Median line
         med = score_at_p(50)
-        fig.add_shape(
-            type="line",
-            x0=med, x1=med,
-            y0=y_center - bar_height / 2,
-            y1=y_center + bar_height / 2,
-            line=dict(color=f"rgb({r},{g},{b})", width=3)
-        )
+        fig.add_trace(go.Scatter(
+            x=[med, med],
+            y=[y_center - bar_height/2, y_center + bar_height/2],
+            mode="lines",
+            line=dict(color=f"rgb({r},{g},{b})", width=3),
+            legendgroup=q_label,
+            showlegend=False,
+            hoverinfo="skip"
+        ))
 
         # Deduplicate — remove consecutive duplicate scores
         p_vals = np.arange(2, 98.2, 0.2)
