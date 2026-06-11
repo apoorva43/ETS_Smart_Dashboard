@@ -1200,7 +1200,7 @@ def render_story_tab(available_years, story_country, story_subject):
         )
 
         if ses_ok or immig_ok:
-            with st.expander("📊 Show full charts", expanded=False):
+            with st.expander("📊 Show full charts", expanded=True):
                 chart_col1, chart_col2 = st.columns(2)
 
                 with chart_col1:
