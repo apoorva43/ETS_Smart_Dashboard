@@ -330,7 +330,7 @@ def render_chart(chart_type, subject, selected_countries,
                 df, subject, valid_countries, year=selected_year
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.markdown(country_distribution_text(
+            st.info(country_distribution_text(
                 df, subject, valid_countries, year=selected_year
             ))
 
@@ -600,7 +600,7 @@ def render_chart(chart_type, subject, selected_countries,
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         
-        st.markdown(scatter_correlation_text(
+        st.info(scatter_correlation_text(
             df=df, subject=subject, resource_col=selected_col,
             resource_label=selected_resource_label, year=selected_year,
             highlight_countries=valid_countries
@@ -1397,23 +1397,11 @@ st.sidebar.markdown("---")
 if app_mode == "📖 Data Story":
     st.sidebar.header("📖 Story Controls")
 
-    story_country_group = st.sidebar.radio(
-        "Country group",
-        ["All", "OECD members", "Partner countries"],
-        key="story_country_group"
-    )
-    if story_country_group == "OECD members":
-        story_pool = oecd_countries
-    elif story_country_group == "Partner countries":
-        story_pool = partner_countries
-    else:
-        story_pool = all_countries
-
-    default_idx = story_pool.index("CAN") if "CAN" in story_pool else 0
+    default_idx = all_countries.index("CAN") if "CAN" in all_countries else 0
 
     story_country = st.sidebar.selectbox(
         "Focus country", 
-        story_pool, 
+        all_countries, 
         index=default_idx, 
         format_func=_cnt_label,
         key="story_country"
@@ -1446,15 +1434,7 @@ elif app_mode == "🔍 Explore":
 
     st.sidebar.markdown("---")
 
-    country_group = st.sidebar.radio(
-        "Country group", ["All", "OECD members", "Partner countries"]
-    )
-    if country_group == "OECD members":
-        country_pool = oecd_countries
-    elif country_group == "Partner countries":
-        country_pool = partner_countries
-    else:
-        country_pool = all_countries
+    country_pool = all_countries
 
     DEFAULT_COUNTRIES = ["CAN", "USA"]
     SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison"]
