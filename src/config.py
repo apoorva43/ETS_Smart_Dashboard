@@ -72,6 +72,8 @@ PALETTE = [
     OKABE_ITO["vermillion"],
     OKABE_ITO["green"],
     OKABE_ITO["pink"],
+    OKABE_ITO["orange"],
+    OKABE_ITO["sky_blue"],
 ]
 
 MIN_GROUP_N = 30  # minimum rows to compute a stat; below this return NaN
