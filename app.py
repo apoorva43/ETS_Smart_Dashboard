@@ -1084,10 +1084,9 @@ def render_story_tab(available_years, story_country, story_subject):
             _chart_expander(
                 "Show full chart",
                 fig2,
-                f"The horizontal axis shows the {reference_year} baseline score "
-                f"at each percentile. The vertical axis shows the score at that "
-                f"same percentile in a later year. Points on the diagonal line "
-                f"mean no change. Points above the diagonal mean improvement; "
+                f"The vertical axis shows the change from the {reference_year} baseline score "
+                f"at each percentile. The horizontal axis shows the years of PISA cycles. "
+                f"Points on the horizontal line at zero mean no change from the baseline. Points above the line mean improvement; "
                 f"points below mean decline."
             )
 
