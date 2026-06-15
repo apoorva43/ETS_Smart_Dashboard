@@ -809,7 +809,7 @@ def _parse_color(color):
         return int(parts[0]), int(parts[1]), int(parts[2])
     return 128, 128, 128
 
-def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_percentile_text=True):
+def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_percentile_text=True, show_oecd_labels=False):
     """
     rows: list of dicts with keys:
         - group: DataFrame (already filtered)
@@ -903,7 +903,7 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_perce
             marker=dict(
                 color=f"rgb({r},{g},{b})",
                 size=[6, 6, 10, 6, 6],
-                symbol="line-ns",
+                # symbol="line-ns",
                 line=dict(color=f"rgb({r},{g},{b})", width=2)
             ),
             legendgroup=legendgroup,
@@ -912,14 +912,44 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_perce
         ))
 
         if show_percentile_text:
-            p_annotate = [10, 25, 50, 75, 90]
             fig.add_trace(go.Scatter(
-                x=[round(score_at_p(p)) for p in p_annotate],
-                y=[y_center] * len(p_annotate),
+                x=[round(score_at_p(50)) + 8],
+                y=[y_center + 0.12],
                 mode="text",
-                text=[f"P{p}: {round(score_at_p(p))}" for p in p_annotate],
-                textposition="top center",
-                textfont=dict(size=9, color=f"rgba({r},{g},{b},0.85)"),
+                text=[f"<b>{round(score_at_p(50))}</b>"],
+                textposition="middle right",
+                textfont=dict(size=12, color=f"rgba({r},{g},{b},0.9)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        if show_oecd_labels:
+            p_annotate = {10: "10th percentile", 25: "25th percentile",
+                          50: "Median", 75: "75th percentile", 90: "90th percentile"}
+            fig.add_trace(go.Scatter(
+                x=[round(score_at_p(p)) + 8 for p in p_annotate],
+                y=[y_center + 0.12] * len(p_annotate),
+                mode="text",
+                text=list(p_annotate.values()),
+                textposition="middle right",
+                textfont=dict(size=9, color="rgba(85,85,85,0.85)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        if not show_oecd_labels:
+            fig.add_trace(go.Scatter(
+                x=[round(score_at_p(p)) for p in [10, 25, 50, 75, 90]],
+                y=[y_center] * 5,
+                mode="markers",
+                marker=dict(
+                    color=f"rgb({r},{g},{b})",
+                    size=[6, 6, 10, 6, 6],
+                    symbol="line-ns",
+                    line=dict(color=f"rgb({r},{g},{b})", width=2)
+                ),
                 legendgroup=legendgroup,
                 showlegend=False,
                 hoverinfo="skip"
@@ -980,7 +1010,8 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             pv_cols=pv_cols, legendgroup=q_label
         ))
 
-    _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height)
+    _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height,
+                                 show_percentile_text=True, show_oecd_labels=False)
 
     # OECD row — same helper, y=0
     oecd_df = df[df["OECD"] == 1].copy()
@@ -992,7 +1023,8 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
         _render_shaded_density_rows(fig, [dict(
             group=oecd_df, label="OECD Average", color_rgb=(85, 85, 85),
             y_center=0, pv_cols=pv_cols, legendgroup="OECD Average"
-        )], x_grid, BANDS, bar_height)
+        )], x_grid, BANDS, bar_height, show_percentile_text=False,
+            show_oecd_labels=True)
 
     all_tickvals = list(range(len(countries), 0, -1)) + [0]
     all_ticktext = [_cnt_label(c) for c in countries] + ["OECD Average"]
