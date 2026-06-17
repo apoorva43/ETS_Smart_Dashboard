@@ -1040,7 +1040,7 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
     return fig
 
 def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
-                               group_title, year=None, min_group_n=30):
+                               group_title, year=None, min_group_n=30, sort_by_median=False):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in subset.columns:
@@ -1078,7 +1078,16 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
     is_ses = group_col == "_group_bin"
     codes = list(group_labels.keys())
     if not is_ses:
-        codes = sorted(codes, key=lambda c: group_sizes.get(c, 0), reverse=True)
+        if sort_by_median:
+            def _get_median(code):
+                grp = subset[subset[group_col] == code]
+                if len(grp) < min_group_n:
+                    return -1
+                m = weighted_percentiles_pv(grp, subject, [50])
+                return float(m[0]) if not np.isnan(m[0]) else -1
+            codes = sorted(codes, key=_get_median, reverse=True)
+        else:
+            codes = sorted(codes, key=lambda c: group_sizes.get(c, 0), reverse=True)
 
     x_grid = np.linspace(100, 900, 500)
     BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
