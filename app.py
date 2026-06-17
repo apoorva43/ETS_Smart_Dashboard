@@ -1331,110 +1331,109 @@ def render_story_tab(available_years, story_country, story_subject):
         tuple(BASE_COLS + pv_cols + ["SCHLTYPE"])
     )
 
-    ctx_col1, ctx_col2 = st.columns(2, gap="large")
+    # ── Public vs private ─────────────────────────────────────────────────
+    st.markdown("#### Public vs private")
 
-    with ctx_col1:
-        st.markdown("#### Public vs private")
+    if check_missing_countries(
+        df_type, ["SCHLTYPE"], [story_country], story_year
+    ):
+        st.warning(
+            f"⚠️ Insufficient school type data for "
+            f"{_cnt_label(story_country)}."
+        )
+    else:
+        type_curves = compute_group_percentiles(
+            df_type, story_subject, "SCHLTYPE",
+            {3: "Public", 1: "Independent private"},
+            [50], cnt=story_country, year=story_year
+        )
+        pub_med  = type_curves.get("Public",              [np.nan])[0]
+        priv_med = type_curves.get("Independent private", [np.nan])[0]
 
-        if check_missing_countries(
-            df_type, ["SCHLTYPE"], [story_country], story_year
-        ):
-            st.warning(
-                f"⚠️ Insufficient school type data for "
-                f"{_cnt_label(story_country)}."
-            )
-        else:
-            # Compute insight for school type
-            type_curves = compute_group_percentiles(
-                df_type, story_subject, "SCHLTYPE",
-                {3: "Public", 1: "Independent private"},
-                [50], cnt=story_country, year=story_year
-            )
-            pub_med  = type_curves.get("Public",              [np.nan])[0]
-            priv_med = type_curves.get("Independent private", [np.nan])[0]
-
-            if not (np.isnan(pub_med) or np.isnan(priv_med)):
-                diff = abs(priv_med - pub_med)
-                higher = "private" if priv_med > pub_med else "public"
-                _insight_box(
-                    f"Students in {higher} schools in "
-                    f"{_cnt_label(story_country)} score {diff:.0f} points "
-                    f"higher at the median in {subject_label}."
-                )
-
-            group_col, group_labels = GROUP_OPTIONS["School type"]
-            fig4b = plot_group_shaded_density(
-                df=df_type, subject=story_subject, cnt=story_country,
-                group_col=group_col, group_labels=group_labels,
-                group_title="School Type", year=story_year
-                )
-            _chart_expander(
-                "Show school type chart",
-                fig4b,
-                "Each curve shows the score distribution for one school "
-                "type. Public = government-operated. "
-                "Government-dependent private = privately managed but "
-                "significantly government funded. "
-                "Independent private = primarily privately funded."
+        if not (np.isnan(pub_med) or np.isnan(priv_med)):
+            diff = abs(priv_med - pub_med)
+            higher = "private" if priv_med > pub_med else "public"
+            _insight_box(
+                f"Students in {higher} schools in "
+                f"{_cnt_label(story_country)} score {diff:.0f} points "
+                f"higher at the median in {subject_label}."
             )
 
-            _policy_box(
-                "Differences between public and private school scores "
-                "often reflect the socioeconomic composition of each "
-                "school type rather than school quality itself. "
-                "Interpreting these figures alongside the SES data "
-                "in Chapter 3 is important."
+        group_col, group_labels = GROUP_OPTIONS["School type"]
+        fig4a = plot_group_shaded_density(
+            df=df_type, subject=story_subject, cnt=story_country,
+            group_col=group_col, group_labels=group_labels,
+            group_title="School Type", year=story_year,
+            sort_by_median=True
+        )
+        _chart_expander(
+            "Show school type chart",
+            fig4a,
+            "Each bar shows the score distribution for one school type. "
+            "Public = government-operated. "
+            "Government-dependent private = privately managed but "
+            "significantly government funded. "
+            "Independent private = primarily privately funded. "
+            "Groups are ordered by median score. "
+            "Percentages show the share of students in each school type."
+        )
+
+        _policy_box(
+            "Differences between public and private school scores "
+            "often reflect the socioeconomic composition of each "
+            "school type rather than school quality itself. "
+            "Interpreting these figures alongside the SES data "
+            "in Chapter 3 is important."
+        )
+
+    # ── Urban vs rural ────────────────────────────────────────────────────
+    st.markdown("#### Urban vs rural")
+
+    if check_missing_countries(
+        df_loc, ["SC001Q01TA"], [story_country], story_year
+    ):
+        st.warning(
+            f"⚠️ Insufficient school location data for "
+            f"{_cnt_label(story_country)}."
+        )
+    else:
+        loc_curves = compute_group_percentiles(
+            df_loc, story_subject, "SC001Q01TA",
+            {5.0: "Large city", 4.0: "City", 1.0: "Village"},
+            [50], cnt=story_country, year=story_year
+        )
+        city_med    = loc_curves.get("City",    [np.nan])[0]
+        village_med = loc_curves.get("Village", [np.nan])[0]
+
+        if not (np.isnan(city_med) or np.isnan(village_med)):
+            diff = abs(city_med - village_med)
+            _insight_box(
+                f"Students in city schools score {diff:.0f} points "
+                f"higher than those in villages at the median "
+                f"in {subject_label} in {_cnt_label(story_country)}."
             )
 
-    with ctx_col2:
-        st.markdown("#### Urban vs rural")
+        group_col, group_labels = GROUP_OPTIONS["School location"]
+        fig4b = plot_group_shaded_density(
+            df=df_loc, subject=story_subject,
+            cnt=story_country, group_col=group_col, group_labels=group_labels,
+            group_title="School Location", year=story_year,
+            sort_by_median=True
+        )
+        _chart_expander(
+            "Show school location chart",
+            fig4b,
+            "Each bar shows the score distribution for one school location category. "
+            "Groups are ordered by median score. "
+            "Percentages show the share of students in each location type."
+        )
 
-        if check_missing_countries(
-            df_loc, ["SC001Q01TA"], [story_country], story_year
-        ):
-            st.warning(
-                f"⚠️ Insufficient school location data for "
-                f"{_cnt_label(story_country)}."
-            )
-        else:
-            # Compute insight for school location
-            loc_curves = compute_group_percentiles(
-                df_loc, story_subject, "SC001Q01TA",
-                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
-                [50], cnt=story_country, year=story_year
-            )
-            city_med    = loc_curves.get("City",    [np.nan])[0]
-            village_med = loc_curves.get("Village", [np.nan])[0]
-
-            if not (np.isnan(city_med) or np.isnan(village_med)):
-                diff = abs(city_med - village_med)
-                _insight_box(
-                    f"Students in city schools score {diff:.0f} points "
-                    f"higher than those in villages at the median "
-                    f"in {subject_label} in {_cnt_label(story_country)}."
-                )
-
-            group_col, group_labels = GROUP_OPTIONS["School location"]
-            fig4a = plot_group_shaded_density(
-                df=df_loc, subject=story_subject,
-                cnt=story_country, group_col=group_col, group_labels=group_labels,
-                group_title="School Location", year=story_year
-            )
-            _chart_expander(
-                "Show school location chart",
-                fig4a,
-                "The box spans the middle 50% of students (P25–P75). "
-                "The line inside is the median (P50). "
-                "The whiskers extend to P10 and P90. "
-                "Dots show a representative sample of individual students."
-            )
-
-            _policy_box(
-                "Urban–rural score differences in PISA typically reflect "
-                "resource allocation across school systems — teacher "
-                "quality, infrastructure, and support services. "
-                "These are addressable through targeted policy."
-            )
+        _policy_box(
+            "Urban-rural score differences in PISA typically reflect "
+            "resource allocation across school systems — teacher "
+            "quality, infrastructure, and support services. "
+            "These are addressable through targeted policy."
+        )
 
     st.divider()
 
