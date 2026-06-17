@@ -1229,71 +1229,75 @@ def render_story_tab(available_years, story_country, story_subject):
                     )
 
         # ── Combined chart expander ────────────────────────────────────────
-        ses_ok   = not check_missing_countries(
-            df_ses, ["ESCS"], [story_country], story_year
-        )
-        immig_ok = not check_missing_countries(
-            df_immig, ["IMMIG"], [story_country], story_year
-        )
+        ses_ok    = not check_missing_countries(df_ses,    ["ESCS"],       [story_country], story_year)
+        immig_ok  = not check_missing_countries(df_immig,  ["IMMIG"],      [story_country], story_year)
+        gender_ok = not check_missing_countries(df_gender, ["ST004D01T"],  [story_country], story_year)
 
-        if ses_ok or immig_ok:
-            with st.expander("📊 Show full charts", expanded=True):
-                chart_col1, chart_col2 = st.columns(2)
+        # SES chart
+        if ses_ok:
+            st.markdown("**By socioeconomic background**")
+            group_col_ses, group_labels_ses = GROUP_OPTIONS["Socioeconomic status"]
+            fig3a = plot_group_shaded_density(
+                df_ses, story_subject, story_country,
+                group_col=group_col_ses, group_labels=group_labels_ses,
+                group_title="Socioeconomic Status", year=story_year,
+                sort_by_median=False  # hard-coded Q1-Q4 order
+            )
+            _chart_expander(
+                "Show socioeconomic chart", fig3a,
+                "Students are split into four equal groups by family background "
+                "(parental education, occupation, and home resources). "
+                "Q1 = lowest 25%, Q4 = highest 25%. "
+                "The darker shading shows where most students in each group are concentrated. "
+                "The vertical line marks the median score for each group."
+            )
+        else:
+            st.warning(f"⚠️ Insufficient socioeconomic data for {_cnt_label(story_country)}.")
 
-                with chart_col1:
-                    st.markdown("**By socioeconomic background**")
-                    if ses_ok:
-                        group_col, group_labels = GROUP_OPTIONS["Socioeconomic status"]
-                        fig3a = plot_group_shaded_density(
-                            df_ses, story_subject,
-                            story_country,
-                            group_col=group_col, group_labels=group_labels, 
-                            group_title="Socioeconomic Status", year=story_year
-                        )
-                        st.plotly_chart(
-                            fig3a, use_container_width=True,
-                            config={"displayModeBar": False}
-                        )
-                    else:
-                        st.warning("Insufficient socioeconomic data.")
+        # Immigration chart
+        if immig_ok:
+            st.markdown("**By immigration status**")
+            immig_warnings = check_group_sizes(
+                df_immig, "IMMIG", IMMIG_MAP, story_country, year=story_year
+            )
+            for w in immig_warnings:
+                st.warning(w)
+            group_col_immig, group_labels_immig = GROUP_OPTIONS["Immigration status"]
+            fig3b = plot_group_shaded_density(
+                df_immig, story_subject, story_country,
+                group_col=group_col_immig, group_labels=group_labels_immig,
+                group_title="Immigration Status", year=story_year,
+                sort_by_median=True  # order by median score
+            )
+            _chart_expander(
+                "Show immigration status chart", fig3b,
+                "Native = born in country, both parents born in country. "
+                "Second-generation = born in country, at least one parent born abroad. "
+                "First-generation = born abroad. "
+                "Groups are ordered by median score. "
+                "The vertical line marks the median score for each group."
+            )
+        else:
+            st.warning(f"⚠️ Insufficient immigration data for {_cnt_label(story_country)}.")
 
-                with chart_col2:
-                    st.markdown("**By immigration status**")
-                    if immig_ok:
-                        immig_warnings = check_group_sizes(
-                            df_immig, "IMMIG", IMMIG_MAP,
-                            story_country, year=story_year
-                        )
-                        for w in immig_warnings:
-                            st.warning(w)
-                        fig3b = plot_immigration_shaded_density(
-                            df=df_immig, subject=story_subject,
-                            cnt=story_country, year=story_year
-                        )
-                        st.plotly_chart(
-                            fig3b, use_container_width=True,
-                            config={"displayModeBar": False}
-                        )
-                    else:
-                        st.warning("Insufficient immigration data.")
-
-                st.markdown(
-                    """
-                    <div style="font-size:0.82rem;color:#555;line-height:1.6;
-                                padding:6px 2px 2px 2px;
-                                border-top:0.5px solid #e0e0e0;margin-top:6px">
-                        <strong>How to read:</strong>
-                        <em>Socioeconomic chart:</em> Students split into four equal
-                        groups by family background — parental education, occupation,
-                        and home resources. Q1 = lowest 25%, Q4 = highest 25%.
-                        <em>Immigration chart:</em> Native = born in country, both
-                        parents born in country. Second-generation = born in country,
-                        at least one parent born abroad. First-generation = born abroad.
-                        Dotted lines show the median score for each group.
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+        # Gender chart
+        if gender_ok:
+            st.markdown("**By gender**")
+            group_col_gen, group_labels_gen = GROUP_OPTIONS["Gender"]
+            fig3c = plot_group_shaded_density(
+                df_gender, story_subject, story_country,
+                group_col=group_col_gen, group_labels=group_labels_gen,
+                group_title="Gender", year=story_year,
+                sort_by_median=True  # order by median score
+            )
+            _chart_expander(
+                "Show gender chart", fig3c,
+                "Each bar shows the score distribution for male and female students. "
+                "Groups are ordered by median score. "
+                "The vertical line marks the median score for each group."
+            )
+        else:
+            st.warning(f"⚠️ Insufficient gender data for {_cnt_label(story_country)}.")
 
         _policy_box(
             "Score differences by student background point to structural "
