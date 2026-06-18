@@ -1139,7 +1139,6 @@ def render_story_tab(available_years, story_country, story_subject):
                         f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
                         f"than those at the {better_end} "
                         f"({better_val:+.0f} pts at P{'90' if worse_end == 'bottom' else '10'}). "
-                        f"This pattern is invisible in average-only reporting."
                     )
 
             fig2 = plot_percentile_change_from_baseline(
@@ -1163,8 +1162,8 @@ def render_story_tab(available_years, story_country, story_subject):
     # ── Chapter 3: Equity ──────────────────────────────────────────────────
     _story_section_header(
         3,
-        "Who scores highest — and who is left behind?",
-        f"Score differences by student background in {_cnt_label(story_country)}"
+        "How do resources and systemic support shape outcomes?",
+        f"Understanding structural differences by student background in {_cnt_label(story_country)}"
     )
 
     st.markdown(
