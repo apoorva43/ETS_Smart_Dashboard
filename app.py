@@ -34,7 +34,6 @@ from src.pisa_stats import (
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
-                          plot_group_comparison,
                           plot_country_shaded_density,
                           plot_percentile_change_from_baseline,
                           plot_intersectional_heatmap,
