@@ -956,7 +956,7 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
             p_annotate = {
                 10: "P10",
                 25: "P25",
-                50: "Medians",
+                50: "Median",
                 75: "P75",
                 90: "P90",
             }
