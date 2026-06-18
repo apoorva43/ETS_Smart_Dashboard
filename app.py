@@ -35,11 +35,9 @@ from src.pisa_stats import (
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
                           plot_group_comparison,
-                          plot_jitter_boxplot,
                           plot_country_shaded_density,
                           plot_percentile_change_from_baseline,
                           plot_intersectional_heatmap,
-                          plot_immigration_shaded_density,
                           plot_immigration_score_distribution,
                           plot_resource_scatter,
                           plot_group_shaded_density,
@@ -230,38 +228,47 @@ CHART_HELP_TEXT = {
 }
 
 GROUP_HOW_TO_READ = {
+    "Score distribution": (
+        "This curve shows the full spread of student scores. "
+        "Darker, wider sections indicate where most students are concentrated (the middle 50%), "
+        "while the thinner tails show the highest and lowest achievers. "
+        "The vertical line marks the median score."
+    ),
+    "Change over time": (
+        "The horizontal axis shows the baseline score at each percentile. "
+        "The vertical axis shows the change in score in subsequent cycles. "
+        "Points on the zero line mean no change. Points above indicate improvement; points below indicate decline."
+    ),
     "Socioeconomic status": (
-        "Students are split into four equal groups by family background "
+        "Each shape shows the score distribution for one socioeconomic group. "
+        "Students are divided into four equal quartiles based on family background "
         "(parental education, occupation, and home resources). "
-        "Q1 = lowest 25%, Q4 = highest 25%. "
-        "Darker shading shows where most students in each group are concentrated. "
-        "The vertical line marks the median score for each group."
+        "Q1 represents the lowest 25%, and Q4 represents the highest 25%. "
+        "The vertical line marks the group's median score."
     ),
     "Immigration status": (
-        "Native = born in country, both parents born in country. "
-        "Second-generation = born in country, at least one parent born abroad. "
-        "First-generation = born abroad. "
-        "Groups are ordered by median score. "
-        "The vertical line marks the median score for each group."
+        "Each shape shows the score distribution for one immigration background. "
+        "Native = student and both parents born in-country. "
+        "Second-generation = student born in-country, at least one parent born abroad. "
+        "First-generation = student born abroad. "
+        "The vertical line marks the group's median score."
     ),
     "Gender": (
-        "Each bar shows the score distribution for male and female students. "
-        "Groups are ordered by median score. "
-        "The vertical line marks the median score for each group."
+        "Each shape shows the score distribution for male and female students. "
+        "The vertical line marks the group's median score."
     ),
     "School type": (
-        "Each bar shows the score distribution for one school type. "
+        "Each shape shows the score distribution for one school type. "
         "Public = government-operated. "
-        "Government-dependent private = privately managed but significantly government funded. "
+        "Government-dependent private = privately managed but significantly government-funded. "
         "Independent private = primarily privately funded. "
-        "Groups are ordered by median score. "
-        "Percentages show the share of students in each school type."
+        "Percentages indicate the share of students in each school type."
     ),
     "School location": (
-        "Each bar shows the score distribution for one school location category. "
-        "Groups are ordered by median score. "
-        "Percentages show the share of students in each location type."
-    ),
+        "Each shape shows the score distribution based on the community size where the school is located. "
+        "The vertical line marks the group's median score. "
+        "Percentages indicate the share of students in each location."
+    )
 }
 
 def render_chart_help(chart_type, group_key=None):
@@ -465,21 +472,32 @@ def render_chart(chart_type, subject, selected_countries,
         elif group_key == "Immigration status":
             df = fetch((primary_country,), selected_year,
                        tuple(BASE_COLS + pv_cols + ["IMMIG"]))
-            fig = plot_immigration_score_distribution(
+            
+            # Warning checks for small group sizes
+            immig_warnings = check_group_sizes(
+                df, group_col, group_vals, primary_country, year=selected_year
+            )
+            for w in immig_warnings:
+                st.warning(w)
+
+            fig = plot_group_shaded_density(
                 df=df,
                 subject=subject,
                 cnt=primary_country,
-                year=selected_year
+                group_col=group_col,
+                group_labels=group_vals,
+                group_title=group_key,
+                year=selected_year,
+                sort_by_median=True
             )
 
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             st.info(
-                "Each curve shows the score distribution for one immigration "
-                "status group."
+                f"Score distribution broken down by Immigration status for {_cnt_label(primary_country)}."
             )
 
         elif group_key == "School location":
-            render_chart_help(chart_type, group_key)
+            # render_chart_help(chart_type, group_key)
             df = fetch((primary_country,), selected_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
             
             fig = plot_group_shaded_density(
