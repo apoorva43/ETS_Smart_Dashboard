@@ -497,11 +497,11 @@ def render_chart(chart_type, subject, selected_countries,
                 f"Group comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
-        # 1. Fetch data ONCE for whatever group was selected
+        # Fetch data ONCE for whatever group was selected
         df = fetch((primary_country,), selected_year,
                    tuple(BASE_COLS + pv_cols + [group_col]))
         
-        # 2. Run size warnings for all groups except SES (which uses fixed quartiles)
+        # Size warnings for all groups except SES
         if group_key != "Socioeconomic status":
             warns = check_group_sizes(
                 df, group_col, group_vals, primary_country, year=selected_year
@@ -509,10 +509,10 @@ def render_chart(chart_type, subject, selected_countries,
             for w in warns:
                 st.warning(w)
 
-        # 3. Determine sorting (SES uses fixed Q1-Q4, others sort by median)
+        # Sorting (SES uses fixed Q1-Q4, others sort by median)
         sort_by_med = False if group_key == "Socioeconomic status" else True
 
-        # 4. Generate the plot ONCE
+        # Generate the plot ONCE
         fig = plot_group_shaded_density(
             df=df,
             subject=subject,
@@ -525,7 +525,7 @@ def render_chart(chart_type, subject, selected_countries,
             sort_by_median=sort_by_med
         )
 
-        # 5. Print the SES-specific text if applicable
+        # Print the SES-specific text if applicable
         if group_key == "Socioeconomic status":
             st.markdown(
                 ses_difference_text(
@@ -533,7 +533,7 @@ def render_chart(chart_type, subject, selected_countries,
                 )
             )
 
-        # 6. Render the chart ONCE, formatting the key dynamically
+        # Render the chart ONCE, formatting the key dynamically
         safe_key = group_key.lower().replace(" ", "_")
         render_plotly_chart_with_note(
             fig,
@@ -574,7 +574,7 @@ def render_chart(chart_type, subject, selected_countries,
             key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
         )
 
-    # 5. Intersectional Heatmap
+    # 4. Intersectional Heatmap
     elif chart_type == "Intersectional Heatmap":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols + extra))
@@ -631,7 +631,7 @@ def render_chart(chart_type, subject, selected_countries,
                 key=f"heatmap_{widget_key}_{subject}_{selected_year}_{primary_country}_{cross_col}",
             )
 
-    # 6. Country Scatterplot
+    # 5. Country Scatterplot
     elif chart_type == "Country Scatterplot":
         resource_options = {
             "Socioeconomic Status (ESCS)": "ESCS",

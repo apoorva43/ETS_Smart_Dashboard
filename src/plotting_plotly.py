@@ -9,9 +9,6 @@ from plotly.subplots import make_subplots
 from src.config import (
     PERCENTILES_COARSE,
     PALETTE,
-    LOC_MAP,
-    IMMIG_MAP,
-    SCHLTYPE_MAP,
     OKABE_ITO,
     SUBJECTS,
     COUNTRY_NAMES
