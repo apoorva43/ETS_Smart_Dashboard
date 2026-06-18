@@ -1160,24 +1160,35 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
     bar_height = 0.7
     fig = go.Figure()
 
+    # filter out the suppressed groups entirely
+    valid_groups = []
+    for code in codes:
+        group = subset[subset[group_col] == code]
+        if len(group) >= min_group_n:
+            valid_groups.append((code, group))
+
     rows = []
     ticktext = []
-    for row_idx, code in enumerate(codes):
-        group = subset[subset[group_col] == code]
-        if len(group) < min_group_n:
-            continue
+    tickvals = []
+    num_valid = len(valid_groups)
+
+    # Iterate only over the valid groups
+    for row_idx, (code, group) in enumerate(valid_groups):
         pct = group_sizes.get(code, 0) / total * 100
         base_label = group_labels[code]
-        y_label = f"{base_label} ({pct:.0f}%)"   # e.g. "Males (62%)"
+        y_label = f"{base_label} ({pct:.0f}%)"
+        
         color = PALETTE[row_idx % len(PALETTE)]
         r, g, b = _parse_color(color)
 
+        y_center = num_valid - row_idx
         rows.append(dict(
             group=group, label=y_label, color_rgb=(r, g, b),
-            y_center=len(codes) - row_idx,
+            y_center=y_center,
             pv_cols=pv_cols, legendgroup=y_label
         ))
         ticktext.append(y_label)
+        tickvals.append(y_center)
 
     _render_shaded_density_rows(
         fig,
@@ -1189,18 +1200,18 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
         short_percentile_labels=compact
     )
 
-    tickvals = list(range(len(codes), 0, -1))
-
     fig.update_layout(**_base_layout(
-        title=f"{SUBJECTS[subject]} by {group_title} | {_cnt_label(cnt)}"
+        title=f"Score by {group_title} | {SUBJECTS[subject]} | {_cnt_label(cnt)}"
     ))
     fig.update_layout(hovermode="closest", hoverlabel=dict(namelength=-1))
     fig.update_xaxes(title=f"{SUBJECTS[subject]} score", range=[100, 900],
                      showspikes=True, spikemode="across", spikesnap="data",
                      tickformat="d", hoverformat="d")
+    
     fig.update_yaxes(tickvals=tickvals, ticktext=ticktext,
                      showgrid=False, zeroline=False,
-                     range=[0.3, len(codes) + 0.7])
+                     range=[0.3, num_valid + 0.7])
+                     
     return fig
 
 def plot_escs_shaded_density(df, subject, cnt, year=None, min_group_n=30):
@@ -1413,7 +1424,7 @@ def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
         ))
 
     fig.update_layout(**_base_layout(
-        title=f"{SUBJECTS[subject]} score change by percentile | {_cnt_label(cnt)}<br>"
+        title=f"{SUBJECTS[subject]} Score Change by Percentile | {_cnt_label(cnt)}<br>"
               f"<sup>Relative to {reference_year} baseline</sup>"
     ))
     fig.update_xaxes(title="Year", tickvals=years, tickformat="d")
