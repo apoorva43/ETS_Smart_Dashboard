@@ -229,6 +229,41 @@ CHART_HELP_TEXT = {
     """
 }
 
+GROUP_HOW_TO_READ = {
+    "Socioeconomic status": (
+        "Students are split into four equal groups by family background "
+        "(parental education, occupation, and home resources). "
+        "Q1 = lowest 25%, Q4 = highest 25%. "
+        "Darker shading shows where most students in each group are concentrated. "
+        "The vertical line marks the median score for each group."
+    ),
+    "Immigration status": (
+        "Native = born in country, both parents born in country. "
+        "Second-generation = born in country, at least one parent born abroad. "
+        "First-generation = born abroad. "
+        "Groups are ordered by median score. "
+        "The vertical line marks the median score for each group."
+    ),
+    "Gender": (
+        "Each bar shows the score distribution for male and female students. "
+        "Groups are ordered by median score. "
+        "The vertical line marks the median score for each group."
+    ),
+    "School type": (
+        "Each bar shows the score distribution for one school type. "
+        "Public = government-operated. "
+        "Government-dependent private = privately managed but significantly government funded. "
+        "Independent private = primarily privately funded. "
+        "Groups are ordered by median score. "
+        "Percentages show the share of students in each school type."
+    ),
+    "School location": (
+        "Each bar shows the score distribution for one school location category. "
+        "Groups are ordered by median score. "
+        "Percentages show the share of students in each location type."
+    ),
+}
+
 def render_chart_help(chart_type, group_key=None):
     """Renders a collapsible help section above complex charts."""
     
@@ -988,14 +1023,14 @@ def render_story_tab(available_years, story_country, story_subject):
             year=story_year
         )
         _chart_expander(
-            "Show full chart",
+            "Collapse chart",
             fig1,
             f"The bar shows the score distribution for {_cnt_label(story_country)}. "
+            "Each row shows the score distribution for one country or group. "
             "Darker shading shows where most students are concentrated (the middle 50%), "
-            "lighter shading towards the tails. "
-            "The solid vertical line marks the median score (midpoint of the distribution). "
-            "The dashed vertical line is the OECD average. "
-            "Hover over the bar to see the score and percentile at that point."
+            "with lighter shading towards the tails. "
+            "The vertical line marks the median score. "
+            "Hover over any row to see the score at that percentile."
         )
 
         _policy_box(
@@ -1082,12 +1117,12 @@ def render_story_tab(available_years, story_country, story_subject):
                 cnt=story_country, reference_year=reference_year
             )
             _chart_expander(
-                "Show full chart",
+                "Collapse chart",
                 fig2,
-                f"The vertical axis shows the change from the {reference_year} baseline score "
-                f"at each percentile. The horizontal axis shows the years of PISA cycles. "
-                f"Points on the horizontal line at zero mean no change from the baseline. Points above the line mean improvement; "
-                f"points below mean decline."
+                f"The vertical axis shows the change in score from the {reference_year} baseline at each percentile. "
+                "The horizontal axis shows PISA cycles. "
+                "Points on the zero line mean no change from baseline. "
+                "Points above mean improvement; points below mean decline."
             )
 
             _policy_box(
@@ -1244,12 +1279,8 @@ def render_story_tab(available_years, story_country, story_subject):
                 sort_by_median=False  # hard-coded Q1-Q4 order
             )
             _chart_expander(
-                "Show socioeconomic chart", fig3a,
-                "Students are split into four equal groups by family background "
-                "(parental education, occupation, and home resources). "
-                "Q1 = lowest 25%, Q4 = highest 25%. "
-                "The darker shading shows where most students in each group are concentrated. "
-                "The vertical line marks the median score for each group."
+                "Collapse chart", fig3a,
+                GROUP_HOW_TO_READ.get("Socioeconomic status", "Each bar shows the score distribution for one group.")
             )
         else:
             st.warning(f"⚠️ Insufficient socioeconomic data for {_cnt_label(story_country)}.")
@@ -1270,12 +1301,8 @@ def render_story_tab(available_years, story_country, story_subject):
                 sort_by_median=True  # order by median score
             )
             _chart_expander(
-                "Show immigration status chart", fig3b,
-                "Native = born in country, both parents born in country. "
-                "Second-generation = born in country, at least one parent born abroad. "
-                "First-generation = born abroad. "
-                "Groups are ordered by median score. "
-                "The vertical line marks the median score for each group."
+                "Collapse chart", fig3b,
+                GROUP_HOW_TO_READ.get("Immigration status", "Each bar shows the score distribution for one group.")
             )
         else:
             st.warning(f"⚠️ Insufficient immigration data for {_cnt_label(story_country)}.")
@@ -1291,10 +1318,8 @@ def render_story_tab(available_years, story_country, story_subject):
                 sort_by_median=True  # order by median score
             )
             _chart_expander(
-                "Show gender chart", fig3c,
-                "Each bar shows the score distribution for male and female students. "
-                "Groups are ordered by median score. "
-                "The vertical line marks the median score for each group."
+                "Collapse chart", fig3c,
+                GROUP_HOW_TO_READ.get("Gender", "Each bar shows the score distribution for one group.")
             )
         else:
             st.warning(f"⚠️ Insufficient gender data for {_cnt_label(story_country)}.")
@@ -1369,13 +1394,7 @@ def render_story_tab(available_years, story_country, story_subject):
         _chart_expander(
             "Show school type chart",
             fig4a,
-            "Each bar shows the score distribution for one school type. "
-            "Public = government-operated. "
-            "Government-dependent private = privately managed but "
-            "significantly government funded. "
-            "Independent private = primarily privately funded. "
-            "Groups are ordered by median score. "
-            "Percentages show the share of students in each school type."
+            GROUP_HOW_TO_READ.get("School type", "Each bar shows the score distribution for one group.")
         )
 
         _policy_box(
@@ -1423,9 +1442,7 @@ def render_story_tab(available_years, story_country, story_subject):
         _chart_expander(
             "Show school location chart",
             fig4b,
-            "Each bar shows the score distribution for one school location category. "
-            "Groups are ordered by median score. "
-            "Percentages show the share of students in each location type."
+            GROUP_HOW_TO_READ.get("School location", "Each bar shows the score distribution for one group.")
         )
 
         _policy_box(
