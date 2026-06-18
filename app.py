@@ -241,7 +241,7 @@ GROUP_HOW_TO_READ = {
     ),
     "Socioeconomic status": (
         "Each shape shows the score distribution for one socioeconomic group. "
-        "Students are divided into **four equal groups** based on family background "
+        "Students are divided into four equal groups based on family background "
         "(parental education, occupation, and home resources):<br>"
         "• Q1: Lowest 25%<br>"
         "• Q4: Highest 25%<br>"
@@ -331,6 +331,107 @@ def apply_compact_plotly_layout(fig, hide_legend=False):
     return fig
 
 
+def render_plotly_chart_with_note(fig, note, key=None, use_container_width=True):
+    """
+    Render a Plotly chart with a short interpretation note and interaction tips.
+    """
+    st.plotly_chart(
+        fig,
+        use_container_width=use_container_width,
+        key=key,
+        config={
+            "displayModeBar": True,
+            "scrollZoom": False,
+        },
+    )
+
+    st.info(note)
+
+    st.caption(
+        "Tip: Click legend items to temporarily hide or show groups. \n"
+        "Hover over the chart to see exact values. "
+        "Drag across the chart to zoom in, or use the toolbar to pan, reset axes, and download the chart."
+    )
+    
+
+def get_chart_note(chart_type, group_key=None, reference_year=None):
+    """
+    Short chart-specific explanation shown below each chart.
+    """
+    if chart_type == "Percentile score profile":
+        return (
+            "This chart shows the full score distribution for the selected country or countries. "
+            "Darker shading shows where most students are concentrated, while the markers show key percentiles. "
+            "Use it to compare both the typical score and the spread of student outcomes."
+        )
+
+    if chart_type == "Score change over time":
+        baseline_text = f" relative to {reference_year}" if reference_year else ""
+        return (
+            f"This chart shows how scores changed across PISA cycles{baseline_text}. "
+            "Each coloured line represents a percentile group, helping show whether changes were larger "
+            "among lower-, middle-, or higher-performing students."
+        )
+
+    if chart_type == "Intersectional Heatmap":
+        return (
+            "This heatmap shows average scores for students who fall into two background categories at the same time. "
+            "Darker cells indicate higher average scores. Use it to identify where overlapping student characteristics "
+            "are associated with stronger or weaker outcomes."
+        )
+
+    if chart_type == "Country Scatterplot":
+        return (
+            "This scatterplot compares countries by a selected context variable and mean score. "
+            "Each point is a country. Use it to identify broad cross-country patterns, but **do not interpret the relationship as causal**."
+        )
+
+    if chart_type == "Group comparison":
+        if group_key == "Socioeconomic status":
+            return (
+                "This chart compares score distributions across socioeconomic quartiles. "
+                "Students are ranked by the ESCS index and split into four equal-sized groups: Q1 is the lowest socioeconomic quartile and Q4 is the highest. "
+                "Use it to see whether SES gaps are consistent across the distribution or larger for particular student groups."
+            )
+
+        if group_key == "Immigration status":
+            return (
+                "This chart compares score distributions by immigration background. "
+                "Use it to compare group medians while also checking how much the distributions overlap."
+            )
+
+        if group_key == "Gender":
+            return (
+                "This chart compares score distributions by gender. "
+                "Use it to see whether differences are concentrated in lower-, middle-, or higher-performing students."
+            )
+
+        if group_key == "School location":
+            return (
+                "This chart compares score distributions by school location. "
+                "School location is grouped by the location category of the school, from village to large city. "
+                "Use it to see whether location differences appear mainly in the median or across the full distribution."
+            )
+
+        if group_key == "School type":
+            return (
+                "This chart compares score distributions by school type. "
+                "Public schools are government-operated; government-dependent private schools are privately managed but receive substantial government funding; "
+                "independent private schools are primarily privately funded. "
+                "Use it to compare typical performance while also considering the spread and overlap within each school type."
+            )
+
+        return (
+            f"This chart compares score distributions by {group_key}. "
+            "Use it to compare both group medians and within-group variation."
+        )
+
+    return (
+        "This chart summarizes PISA performance for the selected filters. "
+        "Hover over the chart to inspect exact values."
+    )
+
+
 def render_chart(chart_type, subject, selected_countries,
                  selected_year, available_years,
                  primary_country, ref_year=None, comp_year=None,
@@ -375,9 +476,13 @@ def render_chart(chart_type, subject, selected_countries,
         if valid_countries:
             render_chart_help(chart_type)
             fig = plot_country_shaded_density(
-                df, subject, valid_countries, year=selected_year
+                df, subject, valid_countries, year=selected_year, compact=compact
             )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note("Percentile score profile"),
+                key=f"percentile_profile_{widget_key}_{subject}_{selected_year}",
+            )
 
     # 2. Group Comparison
     elif chart_type == "Group comparison":
@@ -403,7 +508,7 @@ def render_chart(chart_type, subject, selected_countries,
                 group_col,
                 group_vals,
                 primary_country,
-                year=selected_year
+                year=selected_year,
             )
 
             for w in warns:
@@ -422,16 +527,14 @@ def render_chart(chart_type, subject, selected_countries,
                 group_col=group_col, 
                 group_labels=group_vals, 
                 group_title=group_key,
-                year=selected_year
+                year=selected_year,
+                compact=compact
             )
-            st.plotly_chart(
+            render_plotly_chart_with_note(
                 fig,
-                use_container_width=True,
-                config={"displayModeBar": False}
-            )
-            st.info(
-                "Y-axis shows Male - Female score difference. "
-                "Values above zero mean males score higher; values below zero mean females score higher."
+                note=get_chart_note("Group comparison",
+                                    group_key="Gender"),
+                key=f"group_gender_{widget_key}_{subject}_{selected_year}_{primary_country}",
             )
             
         elif group_key == "Socioeconomic status":
@@ -449,13 +552,8 @@ def render_chart(chart_type, subject, selected_countries,
                 group_labels=group_vals, 
                 group_title=group_key,
                 year=selected_year,
+                compact=compact
             )
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                config={"displayModeBar": False}
-            )
-
             st.markdown(
                 ses_difference_text(
                     df,
@@ -464,11 +562,14 @@ def render_chart(chart_type, subject, selected_countries,
                     year=selected_year
                 )
             )
-
-            st.info(
-                "Students are split into four equal groups by socioeconomic status "
-                "(ESCS index). Q1 = lowest SES, Q4 = highest."
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note("Group comparison",
+                                    group_key="Socioeconomic status"),
+                key=f"group_ses_{widget_key}_{subject}_{selected_year}_{primary_country}",
             )
+
+
 
         elif group_key == "Immigration status":
             df = fetch((primary_country,), selected_year,
@@ -492,20 +593,25 @@ def render_chart(chart_type, subject, selected_countries,
                 sort_by_median=True
             )
 
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(
-                f"Score distribution broken down by Immigration status for {_cnt_label(primary_country)}."
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note("Group comparison", group_key="Immigration status"),
+                key=f"group_immig_{widget_key}_{subject}_{selected_year}_{primary_country}",
             )
 
         elif group_key == "School location":
-            # render_chart_help(chart_type, group_key)
             df = fetch((primary_country,), selected_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
             
             fig = plot_group_shaded_density(
                 df=df, subject=subject, cnt=primary_country,
-                group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year
+                group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year, compact=compact
             )
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note("Group comparison",
+                                    group_key="School location"),
+                key=f"group_location_{widget_key}_{subject}_{selected_year}_{primary_country}",
+            )
 
         elif group_key == "School type":
             df = fetch((primary_country,), selected_year,
@@ -520,9 +626,11 @@ def render_chart(chart_type, subject, selected_countries,
                 year=selected_year,
             )
 
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(
-                "Each curve shows the score distribution for one school type."
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note("Group comparison",
+                                    group_key="School type"),
+                key=f"group_type_{widget_key}_{subject}_{selected_year}_{primary_country}",
             )
 
         else:
@@ -536,9 +644,10 @@ def render_chart(chart_type, subject, selected_countries,
                 title=f"{SUBJECTS[subject]} by {group_key} | {_cnt_label(primary_country)}"
             )
 
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-            st.info(
-                f"Score distribution broken down by {group_key} for {_cnt_label(primary_country)}."
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note("Group comparison", group_key=group_key),
+                key=f"group_{group_key.lower().replace(' ', '_')}_{widget_key}_{subject}_{selected_year}_{primary_country}",
             )
 
     # 3. Score Change Over Time
@@ -565,12 +674,13 @@ def render_chart(chart_type, subject, selected_countries,
             reference_year=reference_year
         )
 
-        st.plotly_chart(fig, use_container_width=True,
-                            config={"displayModeBar": False})
-        st.info(
-            f"This chart shows score changes over time. "
-            f"Horizontal axis shows {reference_year} scores. "
-            f"Each coloured line shows change relative to {reference_year}."
+        render_plotly_chart_with_note(
+            fig,
+            note=get_chart_note(
+                "Score change over time",
+                reference_year=reference_year
+            ),
+            key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
         )
 
     # 5. Intersectional Heatmap
@@ -624,7 +734,11 @@ def render_chart(chart_type, subject, selected_countries,
                 row_label="SES Quartile", col_label=cross_label,
                 year=selected_year
             )
-            st.plotly_chart(fig_hm, use_container_width=True, config={"displayModeBar": False})
+            render_plotly_chart_with_note(
+                fig_hm,
+                note=get_chart_note("Intersectional Heatmap"),
+                key=f"heatmap_{widget_key}_{subject}_{selected_year}_{primary_country}_{cross_col}",
+            )
 
     # 6. Country Scatterplot
     elif chart_type == "Country Scatterplot":
@@ -659,13 +773,25 @@ def render_chart(chart_type, subject, selected_countries,
             year=selected_year,
             highlight_countries=valid_countries
         )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-        
-        st.info(scatter_correlation_text(
-            df=df, subject=subject, resource_col=selected_col,
-            resource_label=selected_resource_label, year=selected_year,
+        scatter_intro = get_chart_note("Country Scatterplot")
+
+
+        scatter_finding = scatter_correlation_text(
+            df=df,
+            subject=subject,
+            resource_col=selected_col,
+            resource_label=selected_resource_label,
+            year=selected_year,
             highlight_countries=valid_countries
-        ))
+        )
+
+        render_plotly_chart_with_note(
+            fig,
+            note=f"{scatter_intro}\n\n{scatter_finding}",
+            key=f"scatter_{widget_key}_{subject}_{selected_year}_{selected_col}",
+        )
+
+        
 
 # ---------------------------------------------------------------------------
 # Data Story helpers — Tab 1 only
@@ -1496,10 +1622,10 @@ app_mode = st.sidebar.radio(
     label_visibility="collapsed" # Hides the word "Navigation" for a cleaner look
 )
 
-st.sidebar.info(
-    "**Interactive Dashboard:** Hover over charts for exact values, "
-    "click legend items to hide/show groups, and drag to zoom."
-)
+# st.sidebar.info(
+#     "**Interactive Dashboard:** Hover over charts for exact values, "
+#     "click legend items to hide/show groups, and drag to zoom."
+# )
 
 st.sidebar.markdown("---")
 
