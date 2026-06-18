@@ -809,7 +809,8 @@ def _parse_color(color):
         return int(parts[0]), int(parts[1]), int(parts[2])
     return 128, 128, 128
 
-def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_percentile_text=True, show_oecd_labels=False):
+
+def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_bottom_percentile_labels=False, show_oecd_labels=False, show_percentile_text=True):
     """
     rows: list of dicts with keys:
         - group: DataFrame (already filtered)
@@ -821,6 +822,7 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_perce
     """
     from scipy.stats import gaussian_kde
 
+    bottom_y_center = min([row["y_center"] for row in rows]) if rows else None
     for row in rows:
         group = row["group"]
         q_label = row["label"]
@@ -923,6 +925,32 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_perce
                 showlegend=False,
                 hoverinfo="skip"
             ))
+        
+        # Add percentile labels only under the bottom row.
+        # This is useful for group-comparison shaded density plots:
+        # label the five vertical percentile markers once instead of repeating
+        # the same labels on every row.
+        if show_bottom_percentile_labels and y_center == bottom_y_center:
+            p_annotate = {
+                10: "P10",
+                25: "P25",
+                50: "Median",
+                75: "P75",
+                90: "P90",
+            }
+
+            fig.add_trace(go.Scatter(
+                x=[round(score_at_p(p)) for p in p_annotate],
+                y=[y_center - 0.55] * len(p_annotate),
+                mode="text",
+                text=list(p_annotate.values()),
+                textposition="top center",
+                textfont=dict(size=9, color="rgba(85,85,85,0.9)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+            
 
         if show_oecd_labels:
             p_annotate = {
@@ -1132,7 +1160,14 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
         ))
         ticktext.append(y_label)
 
-    _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height)
+    _render_shaded_density_rows(
+        fig,
+        rows,
+        x_grid,
+        BANDS,
+        bar_height,
+        show_bottom_percentile_labels=True,
+    )
 
     tickvals = list(range(len(codes), 0, -1))
 
