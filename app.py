@@ -34,11 +34,9 @@ from src.pisa_stats import (
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
-                          plot_group_comparison,
                           plot_country_shaded_density,
                           plot_percentile_change_from_baseline,
                           plot_intersectional_heatmap,
-                          plot_immigration_score_distribution,
                           plot_resource_scatter,
                           plot_group_shaded_density,
                           _cnt_label)
@@ -499,156 +497,49 @@ def render_chart(chart_type, subject, selected_countries,
                 f"Group comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
+        # Fetch data ONCE for whatever group was selected
         df = fetch((primary_country,), selected_year,
                    tuple(BASE_COLS + pv_cols + [group_col]))
         
+        # Size warnings for all groups except SES
         if group_key != "Socioeconomic status":
             warns = check_group_sizes(
-                df,
-                group_col,
-                group_vals,
-                primary_country,
-                year=selected_year,
+                df, group_col, group_vals, primary_country, year=selected_year
             )
-
             for w in warns:
                 st.warning(w)
 
-        if group_key == "Gender":
-            df = fetch(
-                (primary_country,),
-                selected_year,
-                tuple(BASE_COLS + pv_cols + ["ST004D01T"])
-            )
-            fig = plot_group_shaded_density(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                group_col=group_col, 
-                group_labels=group_vals, 
-                group_title=group_key,
-                year=selected_year,
-                compact=compact
-            )
-            render_plotly_chart_with_note(
-                fig,
-                note=get_chart_note("Group comparison",
-                                    group_key="Gender"),
-                key=f"group_gender_{widget_key}_{subject}_{selected_year}_{primary_country}",
-            )
-            
-        elif group_key == "Socioeconomic status":
-            df = fetch(
-                (primary_country,),
-                selected_year,
-                tuple(BASE_COLS + pv_cols + ["ESCS"])
-            )
+        # Sorting (SES uses fixed Q1-Q4, others sort by median)
+        sort_by_med = False if group_key == "Socioeconomic status" else True
 
-            fig = plot_group_shaded_density(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                group_col=group_col, 
-                group_labels=group_vals, 
-                group_title=group_key,
-                year=selected_year,
-                compact=compact
-            )
+        # Generate the plot ONCE
+        fig = plot_group_shaded_density(
+            df=df,
+            subject=subject,
+            cnt=primary_country,
+            group_col=group_col, 
+            group_labels=group_vals, 
+            group_title=group_key,
+            year=selected_year,
+            compact=compact,
+            sort_by_median=sort_by_med
+        )
+
+        # Print the SES-specific text if applicable
+        if group_key == "Socioeconomic status":
             st.markdown(
                 ses_difference_text(
-                    df,
-                    subject,
-                    primary_country,
-                    year=selected_year
+                    df, subject, primary_country, year=selected_year
                 )
             )
-            render_plotly_chart_with_note(
-                fig,
-                note=get_chart_note("Group comparison",
-                                    group_key="Socioeconomic status"),
-                key=f"group_ses_{widget_key}_{subject}_{selected_year}_{primary_country}",
-            )
 
-
-
-        elif group_key == "Immigration status":
-            df = fetch((primary_country,), selected_year,
-                       tuple(BASE_COLS + pv_cols + ["IMMIG"]))
-            
-            # Warning checks for small group sizes
-            immig_warnings = check_group_sizes(
-                df, group_col, group_vals, primary_country, year=selected_year
-            )
-            for w in immig_warnings:
-                st.warning(w)
-
-            fig = plot_group_shaded_density(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                group_col=group_col,
-                group_labels=group_vals,
-                group_title=group_key,
-                year=selected_year,
-                sort_by_median=True
-            )
-
-            render_plotly_chart_with_note(
-                fig,
-                note=get_chart_note("Group comparison", group_key="Immigration status"),
-                key=f"group_immig_{widget_key}_{subject}_{selected_year}_{primary_country}",
-            )
-
-        elif group_key == "School location":
-            df = fetch((primary_country,), selected_year, tuple(BASE_COLS + pv_cols + ["SC001Q01TA"]))
-            
-            fig = plot_group_shaded_density(
-                df=df, subject=subject, cnt=primary_country,
-                group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year, compact=compact
-            )
-            render_plotly_chart_with_note(
-                fig,
-                note=get_chart_note("Group comparison",
-                                    group_key="School location"),
-                key=f"group_location_{widget_key}_{subject}_{selected_year}_{primary_country}",
-            )
-
-        elif group_key == "School type":
-            df = fetch((primary_country,), selected_year,
-                       tuple(BASE_COLS + pv_cols + ["SCHLTYPE"]))
-            fig = plot_group_shaded_density(
-                df=df,
-                subject=subject,
-                cnt=primary_country,
-                group_col=group_col,
-                group_labels=group_vals,
-                group_title=group_key,
-                year=selected_year,
-            )
-
-            render_plotly_chart_with_note(
-                fig,
-                note=get_chart_note("Group comparison",
-                                    group_key="School type"),
-                key=f"group_type_{widget_key}_{subject}_{selected_year}_{primary_country}",
-            )
-
-        else:
-            fig = plot_group_comparison(
-                df=df,
-                subject=subject,
-                group_col=group_col,
-                group_vals=group_vals,
-                cnt=primary_country,
-                year=selected_year,
-                title=f"{SUBJECTS[subject]} by {group_key} | {_cnt_label(primary_country)}"
-            )
-
-            render_plotly_chart_with_note(
-                fig,
-                note=get_chart_note("Group comparison", group_key=group_key),
-                key=f"group_{group_key.lower().replace(' ', '_')}_{widget_key}_{subject}_{selected_year}_{primary_country}",
-            )
+        # Render the chart ONCE, formatting the key dynamically
+        safe_key = group_key.lower().replace(" ", "_")
+        render_plotly_chart_with_note(
+            fig,
+            note=get_chart_note("Group comparison", group_key=group_key),
+            key=f"group_{safe_key}_{widget_key}_{subject}_{selected_year}_{primary_country}",
+        )
 
     # 3. Score Change Over Time
     elif chart_type == "Score change over time":
@@ -683,7 +574,7 @@ def render_chart(chart_type, subject, selected_countries,
             key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
         )
 
-    # 5. Intersectional Heatmap
+    # 4. Intersectional Heatmap
     elif chart_type == "Intersectional Heatmap":
         extra = ["BELONG", "IMMIG", "ESCS", "REPEAT"]
         df = fetch(tuple(selected_countries), selected_year, tuple(BASE_COLS + pv_cols + extra))
@@ -740,7 +631,7 @@ def render_chart(chart_type, subject, selected_countries,
                 key=f"heatmap_{widget_key}_{subject}_{selected_year}_{primary_country}_{cross_col}",
             )
 
-    # 6. Country Scatterplot
+    # 5. Country Scatterplot
     elif chart_type == "Country Scatterplot":
         resource_options = {
             "Socioeconomic Status (ESCS)": "ESCS",
@@ -1248,7 +1139,6 @@ def render_story_tab(available_years, story_country, story_subject):
                         f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
                         f"than those at the {better_end} "
                         f"({better_val:+.0f} pts at P{'90' if worse_end == 'bottom' else '10'}). "
-                        f"This pattern is invisible in average-only reporting."
                     )
 
             fig2 = plot_percentile_change_from_baseline(
@@ -1272,8 +1162,8 @@ def render_story_tab(available_years, story_country, story_subject):
     # ── Chapter 3: Equity ──────────────────────────────────────────────────
     _story_section_header(
         3,
-        "Who scores highest — and who is left behind?",
-        f"Score differences by student background in {_cnt_label(story_country)}"
+        "How do resources and systemic support shape outcomes?",
+        f"Understanding structural differences by student background in {_cnt_label(story_country)}"
     )
 
     st.markdown(
