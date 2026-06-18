@@ -241,16 +241,17 @@ GROUP_HOW_TO_READ = {
     ),
     "Socioeconomic status": (
         "Each shape shows the score distribution for one socioeconomic group. "
-        "Students are divided into four equal quartiles based on family background "
-        "(parental education, occupation, and home resources). "
-        "Q1 represents the lowest 25%, and Q4 represents the highest 25%. "
+        "Students are divided into **four equal groups** based on family background "
+        "(parental education, occupation, and home resources):<br>"
+        "• Q1: Lowest 25%<br>"
+        "• Q4: Highest 25%<br>"
         "The vertical line marks the group's median score."
     ),
     "Immigration status": (
-        "Each shape shows the score distribution for one immigration background. "
-        "Native = student and both parents born in-country. "
-        "Second-generation = student born in-country, at least one parent born abroad. "
-        "First-generation = student born abroad. "
+        "Each shape shows the score distribution for one immigration background:<br>"
+        "• Native: Student and both parents born in-country.<br>"
+        "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
+        "• First-generation: Student born abroad.<br>"
         "The vertical line marks the group's median score."
     ),
     "Gender": (
@@ -258,10 +259,10 @@ GROUP_HOW_TO_READ = {
         "The vertical line marks the group's median score."
     ),
     "School type": (
-        "Each shape shows the score distribution for one school type. "
-        "Public = government-operated. "
-        "Government-dependent private = privately managed but significantly government-funded. "
-        "Independent private = primarily privately funded. "
+        "Each shape shows the score distribution for one school type:<br>"
+        "• Public: Government-operated.<br>"
+        "• Government-dependent private: Privately managed but significantly government-funded.<br>"
+        "• Independent private: Primarily privately funded.<br>"
         "Percentages indicate the share of students in each school type."
     ),
     "School location": (
@@ -1041,15 +1042,9 @@ def render_story_tab(available_years, story_country, story_subject):
             year=story_year
         )
         _chart_expander(
-            "Collapse chart",
-            fig1,
-            f"The bar shows the score distribution for {_cnt_label(story_country)}. "
-            "Each row shows the score distribution for one country or group. "
-            "Darker shading shows where most students are concentrated (the middle 50%), "
-            "with lighter shading towards the tails. "
-            "The vertical line marks the median score. "
-            "Hover over any row to see the score at that percentile."
-        )
+                "Collapse chart", fig1,
+                GROUP_HOW_TO_READ.get("Score distribution", "Each bar shows the score distribution for one group.")
+            )
 
         _policy_box(
             f"{_cnt_label(story_country)}'s position relative to the OECD average "
@@ -1135,12 +1130,8 @@ def render_story_tab(available_years, story_country, story_subject):
                 cnt=story_country, reference_year=reference_year
             )
             _chart_expander(
-                "Collapse chart",
-                fig2,
-                f"The vertical axis shows the change in score from the {reference_year} baseline at each percentile. "
-                "The horizontal axis shows PISA cycles. "
-                "Points on the zero line mean no change from baseline. "
-                "Points above mean improvement; points below mean decline."
+                "Collapse chart", fig2,
+                GROUP_HOW_TO_READ.get("Change over time", "Each bar shows the score distribution for one group.")
             )
 
             _policy_box(
