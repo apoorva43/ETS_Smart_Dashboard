@@ -241,7 +241,7 @@ GROUP_HOW_TO_READ = {
     ),
     "Socioeconomic status": (
         "Each shape shows the score distribution for one socioeconomic group. "
-        "Students are divided into **four equal groups** based on family background "
+        "Students are divided into four equal groups based on family background "
         "(parental education, occupation, and home resources):<br>"
         "• Q1: Lowest 25%<br>"
         "• Q4: Highest 25%<br>"
