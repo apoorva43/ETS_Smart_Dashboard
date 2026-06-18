@@ -925,15 +925,34 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_perce
             ))
 
         if show_oecd_labels:
-            p_annotate = {10: "10th percentile", 25: "25th percentile",
-                          50: "Median", 75: "75th percentile", 90: "90th percentile"}
+            p_annotate = {
+                10: "P10",
+                25: "P25",
+                50: "P50",
+                75: "P75",
+                90: "P90",
+            }
+
             fig.add_trace(go.Scatter(
-                x=[round(score_at_p(p)) + 8 for p in p_annotate],
-                y=[y_center + 0.12] * len(p_annotate),
+                x=[round(score_at_p(p)) for p in p_annotate],
+                y=[y_center - 0.55] * len(p_annotate),
                 mode="text",
                 text=list(p_annotate.values()),
+                textposition="top center",
+                textfont=dict(size=9, color="rgba(85,85,85,0.9)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+            # Add OECD median value to match Canada / selected countries
+            fig.add_trace(go.Scatter(
+                x=[round(score_at_p(50)) + 8],
+                y=[y_center + 0.12],
+                mode="text",
+                text=[f"<b>{round(score_at_p(50))}</b>"],
                 textposition="middle right",
-                textfont=dict(size=9, color="rgba(85,85,85,0.85)"),
+                textfont=dict(size=12, color="rgba(85,85,85,0.95)"),
                 legendgroup=legendgroup,
                 showlegend=False,
                 hoverinfo="skip"
