@@ -1339,7 +1339,7 @@ def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
         ))
 
     fig.update_layout(**_base_layout(
-        title=f"{SUBJECTS[subject]} score change by percentile | {_cnt_label(cnt)}<br>"
+        title=f"{SUBJECTS[subject]} Score Change by Percentile | {_cnt_label(cnt)}<br>"
               f"<sup>Relative to {reference_year} baseline</sup>"
     ))
     fig.update_xaxes(title="Year", tickvals=years, tickformat="d")
