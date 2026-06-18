@@ -810,7 +810,7 @@ def _parse_color(color):
     return 128, 128, 128
 
 
-def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_bottom_percentile_labels=False, show_oecd_labels=False, show_percentile_text=True):
+def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_bottom_percentile_labels=False, show_oecd_labels=False, show_percentile_text=True, short_percentile_labels=False):
     """
     rows: list of dicts with keys:
         - group: DataFrame (already filtered)
@@ -931,13 +931,22 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
         # label the five vertical percentile markers once instead of repeating
         # the same labels on every row.
         if show_bottom_percentile_labels and y_center == bottom_y_center:
-            p_annotate = {
-                10: "P10",
-                25: "P25",
-                50: "Median",
-                75: "P75",
-                90: "P90",
-            }
+            if short_percentile_labels:
+                p_annotate = {
+                    10: "P10",
+                    25: "P25",
+                    50: "Median",
+                    75: "P75",
+                    90: "P90",
+                }
+            else:
+                p_annotate = {
+                    10: "10th Percentile",
+                    25: "25th Percentile",
+                    50: "Median",
+                    75: "75th Percentile",
+                    90: "90th Percentile",
+                }
 
             fig.add_trace(go.Scatter(
                 x=[round(score_at_p(p)) for p in p_annotate],
@@ -951,15 +960,23 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
                 hoverinfo="skip"
             ))
             
-
         if show_oecd_labels:
-            p_annotate = {
-                10: "P10",
-                25: "P25",
-                50: "Median",
-                75: "P75",
-                90: "P90",
-            }
+            if short_percentile_labels:
+                p_annotate = {
+                    10: "P10",
+                    25: "P25",
+                    50: "Median",
+                    75: "P75",
+                    90: "P90",
+                }
+            else:
+                p_annotate = {
+                    10: "10th Percentile",
+                    25: "25th Percentile",
+                    50: "Median",
+                    75: "75th Percentile",
+                    90: "90th Percentile",
+                }
 
             fig.add_trace(go.Scatter(
                 x=[round(score_at_p(p)) for p in p_annotate],
@@ -1025,7 +1042,8 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
             )
         ))
 
-def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
+
+def plot_country_shaded_density(df, subject, countries, year, min_group_n=30, compact=False):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"].isin(countries)].copy()
     if year is not None and "YEAR" in subset.columns:
@@ -1058,7 +1076,8 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
         ))
 
     _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height,
-                                 show_percentile_text=True, show_oecd_labels=False)
+                                 show_percentile_text=True, show_oecd_labels=False,
+                                short_percentile_labels=compact)
 
     # OECD row — same helper, y=0
     oecd_df = df[df["OECD"] == 1].copy()
@@ -1071,7 +1090,7 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
             group=oecd_df, label="OECD Average", color_rgb=(85, 85, 85),
             y_center=0, pv_cols=pv_cols, legendgroup="OECD Average"
         )], x_grid, BANDS, bar_height, show_percentile_text=False,
-            show_oecd_labels=True)
+            show_oecd_labels=True, short_percentile_labels=compact,)
 
     all_tickvals = list(range(len(countries), 0, -1)) + [0]
     all_ticktext = [_cnt_label(c) for c in countries] + ["OECD Average"]
@@ -1087,7 +1106,7 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30):
     return fig
 
 def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
-                               group_title, year=None, min_group_n=30, sort_by_median=False):
+                               group_title, year=None, min_group_n=30, sort_by_median=False, compact=False):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"] == cnt].copy()
     if year is not None and "YEAR" in subset.columns:
@@ -1167,6 +1186,7 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
         BANDS,
         bar_height,
         show_bottom_percentile_labels=True,
+        short_percentile_labels=compact
     )
 
     tickvals = list(range(len(codes), 0, -1))

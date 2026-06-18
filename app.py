@@ -433,7 +433,7 @@ def render_chart(chart_type, subject, selected_countries,
         if valid_countries:
             render_chart_help(chart_type)
             fig = plot_country_shaded_density(
-                df, subject, valid_countries, year=selected_year
+                df, subject, valid_countries, year=selected_year, compact=compact
             )
             render_plotly_chart_with_note(
                 fig,
@@ -465,7 +465,7 @@ def render_chart(chart_type, subject, selected_countries,
                 group_col,
                 group_vals,
                 primary_country,
-                year=selected_year
+                year=selected_year,
             )
 
             for w in warns:
@@ -484,7 +484,8 @@ def render_chart(chart_type, subject, selected_countries,
                 group_col=group_col, 
                 group_labels=group_vals, 
                 group_title=group_key,
-                year=selected_year
+                year=selected_year,
+                compact=compact
             )
             render_plotly_chart_with_note(
                 fig,
@@ -508,6 +509,7 @@ def render_chart(chart_type, subject, selected_countries,
                 group_labels=group_vals, 
                 group_title=group_key,
                 year=selected_year,
+                compact=compact
             )
             st.markdown(
                 ses_difference_text(
@@ -547,7 +549,7 @@ def render_chart(chart_type, subject, selected_countries,
             
             fig = plot_group_shaded_density(
                 df=df, subject=subject, cnt=primary_country,
-                group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year
+                group_col=group_col, group_labels=group_vals, group_title=group_key, year=selected_year, compact=compact
             )
             render_plotly_chart_with_note(
                 fig,
