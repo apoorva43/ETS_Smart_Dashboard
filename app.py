@@ -1239,16 +1239,42 @@ def render_story_tab(available_years, story_country, story_subject):
 
     # ── Summary cards ──────────────────────────────────────────────────────
     if equity_gaps:
+        findings = []
+        
         # Leading insight — biggest gap
         biggest = equity_gaps[0]
-        _insight_box(
+        findings.append(
             f"The largest difference in {_cnt_label(story_country)} is by "
             f"<strong>{biggest['label'].lower()}</strong> — "
             f"a {biggest['value']:.0f}-point difference at the median "
             f"in {subject_label}. {biggest['sub']}."
         )
 
-        # Summary cards — one per gap, ranked
+        # Conditional finding — SES diff > country vs OECD diff
+        ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
+        if ses_gap_entry:
+            cnt_m  = weighted_percentiles_pv(
+                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
+            )
+            # Make sure df_s1 is available or pass the appropriate df
+            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
+            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
+                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
+                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
+                    findings.append(
+                        f"The socioeconomic difference within "
+                        f"{_cnt_label(story_country)} "
+                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                        f"the difference between this country and the OECD "
+                        f"average ({country_vs_oecd:.0f} pts). "
+                        f"Domestic equity is a bigger lever than "
+                        f"international benchmarking."
+                    )
+        
+        # Print combined findings
+        _insight_box(findings)
+
+        # Print metric cards side-by-side
         card_cols = st.columns(len(equity_gaps))
         for i, (col, gap) in enumerate(zip(card_cols, equity_gaps)):
             with col:
@@ -1260,26 +1286,6 @@ def render_story_tab(available_years, story_country, story_subject):
                 )
 
         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
-
-        # Conditional amber — SES diff > country vs OECD diff
-        ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
-        if ses_gap_entry:
-            cnt_m  = weighted_percentiles_pv(
-                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
-            )
-            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
-            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
-                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
-                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
-                    _pullquote_box(
-                        f"The socioeconomic difference within "
-                        f"{_cnt_label(story_country)} "
-                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
-                        f"the difference between this country and the OECD "
-                        f"average ({country_vs_oecd:.0f} pts). "
-                        f"Domestic equity is a bigger lever than "
-                        f"international benchmarking."
-                    )
 
         # ── Combined chart expander ────────────────────────────────────────
         ses_ok    = not check_missing_countries(df_ses,    ["ESCS"],       [story_country], story_year)
