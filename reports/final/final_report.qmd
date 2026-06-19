@@ -72,7 +72,7 @@ Two exploratory findings directly motivated the dashboard's design. First, aggre
 
 This dynamic is visually evident when comparing traditional mean scores against full distributions. [cite_start]Percentile lines reveal the full score spread from P10 to P90, exposing disparities in the tails that averages completely erase[cite: 160].
 
-![Percentile Score Profile comparing Canada and the United States against the OECD average. The visualization maps the full P10–P90 spread, revealing that the bottom 10% of students often experience distinct score shifts invisible in average-only reporting.](../../data/images/fig1_math_dist.png){#fig-percentile-profile}
+![Percentile Score Profile comparing Canada and the United States against the OECD average. The visualization maps the full P10–P90 spread, revealing that the lower end 10% of students often experience distinct score shifts invisible in average-only reporting.](../../data/images/fig1_math_dist.png){#fig-percentile-profile}
 
 TODO - Update the path to point to the actual screenshot of your percentile profile chart from the dashboard.
 
