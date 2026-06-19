@@ -892,8 +892,10 @@ def render_story_tab(available_years, story_country, story_subject):
             - **Who takes it:** ~700,000 students across 80+ countries
             - **Cycles:** 2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022
             - **OECD average:** The benchmark representing the 38 OECD member
-              countries. Non-member participants are referred to as Partner
-              economies.
+              countries. Averages reflect mean scores across students, reported 
+              equally across member countries per PISA's official methodology 
+              (see [OECD PISA 2022 Results, Volume I](https://www.oecd.org/en/publications/pisa-2022-results-volume-i_53f23881-en.html)). 
+              Non-member participants are referred to as Partner economies.
         """)
 
     with st.expander("🔍 Language note: interpreting score differences"):
@@ -940,12 +942,6 @@ def render_story_tab(available_years, story_country, story_subject):
         )
         if dist_text:
             _insight_box(dist_text)
-            st.markdown(
-                "<small>**Note:** Averages reflect mean scores across students, "
-                "reported equally across OECD member countries per PISA's official methodology. "
-                "See [OECD PISA 2022 Results, Volume I](https://www.oecd.org/en/publications/pisa-2022-results-volume-i_53f23881-en.html).</small>",
-                unsafe_allow_html=True
-            )
 
         # Conditional amber — if difference > 20 points at median
         cnt_subset = df_s1[df_s1["CNT"] == story_country]
