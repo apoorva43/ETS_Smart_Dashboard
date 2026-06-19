@@ -83,8 +83,7 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
     if diff_mean_abs < 3:
         main = (
             f"On average, students in {_cnt_label(cnt)} score in line with "
-            f"the OECD average in {subject_label} (mean: {cnt_mean:.0f} vs OECD: {oecd_mean:.0f}; "
-            f"median: {cnt_p50:.0f})."
+            f"the OECD average in {subject_label}."
         )
         direction_general = "in line with"
     else:
@@ -92,8 +91,7 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
         main = (
             f"On average, students in {_cnt_label(cnt)} score "
             f"{diff_mean_abs:.0f} points {direction} the OECD average "
-            f"in {subject_label} (mean: {cnt_mean:.0f} vs OECD: {oecd_mean:.0f}; "
-            f"median: {cnt_p50:.0f})."
+            f"in {subject_label}."
         )
         direction_general = direction
 
