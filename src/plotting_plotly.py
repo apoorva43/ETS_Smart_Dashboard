@@ -725,26 +725,31 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
            customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
        ))
 
-    # Quadrant label annotations — positioned at 10th/90th percentile corners of data
-    x_lo = float(np.nanpercentile(plot_df["resource"], 12))
-    x_hi = float(np.nanpercentile(plot_df["resource"], 88))
-    y_lo = float(np.nanpercentile(plot_df["score"], 12))
-    y_hi = float(np.nanpercentile(plot_df["score"], 88))
-
+    # Quadrant label annotations — positioned at the extreme edges of the plot using 'paper' references
+    short_label = resource_label.split(" ")[0]
     quadrant_labels = [
-        (x_hi, y_hi, "High Performance /<br>High " + resource_label.split(" ")[0]),
-        (x_lo, y_hi, "High Performance /<br>Low " + resource_label.split(" ")[0]),
-        (x_hi, y_lo, "Low Performance /<br>High " + resource_label.split(" ")[0]),
-        (x_lo, y_lo, "Low Performance /<br>Low " + resource_label.split(" ")[0]),
+        (0.98, 0.98, f"High Performance /<br>High {short_label}", "right", "top"),
+        (0.02, 0.98, f"High Performance /<br>Low {short_label}", "left", "top"),
+        (0.98, 0.02, f"Low Performance /<br>High {short_label}", "right", "bottom"),
+        (0.02, 0.02, f"Low Performance /<br>Low {short_label}", "left", "bottom"),
     ]
-    for qx, qy, qtext in quadrant_labels:
-        fig.add_annotation(x=qx, y=qy, text=qtext, showarrow=False,
-                           font=dict(size=10, color="#999999"),
-                           align="center", xanchor="center", yanchor="middle")
+    
+    for qx, qy, qtext, xanch, yanch in quadrant_labels:
+        fig.add_annotation(
+            x=qx, y=qy, xref="paper", yref="paper", 
+            text=qtext, showarrow=False,
+            font=dict(size=11, color="#999999"),
+            align=xanch, xanchor=xanch, yanchor=yanch
+        )
 
-    fig.update_layout(**_base_layout(
+    layout_args = _base_layout(
         title=f"{resource_label} vs {SUBJECTS[subject]} performance<br><sup>(each point = one country)</sup>"
-    ))
+    )
+    
+    # Force the chart to be taller to spread the points out vertically
+    layout_args["height"] = 700 
+    
+    fig.update_layout(**layout_args)
     fig.update_xaxes(title=resource_label)
     fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
     

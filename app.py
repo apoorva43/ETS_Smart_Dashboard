@@ -637,8 +637,6 @@ def render_chart(chart_type, subject, selected_countries,
             "Socioeconomic Status (ESCS)": "ESCS",
             "School Belonging Index": "BELONG",
         }
-        if subject == "MATH":
-            resource_options["Math Motivation Index"] = "MATHMOT"
             
         selected_resource_label = st.selectbox(
             "Select X-Axis Variable:", 
