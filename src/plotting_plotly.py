@@ -212,6 +212,8 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
     bottom_y_center = min([row["y_center"] for row in rows]) if rows else None
     for row in rows:
         group = row["group"]
+        if len(group) > 2000:
+            group = group.sample(n=2000, weights="W_FSTUWT", random_state=42)
         q_label = row["label"]
         r, g, b = row["color_rgb"]
         y_center = row["y_center"]
@@ -443,7 +445,7 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30, co
                            x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
         return fig
 
-    x_grid = np.linspace(100, 900, 500)
+    x_grid = np.linspace(100, 900, 200)
     BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
     bar_height = 0.7
     fig = go.Figure()
@@ -586,7 +588,7 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
         else:
             codes.sort(key=lambda c: group_sizes.get(c, 0), reverse=True)
 
-    x_grid = np.linspace(100, 900, 500)
+    x_grid = np.linspace(100, 900, 200)
     BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
     bar_height = 0.7
     fig = go.Figure()
