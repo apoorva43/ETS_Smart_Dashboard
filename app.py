@@ -1029,7 +1029,7 @@ def render_story_tab(available_years, story_country, story_subject):
             st.metric(
                 "P10 → P90 Spread",
                 f"{p10_p90_spread:.0f} pts" if p10_p90_spread is not None else "N/A",
-                help="Score range between the bottom 10% and top 10% of students"
+                help="Score range between students at the lower end (10%) and upper end (90%) of the distribution"
             )
 
         # Card 4: SE + 95% CI, only when SE > SE_THRESHOLD
@@ -1125,16 +1125,17 @@ def render_story_tab(available_years, story_country, story_subject):
                 # Conditional amber — uneven decline/gain across distribution
                 spread = abs(delta_p10 - delta_p90)
                 if spread > 10:
-                    worse_end = "bottom" if delta_p10 < delta_p90 else "top"
-                    better_end = "top" if worse_end == "bottom" else "bottom"
-                    worse_val  = delta_p10 if worse_end == "bottom" else delta_p90
-                    better_val = delta_p90 if worse_end == "bottom" else delta_p10
+                    worse_end = "lower end" if delta_p10 < delta_p90 else "upper end"
+                    better_end = "upper end" if worse_end == "lower end" else "lower end"
+                    worse_val  = delta_p10 if worse_end == "lower end" else delta_p90
+                    better_val = delta_p90 if worse_end == "lower end" else delta_p10
+                    
                     _insight_box(
                         f"The change is not uniform across the distribution — "
                         f"students at the {worse_end} lost more "
-                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
+                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'lower end' else '90'}) "
                         f"than those at the {better_end} "
-                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'bottom' else '10'}). "
+                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'lower end' else '10'}). "
                     )
 
             fig2 = plot_percentile_change_from_baseline(
@@ -1147,10 +1148,10 @@ def render_story_tab(available_years, story_country, story_subject):
             )
 
             _policy_box(
-                "A decline that is steeper at the bottom of the distribution "
-                "than at the top suggests that the students who most need "
-                "support have fallen furthest behind. Recovery efforts should "
-                "be targeted, not uniform."
+                "A decline that is steeper at the lower end of the distribution "
+                "than at the upper end suggests that students who most need "
+                "support have been disproportionately impacted. Recovery efforts "
+                "should be targeted, not uniform."
             )
 
     st.divider()
