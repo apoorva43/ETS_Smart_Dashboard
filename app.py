@@ -713,8 +713,21 @@ def _story_section_header(number, title, subtitle):
     )
 
 
-def _insight_box(text):
-    """Render a highlighted key-finding callout above a chart."""
+def _insight_box(findings):
+    """Render a highlighted key-finding callout above a chart.
+    Accepts either a single string or a list of strings for bullet points."""
+    
+    if isinstance(findings, list) and len(findings) > 1:
+        title = "💡 <strong>Key findings:</strong>"
+        items = "".join([f"<li style='margin-bottom: 6px;'>{f}</li>" for f in findings])
+        content = f"<ul style='margin-top: 8px; margin-bottom: 0; padding-left: 24px;'>{items}</ul>"
+    elif isinstance(findings, list) and len(findings) == 1:
+        title = "💡 <strong>Key finding:</strong>"
+        content = f" {findings[0]}"
+    else:
+        title = "💡 <strong>Key finding:</strong>"
+        content = f" {findings}"
+
     st.markdown(
         f"""
         <div style="
@@ -726,30 +739,7 @@ def _insight_box(text):
             font-size: 0.95rem;
             color: #1a3a52;
         ">
-            💡 <strong>Key finding:</strong> {text}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def _pullquote_box(text: str):
-    """
-    Render an amber callout for a notably important or surprising finding.
-    Conditional — only call this when the data warrants it, not for every chapter.
-    """
-    st.markdown(
-        f"""
-        <div style="
-            background: #fff8e6;
-            border-left: 3px solid #BA7517;
-            padding: 10px 14px;
-            margin: 8px 0 10px 0;
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: #633806;
-            line-height: 1.55;
-        ">
-            ⚠ {text}
+            {title}{content}
         </div>
         """,
         unsafe_allow_html=True,
@@ -943,46 +933,52 @@ def render_story_tab(available_years, story_country, story_subject):
         if dist_text:
             _insight_box(dist_text)
 
-        # Conditional amber — if difference > 20 points at median
         cnt_subset = df_s1[df_s1["CNT"] == story_country]
         if story_year:
             cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
-        
-        # Compute mean scores
+            
         s1_pv_cols = [
             f"PV{i}{story_subject}" for i in range(1, 11)
             if f"PV{i}{story_subject}" in df_s1.columns
         ]
         cnt_mean_score = np.mean([
             np.average(cnt_subset[pv].values, weights=cnt_subset["W_FSTUWT"].values)
-            for pv in s1_pv_cols
-            if pv in cnt_subset.columns
+            for pv in s1_pv_cols if pv in cnt_subset.columns
         ])        
         oecd_country_means = []
         for oecd_cnt in df_s1[df_s1["OECD"] == 1]["CNT"].unique():
             c = df_s1[
                 (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
             ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
-            if len(c) < 30:
-                continue
-            oecd_country_means.append(np.mean([
-                np.average(c[pv].values, weights=c["W_FSTUWT"].values)
-                for pv in s1_pv_cols
-            ]))
+            if len(c) >= 30:
+                oecd_country_means.append(np.mean([
+                    np.average(c[pv].values, weights=c["W_FSTUWT"].values)
+                    for pv in s1_pv_cols
+                ]))
         oecd_mean_score = np.mean(oecd_country_means) if oecd_country_means else np.nan
-        
-        # Conditional amber box
+
+        # Build the bullet points
+        findings = []
+        dist_text = country_distribution_text(
+            df_s1, story_subject, [story_country], year=story_year
+        )
+        if dist_text:
+            findings.append(dist_text)
+            
+        # Conditional finding — if difference > 20 points
         if not (np.isnan(cnt_mean_score).all() or np.isnan(oecd_mean_score)):
             diff = abs(cnt_mean_score - oecd_mean_score)
             if diff >= 20:
                 direction = "above" if cnt_mean_score > oecd_mean_score else "below"
-                _pullquote_box(
+                findings.append(
                     f"A difference of {diff:.0f} points represents a "
                     f"meaningful distance from the OECD average — "
                     f"equivalent to more than one year of schooling "
-                    f"{direction} the international benchmark. "
-                    f"*(Source: OECD PISA 2022 Results, Volume I)*"
+                    f"{direction} the international benchmark."
                 )
+
+        if findings:
+            _insight_box(findings)
 
         # Metric cards
         cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
