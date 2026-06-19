@@ -114,12 +114,12 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
         if direction_general == "in line with":
             spectrum = (
                 " This pattern is consistent across the distribution — "
-                "students at all performance levels score similarly to the OECD average."
+                "from the lower end to the upper end, students score similarly to the OECD average."
             )
         else:
             spectrum = (
                 f" This pattern is consistent across the distribution — "
-                f"students at all performance levels score similarly "
+                f"from the lower end to the upper end, students score similarly "
                 f"{direction_general} the OECD average."
             )
 
@@ -246,8 +246,8 @@ def ses_difference_text(df, subject: str, cnt: str, year: int = None) -> str:
                 )
         else:
             spectrum = (
-                f" This difference is fairly consistent across the performance "
-                f"spectrum ({abs(diff_p10):.0f} pts at P10, {abs(diff_p90):.0f} pts at P90)."
+                f" This difference is fairly consistent across the distribution "
+                f"({abs(diff_p10):.0f} pts at P10, {abs(diff_p90):.0f} pts at P90)."
             )
     else:
         spectrum = ""
