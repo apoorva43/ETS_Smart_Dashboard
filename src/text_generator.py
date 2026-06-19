@@ -83,8 +83,7 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
     if diff_mean_abs < 3:
         main = (
             f"On average, students in {_cnt_label(cnt)} score in line with "
-            f"the OECD average in {subject_label} (mean: {cnt_mean:.0f} vs OECD: {oecd_mean:.0f}; "
-            f"median: {cnt_p50:.0f})."
+            f"the OECD average in {subject_label}."
         )
         direction_general = "in line with"
     else:
@@ -92,8 +91,7 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
         main = (
             f"On average, students in {_cnt_label(cnt)} score "
             f"{diff_mean_abs:.0f} points {direction} the OECD average "
-            f"in {subject_label} (mean: {cnt_mean:.0f} vs OECD: {oecd_mean:.0f}; "
-            f"median: {cnt_p50:.0f})."
+            f"in {subject_label}."
         )
         direction_general = direction
 
@@ -102,26 +100,26 @@ def country_distribution_text(df, subject: str, countries: list, year: int = Non
     if not np.isnan(oecd_percs).all() and diff_spread > 15:
         if abs(diff_p10) < abs(diff_p90):
             spectrum = (
-                f" The difference is larger at the top of the distribution "
-                f"({diff_p90:+.0f} pts at P90) than at the bottom "
+                f" The difference is larger at the upper end of the distribution "
+                f"({diff_p90:+.0f} pts at P90) than at the lower end "
                 f"({diff_p10:+.0f} pts at P10)."
             )
         else:
             spectrum = (
-                f" The difference is larger at the bottom of the distribution "
-                f"({diff_p10:+.0f} pts at P10) than at the top "
+                f" The difference is larger at the lower end of the distribution "
+                f"({diff_p10:+.0f} pts at P10) than at the upper end "
                 f"({diff_p90:+.0f} pts at P90)."
             )
     else:
         if direction_general == "in line with":
             spectrum = (
                 " This pattern is consistent across the distribution — "
-                "students at all performance levels score similarly to the OECD average."
+                "from the lower end to the upper end, students score similarly to the OECD average."
             )
         else:
             spectrum = (
                 f" This pattern is consistent across the distribution — "
-                f"students at all performance levels score similarly "
+                f"from the lower end to the upper end, students score similarly "
                 f"{direction_general} the OECD average."
             )
 
@@ -184,9 +182,11 @@ def gender_gap_text(df, subject, cnt, year=None):
         overall = f"Female students in {_cnt_label(cnt)} score {abs(median_diff):.0f} points higher than male students at the median in {subject_label}."
 
     if abs(p90_diff - p10_diff) > 10:
-        spread = (f"The difference widens toward the top of the distribution: "
-                  f"{p10_diff:+.0f} pts at P10 vs {p90_diff:+.0f} pts at P90. "
-                  f"This pattern is invisible in average-only reporting.")
+        spread = (
+            f"The difference widens toward the upper end of the distribution: "
+            f"{p10_diff:+.0f} pts at P10 vs {p90_diff:+.0f} pts at P90. "
+            f"This pattern is invisible in average-only reporting."
+        )
     else:
         spread = f"The difference is relatively consistent across the distribution ({p10_diff:+.0f} pts at P10, {p90_diff:+.0f} pts at P90)."
 
@@ -234,7 +234,7 @@ def ses_difference_text(df, subject: str, cnt: str, year: int = None) -> str:
         if spread > 15:
             if abs(diff_p90) > abs(diff_p10):
                 spectrum = (
-                    f" This difference widens at the top of the distribution "
+                    f" This difference widens at the upper end of the distribution "
                     f"({abs(diff_p90):.0f} pts at P90 vs {abs(diff_p10):.0f} pts at P10), "
                     f"suggesting that high-SES students particularly pull ahead "
                     f"among the highest achievers."
@@ -246,8 +246,8 @@ def ses_difference_text(df, subject: str, cnt: str, year: int = None) -> str:
                 )
         else:
             spectrum = (
-                f" This difference is fairly consistent across the performance "
-                f"spectrum ({abs(diff_p10):.0f} pts at P10, {abs(diff_p90):.0f} pts at P90)."
+                f" This difference is fairly consistent across the distribution "
+                f"({abs(diff_p10):.0f} pts at P10, {abs(diff_p90):.0f} pts at P90)."
             )
     else:
         spectrum = ""

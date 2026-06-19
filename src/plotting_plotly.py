@@ -96,7 +96,7 @@ def _country_color(cnt: str, active_countries: list) -> str:
     return OKABE_ITO.get("blue", "#0072B2")
 
 def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELONG",
-                                 row_label="SES Quartile", col_label="Belonging Quartile",
+                                 row_label="SES Quartile", col_label="Belonging",
                                  year=None, n_bins=4, min_cell_n=30):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"] == cnt].copy()
@@ -113,28 +113,53 @@ def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELON
         fig.update_layout(**_base_layout(height=400))
         return fig
 
-    subset["row_bin"] = pd.qcut(subset[row_var].rank(method="first"), q=n_bins,
-                                 labels=[f"{row_label} Q{i+1}" for i in range(n_bins)])
-    subset["col_bin"] = pd.qcut(subset[col_var].rank(method="first"), q=n_bins,
-                                 labels=[f"{col_label} Q{i+1}" for i in range(n_bins)])
+    # Handle categorical vs continuous variables dynamically
+    def assign_bins(df_col, var_name, label_prefix):
+        if var_name == "IMMIG":
+            mapping = {1.0: "Native", 2.0: "Second-generation", 3.0: "First-generation"}
+            cats = ["Native", "Second-generation", "First-generation"]
+            return df_col.map(mapping), cats
+        elif var_name in ["ST004D01T", "GENDER"]: # 1=Female, 2=Male
+            mapping = {1.0: "Female", 2.0: "Male"}
+            cats = ["Female", "Male"]
+            return df_col.map(mapping), cats
+        else:
+            # Strip out "Quartile" if it's already in the label to prevent duplication with Q1/Q2
+            clean_prefix = label_prefix.replace(" Quartile", "").replace(" quartile", "")
+            cats = [f"{clean_prefix} Q{i+1}" for i in range(n_bins)]
+            binned = pd.qcut(df_col.rank(method="first"), q=n_bins, labels=cats)
+            return binned, cats
 
-    row_cats = [f"{row_label} Q{i+1}" for i in range(n_bins)]
-    col_cats = [f"{col_label} Q{i+1}" for i in range(n_bins)]
+    subset["row_bin"], row_cats = assign_bins(subset[row_var], row_var, row_label)
+    subset["col_bin"], col_cats = assign_bins(subset[col_var], col_var, col_label)
 
-    z = np.full((n_bins, n_bins), np.nan)
-    text = [[""] * n_bins for _ in range(n_bins)]
+    # Dynamic dimensions based on the actual categories returned
+    z = np.full((len(row_cats), len(col_cats)), np.nan)
+    text = [[""] * len(col_cats) for _ in range(len(row_cats))]
+    customdata = [[0.0] * len(col_cats) for _ in range(len(row_cats))]
+    
+    total_weight = subset["W_FSTUWT"].sum()
 
     for r_idx, r_cat in enumerate(row_cats):
         for c_idx, c_cat in enumerate(col_cats):
             cell = subset[(subset["row_bin"] == r_cat) & (subset["col_bin"] == c_cat)]
+            
             if len(cell) < min_cell_n:
                 text[r_idx][c_idx] = "n/a"
+                customdata[r_idx][c_idx] = 0.0
                 continue
+                
             pv_means = [np.average(cell[pv].values, weights=cell["W_FSTUWT"].values)
                         for pv in pv_cols if pv in cell.columns]
+            
             if pv_means:
+                # Calculate % of population for this cell using weights
+                cell_weight = cell["W_FSTUWT"].sum()
+                pop_share = (cell_weight / total_weight) * 100
+                
                 z[r_idx][c_idx] = np.mean(pv_means)
                 text[r_idx][c_idx] = f"{z[r_idx][c_idx]:.0f}"
+                customdata[r_idx][c_idx] = pop_share
 
     fig = go.Figure(go.Heatmap(
         z=z,
@@ -142,17 +167,23 @@ def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELON
         y=row_cats,
         text=text,
         texttemplate="%{text}",
+        customdata=customdata,
         colorscale="Blues",
         colorbar=dict(title=f"Mean {SUBJECTS[subject]} score"),
         hovertemplate=(
             f"{row_label}: %{{y}}<br>"
             f"{col_label}: %{{x}}<br>"
-            f"Mean score: %{{z:.0f}}<extra></extra>"
+            f"Mean score: %{{z:.0f}}<br>"
+            f"Population share: %{{customdata:.1f}}%<extra></extra>"
         )
     ))
 
+    # Standardize title replacing "Quartile" if a categorical variable is used
+    clean_col_label = col_label.replace(' Quartile', '') if col_var in ['IMMIG', 'ST004D01T'] else col_label
+    clean_row_label = row_label.replace(' Quartile', '') if row_var in ['IMMIG', 'ST004D01T'] else row_label
+
     fig.update_layout(**_base_layout(
-        title=f"Mean {SUBJECTS[subject]} Score | {row_label} × {col_label} | {_cnt_label(cnt)}",
+        title=f"Mean {SUBJECTS[subject]} Score | {clean_row_label} x {clean_col_label} | {_cnt_label(cnt)}",
         height=480
     ))
     return fig
@@ -497,10 +528,53 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
         for code in group_labels
     }
 
-    # Sort by group size descending (largest group on top), skip for SES quartiles
-    is_ses = group_col == "_group_bin"
     codes = list(group_labels.keys())
-    if not is_ses:
+
+    # Helper to enforce OECD standard sorting via semantic label matching
+    def _get_oecd_rank(code):
+        lbl = str(group_labels.get(code, "")).lower()
+        
+        # a. Immigration status
+        if "native" in lbl: return 1
+        if "1st" in lbl or "first" in lbl: return 2
+        if "2nd" in lbl or "second" in lbl: return 3
+        
+        # b. School location (Megacity to village)
+        # Note: Must check specific multi-word labels before broad ones 
+        # so 'megacity'/'large city' aren't caught by 'city', etc.
+        if "megacity" in lbl: return 10
+        if "large city" in lbl or "1 000 000" in lbl: return 11
+        if "small town" in lbl or "3 000" in lbl: return 14
+        if "town" in lbl or "15 000" in lbl: return 13
+        if "city" in lbl: return 12
+        if "village" in lbl or "rural" in lbl: return 15
+        
+        # c. School type (Public -> Govt-dep. private -> Independent private)
+        if "public" in lbl: return 20
+        if "govt" in lbl: return 21
+        if "independent" in lbl: return 22
+        
+        # d. Socioeconomic status (Q4 to Q1)
+        if "q4" in lbl: return 30
+        if "q3" in lbl: return 31
+        if "q2" in lbl: return 32
+        if "q1" in lbl: return 33
+        
+        # e. Gender (Male -> Female)
+        # Note: Must check 'female' first so it doesn't accidentally match 'male'
+        if "female" in lbl: return 41
+        if "male" in lbl: return 40
+        
+        return 999 # Fallback for unrecognized variables
+
+    # Apply custom sort if the variable matches any OECD patterns
+    ranks = {c: _get_oecd_rank(c) for c in codes}
+    has_custom_order = any(r != 999 for r in ranks.values())
+
+    if has_custom_order:
+        codes.sort(key=lambda c: ranks[c])
+    else:
+        # Fallback to median or size
         if sort_by_median:
             def _get_median(code):
                 grp = subset[subset[group_col] == code]
@@ -508,9 +582,9 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
                     return -1
                 m = weighted_percentiles_pv(grp, subject, [50])
                 return float(m[0]) if not np.isnan(m[0]) else -1
-            codes = sorted(codes, key=_get_median, reverse=True)
+            codes.sort(key=_get_median, reverse=True)
         else:
-            codes = sorted(codes, key=lambda c: group_sizes.get(c, 0), reverse=True)
+            codes.sort(key=lambda c: group_sizes.get(c, 0), reverse=True)
 
     x_grid = np.linspace(100, 900, 500)
     BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
@@ -583,17 +657,29 @@ def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
         return _check_sufficient_data(pd.DataFrame(), [], cnt,
             msg=f"No data for baseline year {reference_year}")[1]
 
-    percentile_labels = {
-        0: "10th percentile", 1: "25th percentile",
-        2: "50th (median)", 3: "75th percentile", 4: "90th percentile"
+    # Map each index to its label and a distinct Plotly symbol
+    percentile_config = {
+        0: {"label": "10th percentile", "symbol": "triangle-down"},
+        1: {"label": "25th percentile", "symbol": "square"},
+        2: {"label": "50th (median)", "symbol": "diamond"},
+        3: {"label": "75th percentile", "symbol": "circle"},
+        4: {"label": "90th percentile", "symbol": "triangle-up"}
     }
 
     fig = go.Figure()
-    fig.add_hline(y=0, line_dash="solid", line_color=OKABE_ITO["vermillion"],
+    
+    # Baseline uses a neutral dark grey
+    fig.add_hline(y=0, line_dash="solid", line_color="#666666",
                   line_width=1.5, annotation_text=f"{reference_year} baseline",
                   annotation_position="top left")
 
-    for p_idx, (p_val, p_label) in enumerate(zip(PERCENTILES_COARSE, percentile_labels.values())):
+    # 90th percentile is added first to put
+    # it at the top of the hover tooltip and the legend
+    for p_idx, p_val in reversed(list(enumerate(PERCENTILES_COARSE))):
+        config = percentile_config[p_idx]
+        p_label = config["label"]
+        p_symbol = config["symbol"]
+        
         color = PALETTE[p_idx % len(PALETTE)]
         x_years, y_deltas = [], []
 
@@ -608,12 +694,19 @@ def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
         if not x_years:
             continue
 
+        # Base sizes
+        base_size = 13 if "triangle" in p_symbol else 10
+        
+        # Dynamically set size and border width to 0 for all but the 50th percentile (p_idx == 2) at the baseline year
+        marker_sizes = [base_size if (yr != reference_year or p_idx == 2) else 0 for yr in x_years]
+        border_widths = [1 if (yr != reference_year or p_idx == 2) else 0 for yr in x_years]
+
         fig.add_trace(go.Scatter(
             x=x_years, y=y_deltas,
             mode="lines+markers",
             name=p_label,
-            line=dict(color=color, width=2.5),
-            marker=dict(size=9, color=color, line=dict(color="white", width=1)),
+            line=dict(color="#B0B0B0", width=2),
+            marker=dict(symbol=p_symbol, size=marker_sizes, color=color, line=dict(color="white", width=border_widths)),
             customdata=[[yr, f"{d:+.0f}"] for yr, d in zip(x_years, y_deltas)],
             hovertemplate=(
                 f"<b>{p_label}</b><br>"
@@ -706,26 +799,31 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
            customdata=hi[["CNT_LABEL"]], hovertemplate=htemp
        ))
 
-    # Quadrant label annotations — positioned at 10th/90th percentile corners of data
-    x_lo = float(np.nanpercentile(plot_df["resource"], 12))
-    x_hi = float(np.nanpercentile(plot_df["resource"], 88))
-    y_lo = float(np.nanpercentile(plot_df["score"], 12))
-    y_hi = float(np.nanpercentile(plot_df["score"], 88))
-
+    # Quadrant label annotations — positioned at the extreme edges of the plot using 'paper' references
+    short_label = resource_label.split(" ")[0]
     quadrant_labels = [
-        (x_hi, y_hi, "High Performance /<br>High " + resource_label.split(" ")[0]),
-        (x_lo, y_hi, "High Performance /<br>Low " + resource_label.split(" ")[0]),
-        (x_hi, y_lo, "Low Performance /<br>High " + resource_label.split(" ")[0]),
-        (x_lo, y_lo, "Low Performance /<br>Low " + resource_label.split(" ")[0]),
+        (0.98, 0.98, f"High Performance /<br>High {short_label}", "right", "top"),
+        (0.02, 0.98, f"High Performance /<br>Low {short_label}", "left", "top"),
+        (0.98, 0.02, f"Low Performance /<br>High {short_label}", "right", "bottom"),
+        (0.02, 0.02, f"Low Performance /<br>Low {short_label}", "left", "bottom"),
     ]
-    for qx, qy, qtext in quadrant_labels:
-        fig.add_annotation(x=qx, y=qy, text=qtext, showarrow=False,
-                           font=dict(size=10, color="#999999"),
-                           align="center", xanchor="center", yanchor="middle")
+    
+    for qx, qy, qtext, xanch, yanch in quadrant_labels:
+        fig.add_annotation(
+            x=qx, y=qy, xref="paper", yref="paper", 
+            text=qtext, showarrow=False,
+            font=dict(size=11, color="#999999"),
+            align=xanch, xanchor=xanch, yanchor=yanch
+        )
 
-    fig.update_layout(**_base_layout(
+    layout_args = _base_layout(
         title=f"{resource_label} vs {SUBJECTS[subject]} performance<br><sup>(each point = one country)</sup>"
-    ))
+    )
+    
+    # Force the chart to be taller to spread the points out vertically
+    layout_args["height"] = 700 
+    
+    fig.update_layout(**layout_args)
     fig.update_xaxes(title=resource_label)
     fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
     

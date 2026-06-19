@@ -35,7 +35,7 @@ Processing over 1.7 million student records across the 2015, 2018, and 2022 cycl
 
 International educational assessments serve as a primary benchmark for governments evaluating the efficacy of their education systems. However, relying solely on average scores to compare student groups obscures critical information: it hides within-group variation and ignores structural inequities, such as disparities in school resources.
 
-Research demonstrates that this mean-centric approach causes audiences to attribute performance gaps to intrinsic group traits rather than systemic factors [@holder_dispersion_2022], with direct consequences for how education departments allocate resources. When data is presented without distributional context, the students most in need of support are the most likely to be mischaracterized and underserved. Aligning with ETS's mission regarding fairness and equity in assessment [@ets_mission], this project demonstrates that shifting the paradigm of data presentation directly leads to more equitable policy decisions.
+Research demonstrates that this mean-centric approach causes audiences to attribute score differences to intrinsic group traits rather than systemic factors [@holder_dispersion_2022], with direct consequences for how education departments allocate resources. When data is presented without distributional context, the students most in need of support are the most likely to be mischaracterized and underserved. Aligning with ETS's mission regarding fairness and equity in assessment [@ets_mission], this project demonstrates that shifting how data is presented can directly drive more equitable policy decisions.
 
 ### Refined Scientific Objectives
 
@@ -72,7 +72,7 @@ Two exploratory findings directly motivated the dashboard's design. First, aggre
 
 This dynamic is visually evident when comparing traditional mean scores against full distributions. [cite_start]Percentile lines reveal the full score spread from P10 to P90, exposing disparities in the tails that averages completely erase[cite: 160].
 
-![Percentile Score Profile comparing Canada and the United States against the OECD average. The visualization maps the full P10–P90 spread, revealing that the bottom 10% of students often experience distinct score shifts invisible in average-only reporting.](../../data/images/fig1_math_dist.png){#fig-percentile-profile}
+![Percentile Score Profile comparing Canada and the United States against the OECD average. The visualization maps the full P10–P90 spread, revealing that the lower end 10% of students often experience distinct score shifts invisible in average-only reporting.](../../data/images/fig1_math_dist.png){#fig-percentile-profile}
 
 TODO - Update the path to point to the actual screenshot of your percentile profile chart from the dashboard.
 

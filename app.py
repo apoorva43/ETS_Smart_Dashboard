@@ -241,15 +241,15 @@ GROUP_HOW_TO_READ = {
         "Each shape shows the score distribution for one socioeconomic group. "
         "Students are divided into four equal groups based on family background "
         "(parental education, occupation, and home resources):<br>"
-        "• Q1: Lowest 25%<br>"
         "• Q4: Highest 25%<br>"
+        "• Q1: Lowest 25%<br>"
         "The vertical line marks the group's median score."
     ),
     "Immigration status": (
         "Each shape shows the score distribution for one immigration background:<br>"
         "• Native: Student and both parents born in-country.<br>"
-        "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
         "• First-generation: Student born abroad.<br>"
+        "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
         "The vertical line marks the group's median score."
     ),
     "Gender": (
@@ -637,8 +637,6 @@ def render_chart(chart_type, subject, selected_countries,
             "Socioeconomic Status (ESCS)": "ESCS",
             "School Belonging Index": "BELONG",
         }
-        if subject == "MATH":
-            resource_options["Math Motivation Index"] = "MATHMOT"
             
         selected_resource_label = st.selectbox(
             "Select X-Axis Variable:", 
@@ -713,8 +711,25 @@ def _story_section_header(number, title, subtitle):
     )
 
 
-def _insight_box(text):
-    """Render a highlighted key-finding callout above a chart."""
+def _insight_box(findings):
+    """Render a highlighted key-finding callout above a chart.
+    Accepts either a single string or a list of strings for bullet points."""
+    
+    if isinstance(findings, list) and len(findings) > 1:
+        title = "<span style='font-size: 0.9rem;'>💡 <strong>Key findings:</strong></span>"
+        items = "".join([
+            f"<li style='margin-bottom: 4px; line-height: 1.4;'>"
+            f"<span style='font-size: 0.85rem;'>{f}</span></li>" 
+            for f in findings
+        ])
+        content = f"<ul style='margin-top: 6px; margin-bottom: 0; padding-left: 20px;'>{items}</ul>"
+    elif isinstance(findings, list) and len(findings) == 1:
+        title = "<span style='font-size: 0.95rem;'>💡 <strong>Key finding:</strong></span>"
+        content = f" <span style='font-size: 0.9rem;'>{findings[0]}</span>"
+    else:
+        title = "<span style='font-size: 0.95rem;'>💡 <strong>Key finding:</strong></span>"
+        content = f" <span style='font-size: 0.9rem;'>{findings}</span>"
+
     st.markdown(
         f"""
         <div style="
@@ -723,33 +738,9 @@ def _insight_box(text):
             border-radius: 6px;
             padding: 12px 16px;
             margin-bottom: 10px;
-            font-size: 0.95rem;
             color: #1a3a52;
         ">
-            💡 <strong>Key finding:</strong> {text}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-def _pullquote_box(text: str):
-    """
-    Render an amber callout for a notably important or surprising finding.
-    Conditional — only call this when the data warrants it, not for every chapter.
-    """
-    st.markdown(
-        f"""
-        <div style="
-            background: #fff8e6;
-            border-left: 3px solid #BA7517;
-            padding: 10px 14px;
-            margin: 8px 0 10px 0;
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: #633806;
-            line-height: 1.55;
-        ">
-            ⚠ {text}
+            {title}{content}
         </div>
         """,
         unsafe_allow_html=True,
@@ -892,8 +883,10 @@ def render_story_tab(available_years, story_country, story_subject):
             - **Who takes it:** ~700,000 students across 80+ countries
             - **Cycles:** 2000, 2003, 2006, 2009, 2012, 2015, 2018, 2022
             - **OECD average:** The benchmark representing the 38 OECD member
-              countries. Non-member participants are referred to as Partner
-              economies.
+              countries. Averages reflect mean scores across students, reported 
+              equally across member countries per PISA's official methodology 
+              (see [OECD PISA 2022 Results, Volume I](https://www.oecd.org/en/publications/pisa-2022-results-volume-i_53f23881-en.html)). 
+              Non-member participants are referred to as Partner economies.
         """)
 
     with st.expander("🔍 Language note: interpreting score differences"):
@@ -934,59 +927,52 @@ def render_story_tab(available_years, story_country, story_subject):
             f"in {subject_label}."
         )
     else:
-        # Insight box — claims not labels
-        dist_text = country_distribution_text(
-            df_s1, story_subject, [story_country], year=story_year
-        )
-        if dist_text:
-            _insight_box(dist_text)
-            st.markdown(
-                "<small>**Note:** Averages reflect mean scores across students, "
-                "reported equally across OECD member countries per PISA's official methodology. "
-                "See [OECD PISA 2022 Results, Volume I](https://www.oecd.org/en/publications/pisa-2022-results-volume-i_53f23881-en.html).</small>",
-                unsafe_allow_html=True
-            )
-
-        # Conditional amber — if difference > 20 points at median
         cnt_subset = df_s1[df_s1["CNT"] == story_country]
         if story_year:
             cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
-        
-        # Compute mean scores
+            
         s1_pv_cols = [
             f"PV{i}{story_subject}" for i in range(1, 11)
             if f"PV{i}{story_subject}" in df_s1.columns
         ]
         cnt_mean_score = np.mean([
             np.average(cnt_subset[pv].values, weights=cnt_subset["W_FSTUWT"].values)
-            for pv in s1_pv_cols
-            if pv in cnt_subset.columns
+            for pv in s1_pv_cols if pv in cnt_subset.columns
         ])        
         oecd_country_means = []
         for oecd_cnt in df_s1[df_s1["OECD"] == 1]["CNT"].unique():
             c = df_s1[
                 (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
             ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
-            if len(c) < 30:
-                continue
-            oecd_country_means.append(np.mean([
-                np.average(c[pv].values, weights=c["W_FSTUWT"].values)
-                for pv in s1_pv_cols
-            ]))
+            if len(c) >= 30:
+                oecd_country_means.append(np.mean([
+                    np.average(c[pv].values, weights=c["W_FSTUWT"].values)
+                    for pv in s1_pv_cols
+                ]))
         oecd_mean_score = np.mean(oecd_country_means) if oecd_country_means else np.nan
-        
-        # Conditional amber box
+
+        # Build the bullet points
+        findings = []
+        dist_text = country_distribution_text(
+            df_s1, story_subject, [story_country], year=story_year
+        )
+        if dist_text:
+            findings.append(dist_text)
+            
+        # Conditional finding — if difference > 20 points
         if not (np.isnan(cnt_mean_score).all() or np.isnan(oecd_mean_score)):
             diff = abs(cnt_mean_score - oecd_mean_score)
             if diff >= 20:
                 direction = "above" if cnt_mean_score > oecd_mean_score else "below"
-                _pullquote_box(
+                findings.append(
                     f"A difference of {diff:.0f} points represents a "
                     f"meaningful distance from the OECD average — "
                     f"equivalent to more than one year of schooling "
-                    f"{direction} the international benchmark. "
-                    f"*(Source: OECD PISA 2022 Results, Volume I)*"
+                    f"{direction} the international benchmark."
                 )
+
+        if findings:
+            _insight_box(findings)
 
         # Metric cards
         cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
@@ -1033,7 +1019,7 @@ def render_story_tab(available_years, story_country, story_subject):
             st.metric(
                 "P10 → P90 Spread",
                 f"{p10_p90_spread:.0f} pts" if p10_p90_spread is not None else "N/A",
-                help="Score range between the bottom 10% and top 10% of students"
+                help="Score range between students at the lower end (10%) and upper end (90%) of the distribution"
             )
 
         # Card 4: SE + 95% CI, only when SE > SE_THRESHOLD
@@ -1099,7 +1085,6 @@ def render_story_tab(available_years, story_country, story_subject):
             )
         else:
             reference_year   = min(country_years)
-            comparison_years = [y for y in country_years if y != reference_year]
             latest_year      = max(country_years)
 
             ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
@@ -1118,7 +1103,10 @@ def render_story_tab(available_years, story_country, story_subject):
                 delta_p90 = last_percs[2] - ref_percs[2]
                 direction = "increased" if delta_p50 > 0 else "decreased"
 
-                _insight_box(
+                # Initialize the findings list
+                findings = []
+
+                findings.append(
                     f"At the median, {_cnt_label(story_country)}'s "
                     f"{subject_label} score {direction} by "
                     f"{abs(delta_p50):.0f} points between "
@@ -1126,20 +1114,24 @@ def render_story_tab(available_years, story_country, story_subject):
                     f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
                 )
 
-                # Conditional amber — uneven decline/gain across distribution
+                # Conditional finding - uneven decline/gain across distribution
                 spread = abs(delta_p10 - delta_p90)
                 if spread > 10:
-                    worse_end = "bottom" if delta_p10 < delta_p90 else "top"
-                    better_end = "top" if worse_end == "bottom" else "bottom"
-                    worse_val  = delta_p10 if worse_end == "bottom" else delta_p90
-                    better_val = delta_p90 if worse_end == "bottom" else delta_p10
-                    _insight_box(
+                    worse_end = "lower end" if delta_p10 < delta_p90 else "upper end"
+                    better_end = "upper end" if worse_end == "lower end" else "lower end"
+                    worse_val  = delta_p10 if worse_end == "lower end" else delta_p90
+                    better_val = delta_p90 if worse_end == "lower end" else delta_p10
+                    
+                    findings.append(
                         f"The change is not uniform across the distribution — "
                         f"students at the {worse_end} lost more "
-                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'bottom' else '90'}) "
+                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'lower end' else '90'}) "
                         f"than those at the {better_end} "
-                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'bottom' else '10'}). "
+                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'lower end' else '10'}). "
                     )
+                
+                # Render the combined insight box
+                _insight_box(findings)
 
             fig2 = plot_percentile_change_from_baseline(
                 df=df_s2, subject=story_subject,
@@ -1151,10 +1143,10 @@ def render_story_tab(available_years, story_country, story_subject):
             )
 
             _policy_box(
-                "A decline that is steeper at the bottom of the distribution "
-                "than at the top suggests that the students who most need "
-                "support have fallen furthest behind. Recovery efforts should "
-                "be targeted, not uniform."
+                "A decline that is steeper at the lower end of the distribution "
+                "than at the upper end suggests that students who most need "
+                "support have been disproportionately impacted. Recovery efforts "
+                "should be targeted, not uniform."
             )
 
     st.divider()
@@ -1246,16 +1238,42 @@ def render_story_tab(available_years, story_country, story_subject):
 
     # ── Summary cards ──────────────────────────────────────────────────────
     if equity_gaps:
+        findings = []
+        
         # Leading insight — biggest gap
         biggest = equity_gaps[0]
-        _insight_box(
+        findings.append(
             f"The largest difference in {_cnt_label(story_country)} is by "
             f"<strong>{biggest['label'].lower()}</strong> — "
             f"a {biggest['value']:.0f}-point difference at the median "
             f"in {subject_label}. {biggest['sub']}."
         )
 
-        # Summary cards — one per gap, ranked
+        # Conditional finding — SES diff > country vs OECD diff
+        ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
+        if ses_gap_entry:
+            cnt_m  = weighted_percentiles_pv(
+                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
+            )
+            # Make sure df_s1 is available or pass the appropriate df
+            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
+            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
+                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
+                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
+                    findings.append(
+                        f"The socioeconomic difference within "
+                        f"{_cnt_label(story_country)} "
+                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                        f"the difference between this country and the OECD "
+                        f"average ({country_vs_oecd:.0f} pts). "
+                        f"Domestic equity is a bigger lever than "
+                        f"international benchmarking."
+                    )
+        
+        # Print combined findings
+        _insight_box(findings)
+
+        # Print metric cards side-by-side
         card_cols = st.columns(len(equity_gaps))
         for i, (col, gap) in enumerate(zip(card_cols, equity_gaps)):
             with col:
@@ -1267,26 +1285,6 @@ def render_story_tab(available_years, story_country, story_subject):
                 )
 
         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
-
-        # Conditional amber — SES diff > country vs OECD diff
-        ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
-        if ses_gap_entry:
-            cnt_m  = weighted_percentiles_pv(
-                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
-            )
-            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year)
-            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
-                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
-                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
-                    _pullquote_box(
-                        f"The socioeconomic difference within "
-                        f"{_cnt_label(story_country)} "
-                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
-                        f"the difference between this country and the OECD "
-                        f"average ({country_vs_oecd:.0f} pts). "
-                        f"Domestic equity is a bigger lever than "
-                        f"international benchmarking."
-                    )
 
         # ── Combined chart expander ────────────────────────────────────────
         ses_ok    = not check_missing_countries(df_ses,    ["ESCS"],       [story_country], story_year)
