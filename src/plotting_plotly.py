@@ -96,7 +96,7 @@ def _country_color(cnt: str, active_countries: list) -> str:
     return OKABE_ITO.get("blue", "#0072B2")
 
 def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELONG",
-                                 row_label="SES Quartile", col_label="Belonging Quartile",
+                                 row_label="SES Quartile", col_label="Belonging",
                                  year=None, n_bins=4, min_cell_n=30):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"] == cnt].copy()
@@ -113,28 +113,53 @@ def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELON
         fig.update_layout(**_base_layout(height=400))
         return fig
 
-    subset["row_bin"] = pd.qcut(subset[row_var].rank(method="first"), q=n_bins,
-                                 labels=[f"{row_label} Q{i+1}" for i in range(n_bins)])
-    subset["col_bin"] = pd.qcut(subset[col_var].rank(method="first"), q=n_bins,
-                                 labels=[f"{col_label} Q{i+1}" for i in range(n_bins)])
+    # Handle categorical vs continuous variables dynamically
+    def assign_bins(df_col, var_name, label_prefix):
+        if var_name == "IMMIG":
+            mapping = {1.0: "Native", 2.0: "Second-generation", 3.0: "First-generation"}
+            cats = ["Native", "Second-generation", "First-generation"]
+            return df_col.map(mapping), cats
+        elif var_name in ["ST004D01T", "GENDER"]: # 1=Female, 2=Male
+            mapping = {1.0: "Female", 2.0: "Male"}
+            cats = ["Female", "Male"]
+            return df_col.map(mapping), cats
+        else:
+            # Strip out "Quartile" if it's already in the label to prevent duplication with Q1/Q2
+            clean_prefix = label_prefix.replace(" Quartile", "").replace(" quartile", "")
+            cats = [f"{clean_prefix} Q{i+1}" for i in range(n_bins)]
+            binned = pd.qcut(df_col.rank(method="first"), q=n_bins, labels=cats)
+            return binned, cats
 
-    row_cats = [f"{row_label} Q{i+1}" for i in range(n_bins)]
-    col_cats = [f"{col_label} Q{i+1}" for i in range(n_bins)]
+    subset["row_bin"], row_cats = assign_bins(subset[row_var], row_var, row_label)
+    subset["col_bin"], col_cats = assign_bins(subset[col_var], col_var, col_label)
 
-    z = np.full((n_bins, n_bins), np.nan)
-    text = [[""] * n_bins for _ in range(n_bins)]
+    # Dynamic dimensions based on the actual categories returned
+    z = np.full((len(row_cats), len(col_cats)), np.nan)
+    text = [[""] * len(col_cats) for _ in range(len(row_cats))]
+    customdata = [[0.0] * len(col_cats) for _ in range(len(row_cats))]
+    
+    total_weight = subset["W_FSTUWT"].sum()
 
     for r_idx, r_cat in enumerate(row_cats):
         for c_idx, c_cat in enumerate(col_cats):
             cell = subset[(subset["row_bin"] == r_cat) & (subset["col_bin"] == c_cat)]
+            
             if len(cell) < min_cell_n:
                 text[r_idx][c_idx] = "n/a"
+                customdata[r_idx][c_idx] = 0.0
                 continue
+                
             pv_means = [np.average(cell[pv].values, weights=cell["W_FSTUWT"].values)
                         for pv in pv_cols if pv in cell.columns]
+            
             if pv_means:
+                # Calculate % of population for this cell using weights
+                cell_weight = cell["W_FSTUWT"].sum()
+                pop_share = (cell_weight / total_weight) * 100
+                
                 z[r_idx][c_idx] = np.mean(pv_means)
                 text[r_idx][c_idx] = f"{z[r_idx][c_idx]:.0f}"
+                customdata[r_idx][c_idx] = pop_share
 
     fig = go.Figure(go.Heatmap(
         z=z,
@@ -142,17 +167,23 @@ def plot_intersectional_heatmap(df, subject, cnt, row_var="ESCS", col_var="BELON
         y=row_cats,
         text=text,
         texttemplate="%{text}",
+        customdata=customdata,
         colorscale="Blues",
         colorbar=dict(title=f"Mean {SUBJECTS[subject]} score"),
         hovertemplate=(
             f"{row_label}: %{{y}}<br>"
             f"{col_label}: %{{x}}<br>"
-            f"Mean score: %{{z:.0f}}<extra></extra>"
+            f"Mean score: %{{z:.0f}}<br>"
+            f"Population share: %{{customdata:.1f}}%<extra></extra>"
         )
     ))
 
+    # Standardize title replacing "Quartile" if a categorical variable is used
+    clean_col_label = col_label.replace(' Quartile', '') if col_var in ['IMMIG', 'ST004D01T'] else col_label
+    clean_row_label = row_label.replace(' Quartile', '') if row_var in ['IMMIG', 'ST004D01T'] else row_label
+
     fig.update_layout(**_base_layout(
-        title=f"Mean {SUBJECTS[subject]} Score | {row_label} × {col_label} | {_cnt_label(cnt)}",
+        title=f"Mean {SUBJECTS[subject]} Score | {clean_row_label} x {clean_col_label} | {_cnt_label(cnt)}",
         height=480
     ))
     return fig
