@@ -528,10 +528,53 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
         for code in group_labels
     }
 
-    # Sort by group size descending (largest group on top), skip for SES quartiles
-    is_ses = group_col == "_group_bin"
     codes = list(group_labels.keys())
-    if not is_ses:
+
+    # Helper to enforce OECD standard sorting via semantic label matching
+    def _get_oecd_rank(code):
+        lbl = str(group_labels.get(code, "")).lower()
+        
+        # a. Immigration status
+        if "native" in lbl: return 1
+        if "1st" in lbl or "first" in lbl: return 2
+        if "2nd" in lbl or "second" in lbl: return 3
+        
+        # b. School location (Megacity to village)
+        # Note: Must check specific multi-word labels before broad ones 
+        # so 'megacity'/'large city' aren't caught by 'city', etc.
+        if "megacity" in lbl: return 10
+        if "large city" in lbl or "1 000 000" in lbl: return 11
+        if "small town" in lbl or "3 000" in lbl: return 14
+        if "town" in lbl or "15 000" in lbl: return 13
+        if "city" in lbl: return 12
+        if "village" in lbl or "rural" in lbl: return 15
+        
+        # c. School type (Public -> Govt-dep. private -> Independent private)
+        if "public" in lbl: return 20
+        if "govt" in lbl: return 21
+        if "independent" in lbl: return 22
+        
+        # d. Socioeconomic status (Q4 to Q1)
+        if "q4" in lbl: return 30
+        if "q3" in lbl: return 31
+        if "q2" in lbl: return 32
+        if "q1" in lbl: return 33
+        
+        # e. Gender (Male -> Female)
+        # Note: Must check 'female' first so it doesn't accidentally match 'male'
+        if "female" in lbl: return 41
+        if "male" in lbl: return 40
+        
+        return 999 # Fallback for unrecognized variables
+
+    # Apply custom sort if the variable matches any OECD patterns
+    ranks = {c: _get_oecd_rank(c) for c in codes}
+    has_custom_order = any(r != 999 for r in ranks.values())
+
+    if has_custom_order:
+        codes.sort(key=lambda c: ranks[c])
+    else:
+        # Fallback to median or size
         if sort_by_median:
             def _get_median(code):
                 grp = subset[subset[group_col] == code]
@@ -539,9 +582,9 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
                     return -1
                 m = weighted_percentiles_pv(grp, subject, [50])
                 return float(m[0]) if not np.isnan(m[0]) else -1
-            codes = sorted(codes, key=_get_median, reverse=True)
+            codes.sort(key=_get_median, reverse=True)
         else:
-            codes = sorted(codes, key=lambda c: group_sizes.get(c, 0), reverse=True)
+            codes.sort(key=lambda c: group_sizes.get(c, 0), reverse=True)
 
     x_grid = np.linspace(100, 900, 500)
     BANDS = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]

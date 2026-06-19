@@ -241,15 +241,15 @@ GROUP_HOW_TO_READ = {
         "Each shape shows the score distribution for one socioeconomic group. "
         "Students are divided into four equal groups based on family background "
         "(parental education, occupation, and home resources):<br>"
-        "• Q1: Lowest 25%<br>"
         "• Q4: Highest 25%<br>"
+        "• Q1: Lowest 25%<br>"
         "The vertical line marks the group's median score."
     ),
     "Immigration status": (
         "Each shape shows the score distribution for one immigration background:<br>"
         "• Native: Student and both parents born in-country.<br>"
-        "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
         "• First-generation: Student born abroad.<br>"
+        "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
         "The vertical line marks the group's median score."
     ),
     "Gender": (
