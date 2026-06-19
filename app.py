@@ -718,15 +718,19 @@ def _insight_box(findings):
     Accepts either a single string or a list of strings for bullet points."""
     
     if isinstance(findings, list) and len(findings) > 1:
-        title = "💡 <strong>Key findings:</strong>"
-        items = "".join([f"<li style='margin-bottom: 6px;'>{f}</li>" for f in findings])
-        content = f"<ul style='margin-top: 8px; margin-bottom: 0; padding-left: 24px;'>{items}</ul>"
+        title = "<span style='font-size: 0.9rem;'>💡 <strong>Key findings:</strong></span>"
+        items = "".join([
+            f"<li style='margin-bottom: 4px; line-height: 1.4;'>"
+            f"<span style='font-size: 0.85rem;'>{f}</span></li>" 
+            for f in findings
+        ])
+        content = f"<ul style='margin-top: 6px; margin-bottom: 0; padding-left: 20px;'>{items}</ul>"
     elif isinstance(findings, list) and len(findings) == 1:
-        title = "💡 <strong>Key finding:</strong>"
-        content = f" {findings[0]}"
+        title = "<span style='font-size: 0.95rem;'>💡 <strong>Key finding:</strong></span>"
+        content = f" <span style='font-size: 0.9rem;'>{findings[0]}</span>"
     else:
-        title = "💡 <strong>Key finding:</strong>"
-        content = f" {findings}"
+        title = "<span style='font-size: 0.95rem;'>💡 <strong>Key finding:</strong></span>"
+        content = f" <span style='font-size: 0.9rem;'>{findings}</span>"
 
     st.markdown(
         f"""
@@ -736,7 +740,6 @@ def _insight_box(findings):
             border-radius: 6px;
             padding: 12px 16px;
             margin-bottom: 10px;
-            font-size: 0.95rem;
             color: #1a3a52;
         ">
             {title}{content}
@@ -926,13 +929,6 @@ def render_story_tab(available_years, story_country, story_subject):
             f"in {subject_label}."
         )
     else:
-        # Insight box — claims not labels
-        dist_text = country_distribution_text(
-            df_s1, story_subject, [story_country], year=story_year
-        )
-        if dist_text:
-            _insight_box(dist_text)
-
         cnt_subset = df_s1[df_s1["CNT"] == story_country]
         if story_year:
             cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
@@ -1110,7 +1106,10 @@ def render_story_tab(available_years, story_country, story_subject):
                 delta_p90 = last_percs[2] - ref_percs[2]
                 direction = "increased" if delta_p50 > 0 else "decreased"
 
-                _insight_box(
+                # Initialize the findings list
+                findings = []
+
+                findings.append(
                     f"At the median, {_cnt_label(story_country)}'s "
                     f"{subject_label} score {direction} by "
                     f"{abs(delta_p50):.0f} points between "
@@ -1118,7 +1117,7 @@ def render_story_tab(available_years, story_country, story_subject):
                     f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
                 )
 
-                # Conditional amber — uneven decline/gain across distribution
+                # Conditional finding - uneven decline/gain across distribution
                 spread = abs(delta_p10 - delta_p90)
                 if spread > 10:
                     worse_end = "lower end" if delta_p10 < delta_p90 else "upper end"
@@ -1126,13 +1125,16 @@ def render_story_tab(available_years, story_country, story_subject):
                     worse_val  = delta_p10 if worse_end == "lower end" else delta_p90
                     better_val = delta_p90 if worse_end == "lower end" else delta_p10
                     
-                    _insight_box(
+                    findings.append(
                         f"The change is not uniform across the distribution — "
                         f"students at the {worse_end} lost more "
                         f"({worse_val:+.0f} pts at P{'10' if worse_end == 'lower end' else '90'}) "
                         f"than those at the {better_end} "
                         f"({better_val:+.0f} pts at P{'90' if worse_end == 'lower end' else '10'}). "
                     )
+                
+                # Render the combined insight box
+                _insight_box(findings)
 
             fig2 = plot_percentile_change_from_baseline(
                 df=df_s2, subject=story_subject,
