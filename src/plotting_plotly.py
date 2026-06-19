@@ -583,17 +583,29 @@ def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
         return _check_sufficient_data(pd.DataFrame(), [], cnt,
             msg=f"No data for baseline year {reference_year}")[1]
 
-    percentile_labels = {
-        0: "10th percentile", 1: "25th percentile",
-        2: "50th (median)", 3: "75th percentile", 4: "90th percentile"
+    # Map each index to its label and a distinct Plotly symbol
+    percentile_config = {
+        0: {"label": "10th percentile", "symbol": "triangle-down"},
+        1: {"label": "25th percentile", "symbol": "square"},
+        2: {"label": "50th (median)", "symbol": "diamond"},
+        3: {"label": "75th percentile", "symbol": "circle"},
+        4: {"label": "90th percentile", "symbol": "triangle-up"}
     }
 
     fig = go.Figure()
-    fig.add_hline(y=0, line_dash="solid", line_color=OKABE_ITO["vermillion"],
+    
+    # Baseline uses a neutral dark grey
+    fig.add_hline(y=0, line_dash="solid", line_color="#666666",
                   line_width=1.5, annotation_text=f"{reference_year} baseline",
                   annotation_position="top left")
 
-    for p_idx, (p_val, p_label) in enumerate(zip(PERCENTILES_COARSE, percentile_labels.values())):
+    # 90th percentile is added first to put
+    # it at the top of the hover tooltip and the legend
+    for p_idx, p_val in reversed(list(enumerate(PERCENTILES_COARSE))):
+        config = percentile_config[p_idx]
+        p_label = config["label"]
+        p_symbol = config["symbol"]
+        
         color = PALETTE[p_idx % len(PALETTE)]
         x_years, y_deltas = [], []
 
@@ -608,12 +620,19 @@ def plot_percentile_change_from_baseline(df, subject, cnt, reference_year=2015):
         if not x_years:
             continue
 
+        # Base sizes
+        base_size = 13 if "triangle" in p_symbol else 10
+        
+        # Dynamically set size and border width to 0 for all but the 50th percentile (p_idx == 2) at the baseline year
+        marker_sizes = [base_size if (yr != reference_year or p_idx == 2) else 0 for yr in x_years]
+        border_widths = [1 if (yr != reference_year or p_idx == 2) else 0 for yr in x_years]
+
         fig.add_trace(go.Scatter(
             x=x_years, y=y_deltas,
             mode="lines+markers",
             name=p_label,
-            line=dict(color=color, width=2.5),
-            marker=dict(size=9, color=color, line=dict(color="white", width=1)),
+            line=dict(color="#B0B0B0", width=2),
+            marker=dict(symbol=p_symbol, size=marker_sizes, color=color, line=dict(color="white", width=border_widths)),
             customdata=[[yr, f"{d:+.0f}"] for yr, d in zip(x_years, y_deltas)],
             hovertemplate=(
                 f"<b>{p_label}</b><br>"

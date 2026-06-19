@@ -1087,7 +1087,6 @@ def render_story_tab(available_years, story_country, story_subject):
             )
         else:
             reference_year   = min(country_years)
-            comparison_years = [y for y in country_years if y != reference_year]
             latest_year      = max(country_years)
 
             ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
