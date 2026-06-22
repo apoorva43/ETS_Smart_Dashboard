@@ -137,7 +137,7 @@ def precompute(processed_dir, out_path):
 @cli.command()
 @click.option("--processed-dir", default="data/processed",
               help="Directory containing pisa_all.parquet.")
-def se_stats(processed_dir):
+def standarderror(processed_dir):
     """Step 7: Precompute weighted SE + 95% CI per country/year/subject."""
     try:
         out = build_se_stats(processed_dir=processed_dir)
