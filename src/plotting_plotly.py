@@ -4,6 +4,7 @@ Plotting utilities for the PISA dashboard using Plotly.
 
 import numpy as np
 import pandas as pd
+import json
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from src.config import (
@@ -645,6 +646,541 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
                      showgrid=False, zeroline=False,
                      range=[0.3, num_valid + 0.7])
                      
+    return fig
+
+def plot_group_shaded_density_precomputed(
+    df_pre: pd.DataFrame,
+    subject: str,
+    cnt: str,
+    group_type: str,
+    group_title: str,
+    year: int,
+    compact: bool = False,
+) -> go.Figure:
+    """
+    Draw the teardrop/shaded density chart from precomputed KDE data.
+    Much faster than plot_group_shaded_density since KDE is precomputed.
+    """
+    from src.data_loader import query_precomputed
+
+    rows = query_precomputed(cnt, year, subject, group_type, df_pre)
+
+    if rows.empty:
+        fig = go.Figure()
+        fig.add_annotation(
+            text="⚠️ Insufficient data.",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="gray")
+        )
+        return fig
+
+    def _get_oecd_rank(lbl):
+        lbl = lbl.lower()
+        if "native" in lbl: return 1
+        if "1st" in lbl or "first" in lbl: return 2
+        if "2nd" in lbl or "second" in lbl: return 3
+        if "megacity" in lbl: return 10
+        if "large city" in lbl: return 11
+        if "small town" in lbl: return 14
+        if "town" in lbl: return 13
+        if "city" in lbl: return 12
+        if "village" in lbl or "rural" in lbl: return 15
+        if "public" in lbl: return 20
+        if "govt" in lbl: return 21
+        if "independent" in lbl: return 22
+        if "q4" in lbl: return 30
+        if "q3" in lbl: return 31
+        if "q2" in lbl: return 32
+        if "q1" in lbl: return 33
+        if "female" in lbl: return 41
+        if "male" in lbl: return 40
+        return 999
+
+    rows = rows.copy()
+    rows["_rank"] = rows["GROUP_LABEL"].apply(_get_oecd_rank)
+    rows = rows.sort_values("_rank").reset_index(drop=True)
+
+    num_valid  = len(rows)
+    bar_height = 0.7
+    BANDS      = [(0, 10, 0.10), (10, 25, 0.20), (25, 75, 0.45), (75, 90, 0.20), (90, 100, 0.10)]
+
+    p_labels = {
+        10: "P10" if compact else "10th Percentile",
+        25: "P25" if compact else "25th Percentile",
+        50: "Median",
+        75: "P75" if compact else "75th Percentile",
+        90: "P90" if compact else "90th Percentile",
+    }
+
+    fig      = go.Figure()
+    bottom_y = 1
+
+    for row_idx, row in rows.iterrows():
+        label       = f"{row['GROUP_LABEL']} ({row['PCT']:.0f}%)"
+        y_center    = num_valid - row_idx
+        color       = PALETTE[row_idx % len(PALETTE)]
+        r, g, b     = _parse_color(color)
+        legendgroup = label
+
+        p10, p25, p50, p75, p90 = row["P10"], row["P25"], row["P50"], row["P75"], row["P90"]
+
+        # Deserialize stored KDE arrays
+        x_grid  = np.array(json.loads(row["DENSITY_X"]))
+        density = np.array(json.loads(row["DENSITY_Y"]))
+
+        # Interpolate score at any percentile using the 5 known anchor points.
+        # Using np.interp with fill_value="extrapolate" equivalent via manual
+        # extrapolation so tails extend naturally beyond P10 and P90.
+        perc_vals   = np.array([0, 10, 25, 50, 75, 90, 100])
+        score_vals  = np.array([
+            p10 - (p25 - p10),        # extrapolated P0
+            p10,
+            p25,
+            p50,
+            p75,
+            p90,
+            p90 + (p90 - p75),        # extrapolated P100
+        ])
+
+        def score_at_p(p):
+            return float(np.interp(p, perc_vals, score_vals))
+
+        for (lo_p, hi_p, alpha) in BANDS:
+            # For tail bands, use the full x_grid extent so tails taper naturally
+            if lo_p == 0:
+                x_lo = float(x_grid[0])   # extend to start of x_grid (100)
+            else:
+                x_lo = score_at_p(lo_p)
+            
+            if hi_p == 100:
+                x_hi = float(x_grid[-1])  # extend to end of x_grid (900)
+            else:
+                x_hi = score_at_p(hi_p)
+            
+            mask = (x_grid >= x_lo) & (x_grid <= x_hi)
+            if mask.sum() < 2:
+                continue
+            band_x       = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
+            band_density = np.concatenate([[0], density[mask], [0]])
+            scaled_y_top = y_center + (band_density / 2) * bar_height
+            scaled_y_bot = y_center - (band_density / 2) * bar_height
+            poly_x = np.concatenate([band_x, band_x[::-1]])
+            poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
+
+            fig.add_trace(go.Scatter(
+                x=poly_x, y=poly_y,
+                fill="toself",
+                fillcolor=f"rgba({r},{g},{b},{alpha})",
+                line=dict(color=f"rgba({r},{g},{b},0)", width=0),
+                mode="lines",
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Median line
+        fig.add_trace(go.Scatter(
+            x=[p50, p50],
+            y=[y_center - bar_height / 2, y_center + bar_height / 2],
+            mode="lines",
+            line=dict(color=f"rgb({r},{g},{b})", width=3),
+            legendgroup=legendgroup,
+            showlegend=False,
+            hoverinfo="skip"
+        ))
+
+        # Median text
+        fig.add_trace(go.Scatter(
+            x=[p50 + 8],
+            y=[y_center + 0.12],
+            mode="text",
+            text=[f"<b>{round(p50)}</b>"],
+            textposition="middle right",
+            textfont=dict(size=12, color=f"rgba({r},{g},{b},0.9)"),
+            legendgroup=legendgroup,
+            showlegend=False,
+            hoverinfo="skip"
+        ))
+
+        # Percentile markers
+        fig.add_trace(go.Scatter(
+            x=[p10, p25, p50, p75, p90],
+            y=[y_center] * 5,
+            mode="markers",
+            marker=dict(
+                color=f"rgb({r},{g},{b})",
+                size=[6, 6, 10, 6, 6],
+                line=dict(color=f"rgb({r},{g},{b})", width=2)
+            ),
+            legendgroup=legendgroup,
+            showlegend=False,
+            hoverinfo="skip"
+        ))
+
+        # Invisible hover trace
+        fig.add_trace(go.Scatter(
+            x=[p10, p25, p50, p75, p90],
+            y=[y_center] * 5,
+            mode="markers",
+            marker=dict(color="rgba(0,0,0,0)", size=12),
+            name=label,
+            legendgroup=legendgroup,
+            showlegend=True,
+            customdata=[[p10, p25, p50, p75, p90]] * 5,
+            hovertemplate=(
+                f"<b>{label}</b><br>"
+                "P10: %{customdata[0]:.0f}<br>"
+                "P25: %{customdata[1]:.0f}<br>"
+                "Median: %{customdata[2]:.0f}<br>"
+                "P75: %{customdata[3]:.0f}<br>"
+                "P90: %{customdata[4]:.0f}"
+                "<extra></extra>"
+            )
+        ))
+
+        # Percentile labels on bottom row only
+        if y_center == bottom_y:
+            fig.add_trace(go.Scatter(
+                x=[p10, p25, p50, p75, p90],
+                y=[y_center - 0.55] * 5,
+                mode="text",
+                text=list(p_labels.values()),
+                textposition="top center",
+                textfont=dict(size=9, color="rgba(85,85,85,0.9)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+    tickvals = list(range(num_valid, 0, -1))
+    ticktext = [
+        f"{row['GROUP_LABEL']} ({row['PCT']:.0f}%)"
+        for _, row in rows.iterrows()
+    ]
+
+    fig.update_layout(**_base_layout(
+        title=f"Score by {group_title} | {SUBJECTS[subject]} | {_cnt_label(cnt)}"
+    ))
+    fig.update_layout(hovermode="closest", hoverlabel=dict(namelength=-1))
+    fig.update_xaxes(
+        title=f"{SUBJECTS[subject]} score", range=[100, 900],
+        showspikes=True, spikemode="across", spikesnap="data",
+        tickformat="d", hoverformat="d"
+    )
+    fig.update_yaxes(
+        tickvals=tickvals, ticktext=ticktext,
+        showgrid=False, zeroline=False,
+        range=[0.3, num_valid + 0.7]
+    )
+    return fig
+
+def plot_country_shaded_density_precomputed(
+    df_pre: pd.DataFrame,
+    subject: str,
+    countries: list,
+    year: int,
+    compact: bool = False,
+) -> go.Figure:
+    """
+    Draw Section 1 country distribution chart from precomputed KDE data.
+    Includes OECD average row at y=0, same as plot_country_shaded_density.
+    """
+    from src.data_loader import query_precomputed
+
+    BANDS      = [(0,10,0.10),(10,25,0.20),(25,75,0.45),(75,90,0.20),(90,100,0.10)]
+    bar_height = 0.7
+    fig        = go.Figure()
+
+    p_labels = {
+        10: "P10" if compact else "10th Percentile",
+        25: "P25" if compact else "25th Percentile",
+        50: "Median",
+        75: "P75" if compact else "75th Percentile",
+        90: "P90" if compact else "90th Percentile",
+    }
+
+    def _draw_row(row_data, y_center, color, legendgroup,
+                  show_text=True, show_oecd_labels=False):
+        p10 = row_data["P10"]
+        p25 = row_data["P25"]
+        p50 = row_data["P50"]
+        p75 = row_data["P75"]
+        p90 = row_data["P90"]
+
+        x_grid  = np.array(json.loads(row_data["DENSITY_X"]))
+        density = np.array(json.loads(row_data["DENSITY_Y"]))
+        r, g, b = _parse_color(color)
+
+        perc_vals  = np.array([0,  10,  25,  50,  75,  90,  100])
+        score_vals = np.array([
+            p10 - (p25 - p10),
+            p10, p25, p50, p75, p90,
+            p90 + (p90 - p75),
+        ])
+
+        def score_at_p(p):
+            return float(np.interp(p, perc_vals, score_vals))
+
+        for (lo_p, hi_p, alpha) in BANDS:
+            x_lo = float(x_grid[0]) if lo_p == 0 else score_at_p(lo_p)
+            x_hi = float(x_grid[-1]) if hi_p == 100 else score_at_p(hi_p)
+            mask = (x_grid >= x_lo) & (x_grid <= x_hi)
+            if mask.sum() < 2:
+                continue
+            band_x       = np.concatenate([[x_lo], x_grid[mask], [x_hi]])
+            band_density = np.concatenate([[0], density[mask], [0]])
+            scaled_y_top = y_center + (band_density / 2) * bar_height
+            scaled_y_bot = y_center - (band_density / 2) * bar_height
+            poly_x = np.concatenate([band_x, band_x[::-1]])
+            poly_y = np.concatenate([scaled_y_top, scaled_y_bot[::-1]])
+
+            fig.add_trace(go.Scatter(
+                x=poly_x, y=poly_y,
+                fill="toself",
+                fillcolor=f"rgba({r},{g},{b},{alpha})",
+                line=dict(color=f"rgba({r},{g},{b},0)", width=0),
+                mode="lines",
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Median line
+        fig.add_trace(go.Scatter(
+            x=[p50, p50],
+            y=[y_center - bar_height / 2, y_center + bar_height / 2],
+            mode="lines",
+            line=dict(color=f"rgb({r},{g},{b})", width=3),
+            legendgroup=legendgroup,
+            showlegend=False,
+            hoverinfo="skip"
+        ))
+
+        # Median text
+        if show_text:
+            fig.add_trace(go.Scatter(
+                x=[p50 + 8],
+                y=[y_center + 0.12],
+                mode="text",
+                text=[f"<b>{round(p50)}</b>"],
+                textposition="middle right",
+                textfont=dict(size=12, color=f"rgba({r},{g},{b},0.9)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Percentile markers
+        fig.add_trace(go.Scatter(
+            x=[p10, p25, p50, p75, p90],
+            y=[y_center] * 5,
+            mode="markers",
+            marker=dict(
+                color=f"rgb({r},{g},{b})",
+                size=[6, 6, 10, 6, 6],
+                symbol="line-ns",
+                line=dict(color=f"rgb({r},{g},{b})", width=2)
+            ),
+            legendgroup=legendgroup,
+            showlegend=False,
+            hoverinfo="skip"
+        ))
+
+        # Percentile labels (OECD row only)
+        if show_oecd_labels:
+            fig.add_trace(go.Scatter(
+                x=[p10, p25, p50, p75, p90],
+                y=[y_center - 0.55] * 5,
+                mode="text",
+                text=list(p_labels.values()),
+                textposition="top center",
+                textfont=dict(size=9, color="rgba(85,85,85,0.9)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+            # OECD median value
+            fig.add_trace(go.Scatter(
+                x=[p50 + 8],
+                y=[y_center + 0.12],
+                mode="text",
+                text=[f"<b>{round(p50)}</b>"],
+                textposition="middle right",
+                textfont=dict(size=12, color="rgba(85,85,85,0.95)"),
+                legendgroup=legendgroup,
+                showlegend=False,
+                hoverinfo="skip"
+            ))
+
+        # Invisible hover trace
+        fig.add_trace(go.Scatter(
+            x=[p10, p25, p50, p75, p90],
+            y=[y_center] * 5,
+            mode="markers",
+            marker=dict(color="rgba(0,0,0,0)", size=12),
+            name=legendgroup,
+            legendgroup=legendgroup,
+            showlegend=True,
+            customdata=[[p10, p25, p50, p75, p90]] * 5,
+            hovertemplate=(
+                f"<b>{legendgroup}</b><br>"
+                "P10: %{customdata[0]:.0f}<br>"
+                "P25: %{customdata[1]:.0f}<br>"
+                "Median: %{customdata[2]:.0f}<br>"
+                "P75: %{customdata[3]:.0f}<br>"
+                "P90: %{customdata[4]:.0f}"
+                "<extra></extra>"
+            )
+        ))
+
+    # Draw country rows
+    for row_idx, cnt in enumerate(countries):
+        rows = query_precomputed(cnt, year, subject, "country", df_pre)
+        if rows.empty:
+            continue
+        row_data   = rows.iloc[0]
+        y_center   = len(countries) - row_idx
+        color      = PALETTE[row_idx % len(PALETTE)]
+        legendgroup = _cnt_label(cnt)
+        _draw_row(row_data, y_center, color, legendgroup, show_text=True)
+
+    # Draw OECD row at y=0
+    oecd_rows = df_pre[
+        (df_pre["CNT"]        == "OECD") &
+        (df_pre["YEAR"]       == year)   &
+        (df_pre["SUBJECT"]    == subject) &
+        (df_pre["GROUP_TYPE"] == "oecd")
+    ]
+    if not oecd_rows.empty:
+        _draw_row(
+            oecd_rows.iloc[0], 0,
+            color="#555555",
+            legendgroup="OECD Average",
+            show_text=False,
+            show_oecd_labels=True
+        )
+
+    all_tickvals = list(range(len(countries), 0, -1)) + [0]
+    all_ticktext = [_cnt_label(c) for c in countries] + ["OECD Average"]
+
+    fig.update_layout(**_base_layout(title=f"Score Distribution | {SUBJECTS[subject]}"))
+    fig.update_layout(hovermode="closest", hoverlabel=dict(namelength=-1))
+    fig.update_xaxes(
+        title=f"{SUBJECTS[subject]} score", range=[100, 900],
+        showspikes=True, spikemode="across", spikesnap="data",
+        tickformat="d", hoverformat="d"
+    )
+    fig.update_yaxes(
+        tickvals=all_tickvals, ticktext=all_ticktext,
+        showgrid=False, zeroline=False,
+        range=[-0.7, len(countries) + 0.7]
+    )
+    return fig
+
+def plot_percentile_change_from_baseline_precomputed(
+    df_pre: pd.DataFrame,
+    subject: str,
+    cnt: str,
+    reference_year: int,
+) -> go.Figure:
+    """
+    Draw Section 2 trend chart from precomputed percentile data.
+    No S3 fetch needed.
+    """
+    from src.data_loader import query_precomputed
+
+    trend_rows = df_pre[
+        (df_pre["CNT"]        == cnt)     &
+        (df_pre["SUBJECT"]    == subject) &
+        (df_pre["GROUP_TYPE"] == "trend")
+    ].copy()
+
+    if trend_rows.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="⚠️ Insufficient data.",
+                           xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False,
+                           font=dict(size=14, color="gray"))
+        return fig
+
+    trend_rows["YEAR"] = trend_rows["YEAR"].astype(int)
+    years = sorted(trend_rows["YEAR"].unique())
+
+    ref_row = trend_rows[trend_rows["YEAR"] == reference_year]
+    if ref_row.empty:
+        fig = go.Figure()
+        fig.add_annotation(text=f"⚠️ No data for baseline year {reference_year}.",
+                           xref="paper", yref="paper",
+                           x=0.5, y=0.5, showarrow=False,
+                           font=dict(size=14, color="gray"))
+        return fig
+
+    ref = ref_row.iloc[0]
+    ref_percs = np.array([ref["P10"], ref["P25"], ref["P50"], ref["P75"], ref["P90"]])
+
+    percentile_config = {
+        0: {"label": "10th percentile", "symbol": "triangle-down"},
+        1: {"label": "25th percentile", "symbol": "square"},
+        2: {"label": "50th (median)",   "symbol": "diamond"},
+        3: {"label": "75th percentile", "symbol": "circle"},
+        4: {"label": "90th percentile", "symbol": "triangle-up"},
+    }
+
+    fig = go.Figure()
+    fig.add_hline(y=0, line_dash="solid", line_color="#666666",
+                  line_width=1.5, annotation_text=f"{reference_year} baseline",
+                  annotation_position="top left")
+
+    for p_idx in reversed(range(5)):
+        config  = percentile_config[p_idx]
+        p_label = config["label"]
+        p_symbol = config["symbol"]
+        color   = PALETTE[p_idx % len(PALETTE)]
+
+        x_years, y_deltas = [], []
+        for yr in years:
+            yr_row = trend_rows[trend_rows["YEAR"] == yr]
+            if yr_row.empty:
+                continue
+            yr_percs = np.array([
+                yr_row.iloc[0]["P10"], yr_row.iloc[0]["P25"],
+                yr_row.iloc[0]["P50"], yr_row.iloc[0]["P75"],
+                yr_row.iloc[0]["P90"]
+            ])
+            x_years.append(yr)
+            y_deltas.append(float(yr_percs[p_idx] - ref_percs[p_idx]))
+
+        if not x_years:
+            continue
+
+        base_size    = 13 if "triangle" in p_symbol else 10
+        marker_sizes = [base_size if (yr != reference_year or p_idx == 2) else 0
+                        for yr in x_years]
+        border_widths = [1 if (yr != reference_year or p_idx == 2) else 0
+                         for yr in x_years]
+
+        fig.add_trace(go.Scatter(
+            x=x_years, y=y_deltas,
+            mode="lines+markers",
+            name=p_label,
+            line=dict(color="#B0B0B0", width=2),
+            marker=dict(symbol=p_symbol, size=marker_sizes, color=color,
+                        line=dict(color="white", width=border_widths)),
+            customdata=[[yr, f"{d:+.0f}"] for yr, d in zip(x_years, y_deltas)],
+            hovertemplate=(
+                f"<b>{p_label}</b><br>"
+                "Year: %{customdata[0]}<br>"
+                "Change from baseline: %{customdata[1]}<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(**_base_layout(
+        title=f"{SUBJECTS[subject]} Score Change by Percentile | {_cnt_label(cnt)}<br>"
+              f"<sup>Relative to {reference_year} baseline</sup>"
+    ))
+    fig.update_xaxes(title="Year", tickvals=years, tickformat="d")
+    fig.update_yaxes(title=f"Score change from {reference_year}")
     return fig
 
 # Score change over time

@@ -24,7 +24,7 @@ import numpy as np
 import os
 from pathlib import Path
 
-from src.data_loader import query_pisa
+from src.data_loader import query_pisa, load_precomputed
 from src.pisa_stats import (
     weighted_percentiles_pv,
     compute_escs_quartile_percentiles,
@@ -39,6 +39,9 @@ from src.plotting_plotly import (
                           plot_intersectional_heatmap,
                           plot_resource_scatter,
                           plot_group_shaded_density,
+                          plot_group_shaded_density_precomputed,
+                          plot_country_shaded_density_precomputed,
+                          plot_percentile_change_from_baseline_precomputed,
                           _cnt_label)
 from src.text_generator import (country_distribution_text,
                                 ses_difference_text,
@@ -96,6 +99,12 @@ def get_meta() -> pd.DataFrame:
     if local.exists():
         return pd.read_parquet(local)
     return pd.read_parquet(f"{S3_BASE}/pisa_country_stats.parquet")
+
+@st.cache_data(ttl=3600)
+def get_precomputed() -> pd.DataFrame:
+    """Load precomputed stats once and cache for the session."""
+    from src.data_loader import load_precomputed
+    return load_precomputed()
     
 
 @st.cache_data(ttl=3600, show_spinner="Fetching data...")
@@ -829,7 +838,7 @@ def _metric_card(col, label, value, delta=None, help_text=None):
                 unsafe_allow_html=True,
             )
 
-def render_story_tab(available_years, story_country, story_subject):
+def render_story_tab(available_years, story_country, story_subject, df_pre=None):
     """
     Render the full Data Story tab content.
 
@@ -907,19 +916,35 @@ def render_story_tab(available_years, story_country, story_subject):
         f"Comparing {_cnt_label(story_country)} to the OECD average in {subject_label}"
     )
 
-    fetch_cnts = tuple(set([story_country]) | set(oecd_countries))
-    df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
+    if df_pre is None:
+        fetch_cnts = tuple(set([story_country]) | set(oecd_countries))
+        df_s1 = fetch(fetch_cnts, story_year, tuple(BASE_COLS + pv_cols))
+    else:
+        df_s1 = None
 
     # Fetch replicate weights for standard error computation
-    df_s1_rep = fetch(
-        (story_country,),
-        story_year,
-        tuple(BASE_COLS + pv_cols + REP_COLS)
-    )
+    if df_pre is None:
+        df_s1_rep = fetch(
+            (story_country,),
+            story_year,
+            tuple(BASE_COLS + pv_cols + REP_COLS)
+        )
+    else:
+        df_s1_rep = None
 
-    missing_s1 = check_missing_countries(
-        df_s1, [f"PV1{story_subject}"], [story_country], story_year
-    )
+    if df_pre is not None:
+    # Check against precomputed file instead
+        cnt_pre_check = df_pre[
+            (df_pre["CNT"]        == story_country) &
+            (df_pre["YEAR"]       == story_year)    &
+            (df_pre["SUBJECT"]    == story_subject) &
+            (df_pre["GROUP_TYPE"] == "country")
+        ]
+        missing_s1 = [] if not cnt_pre_check.empty else [story_country]
+    else:
+        missing_s1 = check_missing_countries(
+            df_s1, [f"PV1{story_subject}"], [story_country], story_year
+        )
 
     if missing_s1:
         st.warning(
@@ -927,69 +952,73 @@ def render_story_tab(available_years, story_country, story_subject):
             f"in {subject_label}."
         )
     else:
-        cnt_subset = df_s1[df_s1["CNT"] == story_country]
-        if story_year:
-            cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
+        # cnt_subset = df_s1[df_s1["CNT"] == story_country]
+        # if story_year:
+        #     cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
             
-        s1_pv_cols = [
-            f"PV{i}{story_subject}" for i in range(1, 11)
-            if f"PV{i}{story_subject}" in df_s1.columns
-        ]
-        cnt_mean_score = np.mean([
-            np.average(cnt_subset[pv].values, weights=cnt_subset["W_FSTUWT"].values)
-            for pv in s1_pv_cols if pv in cnt_subset.columns
-        ])        
-        oecd_country_means = []
-        for oecd_cnt in df_s1[df_s1["OECD"] == 1]["CNT"].unique():
-            c = df_s1[
-                (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
-            ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
-            if len(c) >= 30:
+        if df_pre is not None:
+            cnt_pre = df_pre[
+                (df_pre["CNT"]        == story_country) &
+                (df_pre["YEAR"]       == story_year)    &
+                (df_pre["SUBJECT"]    == story_subject) &
+                (df_pre["GROUP_TYPE"] == "country")
+            ]
+            oecd_pre = df_pre[
+                (df_pre["CNT"]        == "OECD")        &
+                (df_pre["YEAR"]       == story_year)    &
+                (df_pre["SUBJECT"]    == story_subject) &
+                (df_pre["GROUP_TYPE"] == "oecd")
+            ]
+            if not cnt_pre.empty and not oecd_pre.empty:
+                cnt_mean_score  = float(cnt_pre.iloc[0]["MEAN"]) if not np.isnan(cnt_pre.iloc[0]["MEAN"]) else float(cnt_pre.iloc[0]["P50"])
+                oecd_mean_score = float(oecd_pre.iloc[0]["P50"])
+                p10_p90_spread  = float(cnt_pre.iloc[0]["P90"]) - float(cnt_pre.iloc[0]["P10"])
+                cnt_se          = float(cnt_pre.iloc[0]["SE"]) if not np.isnan(cnt_pre.iloc[0]["SE"]) else np.nan
+                delta_val       = cnt_mean_score - oecd_mean_score
+            else:
+                cnt_mean_score  = np.nan
+                oecd_mean_score = np.nan
+                p10_p90_spread  = None
+                cnt_se          = np.nan
+                delta_val       = None
+        else:
+            # Fall back to live computation from raw data
+            s1_pv_cols = [
+                f"PV{i}{story_subject}" for i in range(1, 11)
+                if f"PV{i}{story_subject}" in df_s1.columns
+            ]
+            cnt_subset = df_s1[df_s1["CNT"] == story_country]
+            if story_year:
+                cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
+            cnt_mean_score = np.mean([
+                np.average(cnt_subset[pv].values, weights=cnt_subset["W_FSTUWT"].values)
+                for pv in s1_pv_cols
+            ])
+            oecd_country_means = []
+            for oecd_cnt in df_s1[df_s1["OECD"] == 1]["CNT"].unique():
+                c = df_s1[
+                    (df_s1["CNT"] == oecd_cnt) & (df_s1["YEAR"] == story_year)
+                ].dropna(subset=["W_FSTUWT"] + s1_pv_cols)
+                if len(c) < 30:
+                    continue
                 oecd_country_means.append(np.mean([
                     np.average(c[pv].values, weights=c["W_FSTUWT"].values)
                     for pv in s1_pv_cols
                 ]))
-        oecd_mean_score = np.mean(oecd_country_means) if oecd_country_means else np.nan
-
-        # Build the bullet points
-        findings = []
-        dist_text = country_distribution_text(
-            df_s1, story_subject, [story_country], year=story_year
-        )
-        if dist_text:
-            findings.append(dist_text)
-            
-        # Conditional finding — if difference > 20 points
-        if not (np.isnan(cnt_mean_score).all() or np.isnan(oecd_mean_score)):
-            diff = abs(cnt_mean_score - oecd_mean_score)
-            if diff >= 20:
-                direction = "above" if cnt_mean_score > oecd_mean_score else "below"
-                findings.append(
-                    f"A difference of {diff:.0f} points represents a "
-                    f"meaningful distance from the OECD average — "
-                    f"equivalent to more than one year of schooling "
-                    f"{direction} the international benchmark."
-                )
-
-        if findings:
-            _insight_box(findings)
-
-        # Metric cards
-        cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
-        p10_p90_spread = (
-            cnt_p10_p90[1] - cnt_p10_p90[0]
-            if not np.isnan(cnt_p10_p90).all() else None
-        )
-        delta_val = (
-            cnt_mean_score - oecd_mean_score 
-            if not np.isnan(cnt_mean_score) else None
-        )
-
-        # Calculate standard error and 95% CI
-        cnt_se = compute_weighted_se_pv(
-            df_s1_rep[df_s1_rep["CNT"] == story_country],
-            story_subject
-        )
+            oecd_mean_score = np.mean(oecd_country_means) if oecd_country_means else np.nan
+            delta_val = (
+                cnt_mean_score - oecd_mean_score
+                if not np.isnan(cnt_mean_score) else None
+            )
+            cnt_p10_p90 = weighted_percentiles_pv(cnt_subset, story_subject, [10, 90])
+            p10_p90_spread = (
+                cnt_p10_p90[1] - cnt_p10_p90[0]
+                if not np.isnan(cnt_p10_p90).all() else None
+            )
+            cnt_se = compute_weighted_se_pv(
+                df_s1_rep[df_s1_rep["CNT"] == story_country],
+                story_subject
+            )
         
         show_se_card = (not np.isnan(cnt_se)) and (cnt_se > SE_THRESHOLD)
 
@@ -1040,9 +1069,10 @@ def render_story_tab(available_years, story_country, story_subject):
                 )
 
         # Chart + how to read
-        fig1 = plot_country_shaded_density(
-            df_s1, story_subject, [story_country],
-            year=story_year
+        fig1 = plot_country_shaded_density_precomputed(
+            df_pre, story_subject, [story_country], year=story_year
+        ) if df_pre is not None else plot_country_shaded_density(
+            df_s1, story_subject, [story_country], year=story_year
         )
         _chart_expander(
                 "Collapse chart", fig1,
@@ -1071,12 +1101,24 @@ def render_story_tab(available_years, story_country, story_subject):
             "Load 2015, 2018, and 2022 to unlock this section."
         )
     else:
-        df_s2 = fetch(
-            (story_country,), None, tuple(BASE_COLS + pv_cols)
-        )
-        country_years = sorted(
-            df_s2["YEAR"].dropna().unique().tolist()
-        ) if "YEAR" in df_s2.columns else []
+        if df_pre is None:
+            df_s2 = fetch(
+                (story_country,), None, tuple(BASE_COLS + pv_cols)
+            )
+        else:
+            df_s2 = None
+
+        if df_pre is not None:
+            trend_rows = df_pre[
+                (df_pre["CNT"]        == story_country) &
+                (df_pre["SUBJECT"]    == story_subject) &
+                (df_pre["GROUP_TYPE"] == "trend")
+            ]
+            country_years = sorted(trend_rows["YEAR"].unique().tolist())
+        else:
+            country_years = sorted(
+                df_s2["YEAR"].dropna().unique().tolist()
+            ) if "YEAR" in df_s2.columns else []
 
         if len(country_years) < 2:
             st.warning(
@@ -1087,15 +1129,21 @@ def render_story_tab(available_years, story_country, story_subject):
             reference_year   = min(country_years)
             latest_year      = max(country_years)
 
-            ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
-            last_subset = df_s2[df_s2["YEAR"] == latest_year]
-
-            ref_percs  = weighted_percentiles_pv(
-                ref_subset,  story_subject, [10, 50, 90]
-            )
-            last_percs = weighted_percentiles_pv(
-                last_subset, story_subject, [10, 50, 90]
-            )
+            if df_pre is not None:
+                trend_rows = df_pre[
+                    (df_pre["CNT"]        == story_country) &
+                    (df_pre["SUBJECT"]    == story_subject) &
+                    (df_pre["GROUP_TYPE"] == "trend")
+                ]
+                ref_row  = trend_rows[trend_rows["YEAR"] == reference_year].iloc[0]
+                last_row = trend_rows[trend_rows["YEAR"] == latest_year].iloc[0]
+                ref_percs  = np.array([ref_row["P10"],  ref_row["P25"],  ref_row["P50"],  ref_row["P75"],  ref_row["P90"]])
+                last_percs = np.array([last_row["P10"], last_row["P25"], last_row["P50"], last_row["P75"], last_row["P90"]])
+            else:
+                ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
+                last_subset = df_s2[df_s2["YEAR"] == latest_year]
+                ref_percs  = weighted_percentiles_pv(ref_subset,  story_subject, [10, 50, 90])
+                last_percs = weighted_percentiles_pv(last_subset, story_subject, [10, 50, 90])
 
             if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
                 delta_p10 = last_percs[0] - ref_percs[0]
@@ -1133,7 +1181,10 @@ def render_story_tab(available_years, story_country, story_subject):
                 # Render the combined insight box
                 _insight_box(findings)
 
-            fig2 = plot_percentile_change_from_baseline(
+            fig2 = plot_percentile_change_from_baseline_precomputed(
+                df_pre=df_pre, subject=story_subject,
+                cnt=story_country, reference_year=reference_year
+            ) if df_pre is not None else plot_percentile_change_from_baseline(
                 df=df_s2, subject=story_subject,
                 cnt=story_country, reference_year=reference_year
             )
@@ -1256,7 +1307,16 @@ def render_story_tab(available_years, story_country, story_subject):
                 df_ses[df_ses["CNT"] == story_country], story_subject, [50]
             )
             # Make sure df_s1 is available or pass the appropriate df
-            oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
+            if df_pre is not None:
+                oecd_pre_check = df_pre[
+                    (df_pre["CNT"]        == "OECD")        &
+                    (df_pre["YEAR"]       == story_year)    &
+                    (df_pre["SUBJECT"]    == story_subject) &
+                    (df_pre["GROUP_TYPE"] == "oecd")
+                ]
+                oecd_m = np.array([oecd_pre_check.iloc[0]["P50"]]) if not oecd_pre_check.empty else np.array([np.nan])
+            else:
+                oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
             if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
                 country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
                 if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
@@ -1295,11 +1355,14 @@ def render_story_tab(available_years, story_country, story_subject):
         if ses_ok:
             st.markdown("**By socioeconomic background**")
             group_col_ses, group_labels_ses = GROUP_OPTIONS["Socioeconomic status"]
-            fig3a = plot_group_shaded_density(
+            fig3a = plot_group_shaded_density_precomputed(
+                df_pre=df_pre, subject=story_subject, cnt=story_country,
+                group_type="ses", group_title="Socioeconomic Status", year=story_year
+            ) if df_pre is not None else plot_group_shaded_density(
                 df_ses, story_subject, story_country,
                 group_col=group_col_ses, group_labels=group_labels_ses,
                 group_title="Socioeconomic Status", year=story_year,
-                sort_by_median=False  # hard-coded Q1-Q4 order
+                sort_by_median=False
             )
             _chart_expander(
                 "Collapse chart", fig3a,
@@ -1317,11 +1380,14 @@ def render_story_tab(available_years, story_country, story_subject):
             for w in immig_warnings:
                 st.warning(w)
             group_col_immig, group_labels_immig = GROUP_OPTIONS["Immigration status"]
-            fig3b = plot_group_shaded_density(
+            fig3b = plot_group_shaded_density_precomputed(
+                df_pre=df_pre, subject=story_subject, cnt=story_country,
+                group_type="immigration", group_title="Immigration Status", year=story_year
+            ) if df_pre is not None else plot_group_shaded_density(
                 df_immig, story_subject, story_country,
                 group_col=group_col_immig, group_labels=group_labels_immig,
                 group_title="Immigration Status", year=story_year,
-                sort_by_median=True  # order by median score
+                sort_by_median=True
             )
             _chart_expander(
                 "Collapse chart", fig3b,
@@ -1334,11 +1400,14 @@ def render_story_tab(available_years, story_country, story_subject):
         if gender_ok:
             st.markdown("**By gender**")
             group_col_gen, group_labels_gen = GROUP_OPTIONS["Gender"]
-            fig3c = plot_group_shaded_density(
+            fig3c = plot_group_shaded_density_precomputed(
+                df_pre=df_pre, subject=story_subject, cnt=story_country,
+                group_type="gender", group_title="Gender", year=story_year
+            ) if df_pre is not None else plot_group_shaded_density(
                 df_gender, story_subject, story_country,
                 group_col=group_col_gen, group_labels=group_labels_gen,
                 group_title="Gender", year=story_year,
-                sort_by_median=True  # order by median score
+                sort_by_median=True
             )
             _chart_expander(
                 "Collapse chart", fig3c,
@@ -1408,7 +1477,10 @@ def render_story_tab(available_years, story_country, story_subject):
             )
 
         group_col, group_labels = GROUP_OPTIONS["School type"]
-        fig4a = plot_group_shaded_density(
+        fig4a = plot_group_shaded_density_precomputed(
+            df_pre=df_pre, subject=story_subject, cnt=story_country,
+            group_type="school_type", group_title="School Type", year=story_year
+        ) if df_pre is not None else plot_group_shaded_density(
             df=df_type, subject=story_subject, cnt=story_country,
             group_col=group_col, group_labels=group_labels,
             group_title="School Type", year=story_year,
@@ -1456,9 +1528,12 @@ def render_story_tab(available_years, story_country, story_subject):
             )
 
         group_col, group_labels = GROUP_OPTIONS["School location"]
-        fig4b = plot_group_shaded_density(
-            df=df_loc, subject=story_subject,
-            cnt=story_country, group_col=group_col, group_labels=group_labels,
+        fig4b = plot_group_shaded_density_precomputed(
+            df_pre=df_pre, subject=story_subject, cnt=story_country,
+            group_type="school_loc", group_title="School Location", year=story_year
+        ) if df_pre is not None else plot_group_shaded_density(
+            df=df_loc, subject=story_subject, cnt=story_country,
+            group_col=group_col, group_labels=group_labels,
             group_title="School Location", year=story_year,
             sort_by_median=True
         )
@@ -1492,7 +1567,8 @@ def render_story_tab(available_years, story_country, story_subject):
     """, unsafe_allow_html=True)
 
 # Load data and derive country lists
-meta = get_meta()
+meta   = get_meta()
+df_pre = get_precomputed()
 
 available_years = sorted(meta["YEAR"].unique().tolist())
 all_countries = sorted(meta["CNT"].unique().tolist(), key=_cnt_label)
@@ -1539,7 +1615,7 @@ if app_mode == "📖 Data Story":
     )
     
     # Draw the main area
-    render_story_tab(available_years, story_country, story_subject)
+    render_story_tab(available_years, story_country, story_subject, df_pre=df_pre)
 
 
 # ==========================================
