@@ -105,6 +105,18 @@ def get_precomputed() -> pd.DataFrame:
     """Load precomputed stats once and cache for the session."""
     from src.data_loader import load_precomputed
     return load_precomputed()
+
+
+@st.cache_data(ttl=3600)
+def get_se_lookup() -> pd.DataFrame:
+    """
+    Load precomputed standard errors and 95% CIs for every
+    (CNT, YEAR, SUBJECT) combination. Indexed for O(1) lookup -
+    replaces the runtime 91-column fetch + Fay BRR computation.
+    """
+    local = Path("data/processed/pisa_se_stats.parquet")
+    df = pd.read_parquet(local) if local.exists() else pd.read_parquet(f"{S3_BASE}/pisa_se_stats.parquet")
+    return df.set_index(["CNT", "YEAR", "SUBJECT"])
     
 
 @st.cache_data(ttl=3600, show_spinner="Fetching data...")
@@ -922,16 +934,6 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     else:
         df_s1 = None
 
-    # Fetch replicate weights for standard error computation
-    if df_pre is None:
-        df_s1_rep = fetch(
-            (story_country,),
-            story_year,
-            tuple(BASE_COLS + pv_cols + REP_COLS)
-        )
-    else:
-        df_s1_rep = None
-
     if df_pre is not None:
     # Check against precomputed file instead
         cnt_pre_check = df_pre[
@@ -1015,24 +1017,37 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 cnt_p10_p90[1] - cnt_p10_p90[0]
                 if not np.isnan(cnt_p10_p90).all() else None
             )
-            cnt_se = compute_weighted_se_pv(
-                df_s1_rep[df_s1_rep["CNT"] == story_country],
-                story_subject
-            )
-        
-        show_se_card = (not np.isnan(cnt_se)) and (cnt_se > SE_THRESHOLD)
 
-        ci_margin = CI_Z * cnt_se if not np.isnan(cnt_se) else np.nan
+        # Standard error and 95% CI lookup
 
-        # Dynamic column layout: 4 cards if SE is high, 3 otherwise
-        cols = st.columns(4 if show_se_card else 3)
+        se_lookup = get_se_lookup()
 
-        # Card 1: country average score
+        try: 
+            se_row = se_lookup.loc[(story_country, story_year, story_subject)]
+            cnt_se = se_row["se"]
+            ci_lower = se_row["ci_lower"]
+            ci_upper = se_row["ci_upper"]
+        except KeyError:
+            cnt_se = ci_lower = ci_upper = np.nan
+
+
+        cols = st.columns(3)
+
+        # Card 1: country average score + standard error
         with cols[0]:
+            se_suffix = f" ± {cnt_se:.1f}" if not np.isnan(cnt_se) else ""
+            ci_text = (
+                f"95% confidence interval: [{ci_lower:.0f}, {ci_upper:.0f}]. "
+                "This range reflects sampling and measurement uncertainty in the estimate - "
+                "the true population mean is likely within this range."
+                if not np.isnan(ci_lower) else
+                "Standard error unavailable for this selection."
+            )
             st.metric(
                 f"{_cnt_label(story_country)} average score",
-                f"{cnt_mean_score:.0f}" if not np.isnan(cnt_mean_score) else "N/A",
+                f"{cnt_mean_score:.0f}{se_suffix}" if not np.isnan(cnt_mean_score) else "N/A",
                 delta=f"{delta_val:+.0f} pts vs OECD" if delta_val is not None else None,
+                help=ci_text
             )
 
         # Card 2: OECD average
@@ -1051,22 +1066,6 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 help="Score range between students at the lower end (10%) and upper end (90%) of the distribution"
             )
 
-        # Card 4: SE + 95% CI, only when SE > SE_THRESHOLD
-        if show_se_card:
-            with cols[3]:
-                ci_str = (
-                    f"[{cnt_mean_score - ci_margin:.0f}, {cnt_mean_score + ci_margin:.0f}]"
-                    if not np.isnan(ci_margin) and not np.isnan(cnt_mean_score)
-                    else "N/A"
-                )
-                st.metric(
-                    label="Standard error",
-                    value=f"±{cnt_se:.1f} pts",
-                    help=(
-                        f"Sampling and measurement uncertainty around the mean score "
-                        f"exceeds {SE_THRESHOLD} pts. The 95% confidence interval is {ci_str}. "
-                    )
-                )
 
         # Chart + how to read
         fig1 = plot_country_shaded_density_precomputed(

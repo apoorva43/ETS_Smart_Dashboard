@@ -19,6 +19,7 @@ from src.data_loader import (
     validate_url, 
     merge_parquets,
     build_country_stats,
+    build_se_stats,
     PISA_URLS,
     PISA_SCHOOL_URLS
 )
@@ -117,6 +118,7 @@ def country_stats(processed_dir):
         click.secho(f"Country stats failed: {e}", fg="red")
         sys.exit(1)
 
+
 @cli.command()
 @click.option("--processed-dir", default="data/processed",
               help="Directory containing pisa_all.parquet.")
@@ -129,6 +131,19 @@ def precompute(processed_dir, out_path):
         build_precomputed(processed_dir=processed_dir, out_path=out_path)
     except Exception as e:
         click.secho(f"Precompute failed: {e}", fg="red")
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--processed-dir", default="data/processed",
+              help="Directory containing pisa_all.parquet.")
+def standarderror(processed_dir):
+    """Step 7: Precompute weighted SE + 95% CI per country/year/subject."""
+    try:
+        out = build_se_stats(processed_dir=processed_dir)
+        click.secho(f"Wrote {out}")
+    except Exception as e:
+        click.secho(f"SE stats failed: {e}", fg="red")
         sys.exit(1)
 
 if __name__ == "__main__":
