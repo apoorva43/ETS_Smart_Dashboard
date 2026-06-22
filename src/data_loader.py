@@ -545,6 +545,44 @@ def build_country_stats(processed_dir: Union[str, Path] = "data/processed") -> P
     print(f"Saved: {out_path} ({stats.shape}, {size_mb:.2f} MB on disk)")
     return out_path
 
+def load_precomputed(
+    processed_dir: Union[str, Path] = "data/processed",
+) -> pd.DataFrame:
+    """
+    Load precomputed group-level percentile stats.
+    Checks local first, falls back to S3. Returns None if neither available.
+    """
+    local = Path(processed_dir) / "pisa_precomputed.parquet"
+    if local.exists():
+        return pd.read_parquet(local)
+    try:
+        return pd.read_parquet(f"{S3_BASE_URL}/pisa_precomputed.parquet")
+    except Exception as e:
+        print(f"Warning: could not load precomputed stats: {e}")
+        return None
+
+
+def query_precomputed(
+    cnt: str,
+    year: int,
+    subject: str,
+    group_type: str,
+    df_pre: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Filter the precomputed DataFrame for a specific CNT/YEAR/SUBJECT/GROUP_TYPE.
+    Returns empty DataFrame if no data found or df_pre is None.
+    """
+    if df_pre is None or df_pre.empty:
+        return pd.DataFrame()
+
+    mask = (
+        (df_pre["CNT"]        == cnt)      &
+        (df_pre["YEAR"]       == year)     &
+        (df_pre["SUBJECT"]    == subject)  &
+        (df_pre["GROUP_TYPE"] == group_type)
+    )
+    return df_pre[mask].copy()
 
 def query_pisa(
     countries: list[str],

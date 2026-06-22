@@ -117,5 +117,19 @@ def country_stats(processed_dir):
         click.secho(f"Country stats failed: {e}", fg="red")
         sys.exit(1)
 
+@cli.command()
+@click.option("--processed-dir", default="data/processed",
+              help="Directory containing pisa_all.parquet.")
+@click.option("--out-path", default="data/processed/pisa_precomputed.parquet",
+              help="Output path for precomputed stats.")
+def precompute(processed_dir, out_path):
+    """Step 6: Precompute group-level percentile stats for fast dashboard loading."""
+    from precompute import build_precomputed
+    try:
+        build_precomputed(processed_dir=processed_dir, out_path=out_path)
+    except Exception as e:
+        click.secho(f"Precompute failed: {e}", fg="red")
+        sys.exit(1)
+
 if __name__ == "__main__":
     cli()
