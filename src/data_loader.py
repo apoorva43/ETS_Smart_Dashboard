@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 from typing import Union
 from src.config import KEEP_COLS, SCHOOL_COLS
+from src.pisa_stats import weighted_mean_pv, compute_weighted_se_pv
 
 # Student questionnaire files (SPSS format).
 # NOTE: Update here if OECD changes hosting.
@@ -644,3 +645,66 @@ def query_pisa(
 
     query = f"SELECT {col_clause} FROM read_parquet({source}) WHERE {where}"
     return duckdb.query(query).df()
+
+
+def build_se_stats(
+        processed_dir: str = "data/processed",
+        out_name: str = "pisa_se_stats.parquet"
+) -> Path:
+    """
+    Precompute weighted mean score, standard error and 95% CI for every
+    (CNT, YEAR, SUBJECT) combination, so the dashboard can do an O(1)
+    lookup instead of fetching 91 student-level columns (10 plausible 
+    values + 1 final sampling weight + 80 replicate weights) and running 
+    the Fay BRR calculation at render time.
+
+    Loads PV1-10 for all three subjects plus all 81 weight columns
+    (W_FSTUWT + W_FSTURWT1-80) once, then computes SE per subject per
+    country-year group in memory. This is a one-time/periodic batch
+    job, so the full in-memory load is acceptable even though it would
+    be too slow to repeat on every Streamlit page render.
+
+    Returns
+    -------
+    Path
+        Path to the written parquet file.
+    """
+    
+    # Data path and columns required
+    src = Path(processed_dir) / "pisa_all.parquet"
+    subjects = ("MATH", "READ", "SCIE")
+    pv_all = [f"PV{i}{s}" for s in subjects for i in range(1, 11)]
+    rep_cols = [f"W_FSTURWT{r}" for r in range(1, 81)]
+    select_cols = ", ".join(["CNT", "YEAR", "W_FSTUWT"] + pv_all + rep_cols)
+
+    # DuckDB query
+    df = duckdb.query(
+        f"SELECT {select_cols} FROM read_parquet('{src}')"
+    ).df()
+
+    # 95% CI
+    Z = 1.96
+
+    # Standard error and 95% CI calculation  
+    rows = []
+    for (cnt, year), group in df.groupby(["CNT", "YEAR"]):
+        for subject in subjects:
+            mean_score = weighted_mean_pv(group, subject)
+            se = compute_weighted_se_pv(group, subject)
+            has_ci = not (np.isnan(mean_score) or np.isnan(se))
+            rows.append({
+                "CNT": cnt,
+                "YEAR": year,
+                "SUBJECT": subject,
+                "mean_score": mean_score,
+                "se": se,
+                "ci_lower": mean_score - Z * se if has_ci else np.nan,
+                "ci_upper": mean_score + Z * se if has_ci else np.nan,
+                "n": int(len(group.dropna(subset=["W_FSTUWT"]))),
+            })
+
+    # Write the output parquet
+    out_df = pd.DataFrame(rows)
+    out_path = Path(processed_dir) / out_name
+    out_df.to_parquet(out_path, index=False)
+    return out_path
