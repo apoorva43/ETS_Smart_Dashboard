@@ -19,9 +19,9 @@ Run the app from the project root with:
 """
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
-import os
+# import os
 from pathlib import Path
 
 from src.data_loader import query_pisa, load_precomputed
@@ -954,9 +954,6 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"in {subject_label}."
         )
     else:
-        # cnt_subset = df_s1[df_s1["CNT"] == story_country]
-        # if story_year:
-        #     cnt_subset = cnt_subset[cnt_subset["YEAR"] == story_year]
             
         if df_pre is not None:
             cnt_pre = df_pre[
@@ -1146,8 +1143,8 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
             if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
                 delta_p10 = last_percs[0] - ref_percs[0]
-                delta_p50 = last_percs[1] - ref_percs[1]
-                delta_p90 = last_percs[2] - ref_percs[2]
+                delta_p50 = last_percs[2] - ref_percs[2]  # P50 is index 2
+                delta_p90 = last_percs[4] - ref_percs[4]  # P90 is index 4
                 direction = "increased" if delta_p50 > 0 else "decreased"
 
                 # Initialize the findings list
@@ -1216,30 +1213,38 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     )
 
     # Fetch all three equity datasets
-    df_ses   = fetch(
-        (story_country,), story_year,
-        tuple(BASE_COLS + pv_cols + ["ESCS"])
-    )
-    df_immig = fetch(
-        (story_country,), story_year,
-        tuple(BASE_COLS + pv_cols + ["IMMIG"])
-    )
-    df_gender = fetch(
-        (story_country,), story_year,
-        tuple(BASE_COLS + pv_cols + ["ST004D01T"])
-    )
+    # Fetch equity datasets — skip if precomputed available
+    if df_pre is None:
+        df_ses   = fetch(
+            (story_country,), story_year,
+            tuple(BASE_COLS + pv_cols + ["ESCS"])
+        )
+        df_immig = fetch(
+            (story_country,), story_year,
+            tuple(BASE_COLS + pv_cols + ["IMMIG"])
+        )
+        df_gender = fetch(
+            (story_country,), story_year,
+            tuple(BASE_COLS + pv_cols + ["ST004D01T"])
+        )
+    else:
+        df_ses = df_immig = df_gender = None
 
     # ── Compute all three gaps ─────────────────────────────────────────────
     equity_gaps = []
 
-    # SES gap
-    if not check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
-        curves = compute_escs_quartile_percentiles(
-            df_ses, story_subject, [50], cnt=story_country, year=story_year
-        )
-        q1_med = curves.get("Q1 (low SES)",  [np.nan])[0]
-        q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
-        if not (np.isnan(q1_med) or np.isnan(q4_med)):
+    if df_pre is not None:
+        # Read gaps directly from precomputed file
+        ses_rows   = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "ses")]
+        immig_rows = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "immigration")]
+        gender_rows = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "gender")]
+
+        # SES gap
+        q1_row = ses_rows[ses_rows["GROUP_LABEL"] == "Q1 (lowest)"]
+        q4_row = ses_rows[ses_rows["GROUP_LABEL"] == "Q4 (highest)"]
+        if not q1_row.empty and not q4_row.empty:
+            q1_med = float(q1_row.iloc[0]["P50"])
+            q4_med = float(q4_row.iloc[0]["P50"])
             equity_gaps.append({
                 "label": "Socioeconomic background",
                 "value": q4_med - q1_med,
@@ -1247,41 +1252,83 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 "type":  "ses"
             })
 
-    # Immigration gap
-    if not check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
-        native_subset = df_immig[
-            (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 1.0)
-        ]
-        gen1_subset = df_immig[
-            (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 3.0)
-        ]
-        nat_med  = weighted_percentiles_pv(native_subset, story_subject, [50])
-        gen1_med = weighted_percentiles_pv(gen1_subset,   story_subject, [50])
-        if not (np.isnan(nat_med).all() or np.isnan(gen1_med).all()):
+        # Immigration gap
+        nat_row  = immig_rows[immig_rows["GROUP_LABEL"] == "Native"]
+        gen1_row = immig_rows[immig_rows["GROUP_LABEL"] == "1st-gen immigrant"]
+        if not nat_row.empty and not gen1_row.empty:
+            nat_med  = float(nat_row.iloc[0]["P50"])
+            gen1_med = float(gen1_row.iloc[0]["P50"])
             equity_gaps.append({
                 "label": "Immigration status",
-                "value": nat_med[0] - gen1_med[0],
+                "value": nat_med - gen1_med,
                 "sub":   "Native vs first-generation students",
                 "type":  "immig"
             })
 
-    # Gender gap
-    if not check_missing_countries(df_gender, ["ST004D01T"], [story_country], story_year):
-        male_subset   = df_gender[
-            (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 2.0)
-        ]
-        female_subset = df_gender[
-            (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 1.0)
-        ]
-        male_med   = weighted_percentiles_pv(male_subset,   story_subject, [50])
-        female_med = weighted_percentiles_pv(female_subset, story_subject, [50])
-        if not (np.isnan(male_med).all() or np.isnan(female_med).all()):
+        # Gender gap
+        male_row   = gender_rows[gender_rows["GROUP_LABEL"] == "Male"]
+        female_row = gender_rows[gender_rows["GROUP_LABEL"] == "Female"]
+        if not male_row.empty and not female_row.empty:
+            male_med   = float(male_row.iloc[0]["P50"])
+            female_med = float(female_row.iloc[0]["P50"])
             equity_gaps.append({
                 "label": "Gender",
-                "value": abs(male_med[0] - female_med[0]),
+                "value": abs(male_med - female_med),
                 "sub":   "Boys vs girls at the median",
                 "type":  "gender"
             })
+
+    else:
+        # SES gap from raw data
+        if not check_missing_countries(df_ses, ["ESCS"], [story_country], story_year):
+            curves = compute_escs_quartile_percentiles(
+                df_ses, story_subject, [50], cnt=story_country, year=story_year
+            )
+            q1_med = curves.get("Q1 (low SES)",  [np.nan])[0]
+            q4_med = curves.get("Q4 (high SES)", [np.nan])[0]
+            if not (np.isnan(q1_med) or np.isnan(q4_med)):
+                equity_gaps.append({
+                    "label": "Socioeconomic background",
+                    "value": q4_med - q1_med,
+                    "sub":   "Highest vs lowest SES quartile",
+                    "type":  "ses"
+                })
+
+        # Immigration gap from raw data
+        if not check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
+            native_subset = df_immig[
+                (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 1.0)
+            ]
+            gen1_subset = df_immig[
+                (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 3.0)
+            ]
+            nat_med  = weighted_percentiles_pv(native_subset, story_subject, [50])
+            gen1_med = weighted_percentiles_pv(gen1_subset,   story_subject, [50])
+            if not (np.isnan(nat_med).all() or np.isnan(gen1_med).all()):
+                equity_gaps.append({
+                    "label": "Immigration status",
+                    "value": nat_med[0] - gen1_med[0],
+                    "sub":   "Native vs first-generation students",
+                    "type":  "immig"
+                })
+
+        # Gender gap from raw data
+        if not check_missing_countries(df_gender, ["ST004D01T"], [story_country], story_year):
+            male_subset   = df_gender[
+                (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 2.0)
+            ]
+            female_subset = df_gender[
+                (df_gender["CNT"] == story_country) & (df_gender["ST004D01T"] == 1.0)
+            ]
+            male_med   = weighted_percentiles_pv(male_subset,   story_subject, [50])
+            female_med = weighted_percentiles_pv(female_subset, story_subject, [50])
+            if not (np.isnan(male_med).all() or np.isnan(female_med).all()):
+                equity_gaps.append({
+                    "label": "Gender",
+                    "value": abs(male_med[0] - female_med[0]),
+                    "sub":   "Boys vs girls at the median",
+                    "type":  "gender"
+                })
 
     # Sort by size — largest first
     equity_gaps.sort(key=lambda x: x["value"], reverse=True)
@@ -1302,32 +1349,40 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         # Conditional finding — SES diff > country vs OECD diff
         ses_gap_entry = next((g for g in equity_gaps if g["type"] == "ses"), None)
         if ses_gap_entry:
-            cnt_m  = weighted_percentiles_pv(
-                df_ses[df_ses["CNT"] == story_country], story_subject, [50]
-            )
+            country_vs_oecd = abs(cnt_mean_score - oecd_mean_score) if not (np.isnan(cnt_mean_score) or np.isnan(oecd_mean_score)) else np.nan
+            if not np.isnan(country_vs_oecd) and ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
+                findings.append(
+                    f"The socioeconomic difference within "
+                    f"{_cnt_label(story_country)} "
+                    f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                    f"the difference between this country and the OECD "
+                    f"average ({country_vs_oecd:.0f} pts). "
+                    f"Domestic equity is a bigger lever than "
+                    f"international benchmarking."
+                )
             # Make sure df_s1 is available or pass the appropriate df
-            if df_pre is not None:
-                oecd_pre_check = df_pre[
-                    (df_pre["CNT"]        == "OECD")        &
-                    (df_pre["YEAR"]       == story_year)    &
-                    (df_pre["SUBJECT"]    == story_subject) &
-                    (df_pre["GROUP_TYPE"] == "oecd")
-                ]
-                oecd_m = np.array([oecd_pre_check.iloc[0]["P50"]]) if not oecd_pre_check.empty else np.array([np.nan])
-            else:
-                oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
-            if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
-                country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
-                if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
-                    findings.append(
-                        f"The socioeconomic difference within "
-                        f"{_cnt_label(story_country)} "
-                        f"({ses_gap_entry['value']:.0f} pts) is larger than "
-                        f"the difference between this country and the OECD "
-                        f"average ({country_vs_oecd:.0f} pts). "
-                        f"Domestic equity is a bigger lever than "
-                        f"international benchmarking."
-                    )
+            # if df_pre is not None:
+            #     oecd_pre_check = df_pre[
+            #         (df_pre["CNT"]        == "OECD")        &
+            #         (df_pre["YEAR"]       == story_year)    &
+            #         (df_pre["SUBJECT"]    == story_subject) &
+            #         (df_pre["GROUP_TYPE"] == "oecd")
+            #     ]
+            #     oecd_m = np.array([oecd_pre_check.iloc[0]["P50"]]) if not oecd_pre_check.empty else np.array([np.nan])
+            # else:
+            #     oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
+            # if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
+            #     country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
+            #     if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
+            #         findings.append(
+            #             f"The socioeconomic difference within "
+            #             f"{_cnt_label(story_country)} "
+            #             f"({ses_gap_entry['value']:.0f} pts) is larger than "
+            #             f"the difference between this country and the OECD "
+            #             f"average ({country_vs_oecd:.0f} pts). "
+            #             f"Domestic equity is a bigger lever than "
+            #             f"international benchmarking."
+            #         )
         
         # Print combined findings
         _insight_box(findings)
@@ -1346,9 +1401,14 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
 
         # ── Combined chart expander ────────────────────────────────────────
-        ses_ok    = not check_missing_countries(df_ses,    ["ESCS"],       [story_country], story_year)
-        immig_ok  = not check_missing_countries(df_immig,  ["IMMIG"],      [story_country], story_year)
-        gender_ok = not check_missing_countries(df_gender, ["ST004D01T"],  [story_country], story_year)
+        if df_pre is not None:
+            ses_ok    = not ses_rows.empty
+            immig_ok  = not immig_rows.empty
+            gender_ok = not gender_rows.empty
+        else:
+            ses_ok    = not check_missing_countries(df_ses,    ["ESCS"],       [story_country], story_year)
+            immig_ok  = not check_missing_countries(df_immig,  ["IMMIG"],      [story_country], story_year)
+            gender_ok = not check_missing_countries(df_gender, ["ST004D01T"],  [story_country], story_year)
 
         # SES chart
         if ses_ok:
@@ -1373,11 +1433,12 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         # Immigration chart
         if immig_ok:
             st.markdown("**By immigration status**")
-            immig_warnings = check_group_sizes(
-                df_immig, "IMMIG", IMMIG_MAP, story_country, year=story_year
-            )
-            for w in immig_warnings:
-                st.warning(w)
+            if df_pre is None:
+                immig_warnings = check_group_sizes(
+                    df_immig, "IMMIG", IMMIG_MAP, story_country, year=story_year
+                )
+                for w in immig_warnings:
+                    st.warning(w)
             group_col_immig, group_labels_immig = GROUP_OPTIONS["Immigration status"]
             fig3b = plot_group_shaded_density_precomputed(
                 df_pre=df_pre, subject=story_subject, cnt=story_country,
@@ -1438,19 +1499,22 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         f"in {_cnt_label(story_country)}"
     )
 
-    df_loc  = fetch(
-        (story_country,), story_year,
-        tuple(BASE_COLS + pv_cols + ["SC001Q01TA"])
-    )
-    df_type = fetch(
-        (story_country,), story_year,
-        tuple(BASE_COLS + pv_cols + ["SCHLTYPE"])
-    )
+    if df_pre is None:
+        df_loc  = fetch(
+            (story_country,), story_year,
+            tuple(BASE_COLS + pv_cols + ["SC001Q01TA"])
+        )
+        df_type = fetch(
+            (story_country,), story_year,
+            tuple(BASE_COLS + pv_cols + ["SCHLTYPE"])
+        )
+    else:
+        df_loc = df_type = None
 
     # ── Public vs private ─────────────────────────────────────────────────
     st.markdown("#### Public vs private")
 
-    if check_missing_countries(
+    if df_pre is None and check_missing_countries(
         df_type, ["SCHLTYPE"], [story_country], story_year
     ):
         st.warning(
@@ -1458,13 +1522,20 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
-        type_curves = compute_group_percentiles(
-            df_type, story_subject, "SCHLTYPE",
-            {3: "Public", 1: "Independent private"},
-            [50], cnt=story_country, year=story_year
-        )
-        pub_med  = type_curves.get("Public",              [np.nan])[0]
-        priv_med = type_curves.get("Independent private", [np.nan])[0]
+        if df_pre is not None:
+            type_rows = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_type")]
+            pub_row  = type_rows[type_rows["GROUP_LABEL"] == "Public"]
+            priv_row = type_rows[type_rows["GROUP_LABEL"] == "Independent private"]
+            pub_med  = float(pub_row.iloc[0]["P50"])  if not pub_row.empty  else np.nan
+            priv_med = float(priv_row.iloc[0]["P50"]) if not priv_row.empty else np.nan
+        else:
+            type_curves = compute_group_percentiles(
+                df_type, story_subject, "SCHLTYPE",
+                {3: "Public", 1: "Independent private"},
+                [50], cnt=story_country, year=story_year
+            )
+            pub_med  = type_curves.get("Public",              [np.nan])[0]
+            priv_med = type_curves.get("Independent private", [np.nan])[0]
 
         if not (np.isnan(pub_med) or np.isnan(priv_med)):
             diff = abs(priv_med - pub_med)
@@ -1502,7 +1573,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     # ── Urban vs rural ────────────────────────────────────────────────────
     st.markdown("#### Urban vs rural")
 
-    if check_missing_countries(
+    if df_pre is None and check_missing_countries(
         df_loc, ["SC001Q01TA"], [story_country], story_year
     ):
         st.warning(
@@ -1510,13 +1581,20 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
-        loc_curves = compute_group_percentiles(
-            df_loc, story_subject, "SC001Q01TA",
-            {5.0: "Large city", 4.0: "City", 1.0: "Village"},
-            [50], cnt=story_country, year=story_year
-        )
-        city_med    = loc_curves.get("City",    [np.nan])[0]
-        village_med = loc_curves.get("Village", [np.nan])[0]
+        if df_pre is not None:
+            loc_rows    = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_loc")]
+            city_row    = loc_rows[loc_rows["GROUP_LABEL"] == "City"]
+            village_row = loc_rows[loc_rows["GROUP_LABEL"] == "Village"]
+            city_med    = float(city_row.iloc[0]["P50"])    if not city_row.empty    else np.nan
+            village_med = float(village_row.iloc[0]["P50"]) if not village_row.empty else np.nan
+        else:
+            loc_curves = compute_group_percentiles(
+                df_loc, story_subject, "SC001Q01TA",
+                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
+                [50], cnt=story_country, year=story_year
+            )
+            city_med    = loc_curves.get("City",    [np.nan])[0]
+            village_med = loc_curves.get("Village", [np.nan])[0]
 
         if not (np.isnan(city_med) or np.isnan(village_med)):
             diff = abs(city_med - village_med)
