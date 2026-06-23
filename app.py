@@ -1209,7 +1209,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
     st.markdown(
         "High average scores can mask large differences between student groups. "
-        "The figures below show the difference in median scores between groups — "
+        "The figures below show the difference in distribution and median scores between groups — "
         "they reflect structural inequalities in access to resources and support, "
         "not differences in student ability."
     )
