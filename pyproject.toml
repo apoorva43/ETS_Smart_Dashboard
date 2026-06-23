@@ -1,0 +1,6 @@
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project]
+name = "pisa-dashboard"
+version = "0.1.0"
