@@ -1066,9 +1066,11 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         # Chart + how to read
         fig1 = plot_country_shaded_density_precomputed(
-            df_pre, story_subject, [story_country], year=story_year
+            df_pre, story_subject, [
+                story_country], year=story_year, show_mean_marker=True,
         ) if df_pre is not None else plot_country_shaded_density(
-            df_s1, story_subject, [story_country], year=story_year
+            df_s1, story_subject, [
+                story_country], year=story_year, show_mean_marker=True,
         )
         _chart_expander(
                 "Collapse chart", fig1,

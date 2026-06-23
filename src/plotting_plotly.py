@@ -198,7 +198,8 @@ def _parse_color(color):
         return int(parts[0]), int(parts[1]), int(parts[2])
     return 128, 128, 128
 
-def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_bottom_percentile_labels=False, show_oecd_labels=False, show_percentile_text=True, short_percentile_labels=False):
+
+def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_bottom_percentile_labels=False, show_oecd_labels=False, show_percentile_text=True, short_percentile_labels=False, show_mean_marker=False,):
     """
     rows: list of dicts with keys:
         - group: DataFrame (already filtered)
@@ -287,6 +288,29 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
             hoverinfo="skip"
         ))
 
+        # Mean marker
+        mean_val = row.get("mean_value", None)
+
+        if show_mean_marker and mean_val is not None and np.isfinite(mean_val):
+            fig.add_trace(go.Scatter(
+                x=[mean_val],
+                y=[y_center],
+                mode="markers",
+                marker=dict(
+                    symbol="star",
+                    size=13,
+                    color=f"rgb({r},{g},{b})",
+                    line=dict(color="white", width=1.5),
+                ),
+                legendgroup=legendgroup,
+                showlegend=False,
+                customdata=[[round(mean_val), q_label]],
+                hovertemplate=(
+                    "<b>%{customdata[1]}</b><br>"
+                    "Average score: %{customdata[0]}<extra></extra>"
+                ),
+            ))
+        
         marker_ps = [10, 25, 50, 75, 90]
         fig.add_trace(go.Scatter(
             x=[round(score_at_p(p)) for p in marker_ps],
@@ -433,7 +457,9 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
         ))
 
 # Percentile score profile
-def plot_country_shaded_density(df, subject, countries, year, min_group_n=30, compact=False):
+
+
+def plot_country_shaded_density(df, subject, countries, year, min_group_n=30, compact=False, show_mean_marker=False,):
     pv_cols = [f"PV{i}{subject}" for i in range(1, 11) if f"PV{i}{subject}" in df.columns]
     subset = df[df["CNT"].isin(countries)].copy()
     if year is not None and "YEAR" in subset.columns:
@@ -467,7 +493,8 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30, co
 
     _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height,
                                  show_percentile_text=True, show_oecd_labels=False,
-                                short_percentile_labels=compact)
+                                short_percentile_labels=compact,
+                                show_mean_marker=show_mean_marker,)
 
     # OECD row — same helper, y=0
     oecd_df = df[df["OECD"] == 1].copy()
@@ -480,7 +507,8 @@ def plot_country_shaded_density(df, subject, countries, year, min_group_n=30, co
             group=oecd_df, label="OECD Average", color_rgb=(85, 85, 85),
             y_center=0, pv_cols=pv_cols, legendgroup="OECD Average"
         )], x_grid, BANDS, bar_height, show_percentile_text=False,
-            show_oecd_labels=True, short_percentile_labels=compact,)
+            show_oecd_labels=True, short_percentile_labels=compact,
+            show_mean_marker=show_mean_marker,)
 
     all_tickvals = list(range(len(countries), 0, -1)) + [0]
     all_ticktext = [_cnt_label(c) for c in countries] + ["OECD Average"]
@@ -656,6 +684,7 @@ def plot_group_shaded_density_precomputed(
     group_title: str,
     year: int,
     compact: bool = False,
+    show_mean_marker: bool = False,
 ) -> go.Figure:
     """
     Draw the teardrop/shaded density chart from precomputed KDE data.
@@ -881,6 +910,7 @@ def plot_country_shaded_density_precomputed(
     countries: list,
     year: int,
     compact: bool = False,
+    show_mean_marker: bool = False,
 ) -> go.Figure:
     """
     Draw Section 1 country distribution chart from precomputed KDE data.
@@ -958,18 +988,70 @@ def plot_country_shaded_density_precomputed(
         ))
 
         # Median text
+        # Median text: place above the central median line
         if show_text:
-            fig.add_trace(go.Scatter(
-                x=[p50 + 8],
-                y=[y_center + 0.12],
-                mode="text",
-                text=[f"<b>{round(p50)}</b>"],
-                textposition="middle right",
-                textfont=dict(size=12, color=f"rgba({r},{g},{b},0.9)"),
-                legendgroup=legendgroup,
-                showlegend=False,
-                hoverinfo="skip"
-            ))
+            fig.add_annotation(
+                x=p50,
+                y=y_center + bar_height * 0.5,
+                text=f"<b>Median: {round(p50)}</b>",
+                showarrow=False,
+                font=dict(
+                    size=12,
+                    color=f"rgba({r},{g},{b},0.95)",
+                ),
+                xanchor="center",
+                yanchor="bottom",
+                align="center",
+                bgcolor="rgba(255,255,255,0.0)",
+            )
+        
+        # Mean marker — only used in Story mode.
+        # Summary cards report average score, while the vertical line shows median.
+        # This marker lets users see both values on the same plot.
+        mean_score = row_data.get("MEAN", np.nan)
+
+        # Mean marker: put the * on the distribution itself
+        fig.add_trace(go.Scatter(
+            x=[mean_score],
+            y=[y_center],
+            mode="markers",
+            marker=dict(
+                symbol="asterisk",
+                size=20,
+                color=color,
+                line=dict(color=color, width=1.5),
+            ),
+            legendgroup=legendgroup,
+            showlegend=False,
+            hovertemplate=(
+                f"<b>{legendgroup}</b><br>"
+                f"Average score: {mean_score:.0f}<br>"
+                f"Median score: {float(p50):.0f}"
+                "<extra></extra>"
+            ),
+        ))
+
+        # Mean text: place next to the asterisk
+        mean_text_shift = 18 if mean_score <= p50 else -18
+
+        fig.add_annotation(
+            x=mean_score,
+            y=y_center,
+            text=f"Avg: {mean_score:.0f}",
+            showarrow=False,
+            xshift=mean_text_shift,
+            yshift=-10,
+            font=dict(
+                size=11,
+                color=color,
+            ),
+            xanchor="left" if mean_text_shift > 0 else "right",
+            yanchor="middle",
+            align="center",
+            bgcolor="rgba(255,255,255,0.65)",
+            bordercolor="rgba(255,255,255,0)",
+            borderpad=1,
+        )
 
         # Percentile markers
         fig.add_trace(go.Scatter(
@@ -1001,17 +1083,20 @@ def plot_country_shaded_density_precomputed(
                 hoverinfo="skip"
             ))
             # OECD median value
-            fig.add_trace(go.Scatter(
-                x=[p50 + 8],
-                y=[y_center + 0.12],
-                mode="text",
-                text=[f"<b>{round(p50)}</b>"],
-                textposition="middle right",
-                textfont=dict(size=12, color="rgba(85,85,85,0.95)"),
-                legendgroup=legendgroup,
-                showlegend=False,
-                hoverinfo="skip"
-            ))
+            fig.add_annotation(
+                x=p50,
+                y=y_center + bar_height * 0.5,
+                text=f"<b>Median: {round(p50)}</b>",
+                showarrow=False,
+                font=dict(
+                    size=12,
+                    color="rgba(85,85,85,0.95)",
+                ),
+                xanchor="center",
+                yanchor="bottom",
+                align="center",
+                bgcolor="rgba(255,255,255,0.0)",
+            )
 
         # Invisible hover trace
         fig.add_trace(go.Scatter(
