@@ -107,7 +107,7 @@ class TestPlotCountryShapedDensity:
     def test_x_axis_range_set(self, base_df):
         # X axis range is pinned to 100–900
         fig = plot_country_shaded_density(base_df, "MATH", ["CAN"], year=2022)
-        assert fig.layout.xaxis.range == [100, 900]
+        assert tuple(fig.layout.xaxis.range) == (100, 900)
 
     def test_year_filter_applied(self, base_df):
         # Chart for 2022 and 2015 produce different figures (different data)
@@ -116,7 +116,7 @@ class TestPlotCountryShapedDensity:
         # Different years → different median positions → different trace x values
         xs_22 = [t.x for t in fig_22.data if t.x is not None]
         xs_15 = [t.x for t in fig_15.data if t.x is not None]
-        assert xs_22 != xs_15
+        assert str(xs_22) != str(xs_15)
 
 
 # plot_group_shaded_density
