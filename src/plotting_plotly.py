@@ -1269,6 +1269,9 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     """
     Plotly Scatterplot: country-level resource variable vs mean score.
     """
+    if df.empty or "CNT" not in df.columns:
+         return _check_sufficient_data(pd.DataFrame(), [], "", msg="Insufficient data for scatter")[1]
+
     subset = df.copy()
     if year and "YEAR" in df.columns:
         subset = subset[subset["YEAR"] == year]
