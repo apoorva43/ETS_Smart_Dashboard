@@ -1960,22 +1960,15 @@ elif app_mode == "🔍 Explore":
     )
 
     if is_time_chart:
-        st.sidebar.markdown("### Time comparison")
-        ref_year = st.sidebar.selectbox(
-            "Baseline year", available_years[:-1], index=0, key="ref_year"
-            )
-        later_years = [y for y in available_years if y > ref_year]
-        comp_year = st.sidebar.selectbox(
-            "Compare to", later_years, index=len(later_years) - 1, key="comp_year"
-            )
         selected_year = None
     else:
         selected_year = st.sidebar.selectbox(
             "Year", available_years, 
             index=available_years.index(2022) if 2022 in available_years else len(available_years) - 1
         )
-        ref_year = None
-        comp_year = None
+
+    ref_year = None
+    comp_year = None
 
     primary_country = selected_countries[0]
 
