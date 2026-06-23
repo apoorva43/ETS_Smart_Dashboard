@@ -49,7 +49,7 @@ from src.text_generator import (country_distribution_text,
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
-S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
+S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 CHART_TYPES = [
     "Percentile score profile",
@@ -98,7 +98,7 @@ def get_meta() -> pd.DataFrame:
     local = Path("data/processed/pisa_country_stats.parquet")
     if local.exists():
         return pd.read_parquet(local)
-    return pd.read_parquet(f"{S3_BASE}/pisa_country_stats.parquet")
+    return pd.read_parquet(f"{S3_BASE_URL}/pisa_country_stats.parquet")
 
 @st.cache_data(ttl=3600)
 def get_precomputed() -> pd.DataFrame:
@@ -115,7 +115,7 @@ def get_se_lookup() -> pd.DataFrame:
     replaces the runtime 91-column fetch + Fay BRR computation.
     """
     local = Path("data/processed/pisa_se_stats.parquet")
-    df = pd.read_parquet(local) if local.exists() else pd.read_parquet(f"{S3_BASE}/pisa_se_stats.parquet")
+    df = pd.read_parquet(local) if local.exists() else pd.read_parquet(f"{S3_BASE_URL}/pisa_se_stats.parquet")
     return df.set_index(["CNT", "YEAR", "SUBJECT"])
     
 

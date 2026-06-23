@@ -9,8 +9,12 @@ PARQUETS = $(foreach y,$(YEARS),$(PROCESSED_DIR)/pisa_$(y).parquet)
 # Default target - runs full pipeline
 all: stats figures report
 
-# Data pipeline (Steps 1-5)
-data: $(PARQUETS) $(PROCESSED_DIR)/pisa_all.parquet $(PROCESSED_DIR)/pisa_country_stats.parquet
+# Data pipeline (Steps 1-7)
+data: $(PARQUETS) \
+	  $(PROCESSED_DIR)/pisa_all.parquet \
+	  $(PROCESSED_DIR)/pisa_country_stats.parquet \
+	  $(PROCESSED_DIR)/pisa_precomputed.parquet \
+	  $(PROCESSED_DIR)/pisa_se_stats.parquet
 
 # Step 1: Download Rules
 $(RAW_DIR)/%/student/pisa_%.zip:
@@ -46,6 +50,17 @@ $(PROCESSED_DIR)/pisa_all.parquet: $(PARQUETS)
 $(PROCESSED_DIR)/pisa_country_stats.parquet: $(PROCESSED_DIR)/pisa_all.parquet
 	@echo "\n--- Building country stats parquet ---"
 	python src/build_data.py country-stats
+
+# Step 6: Precompute KDE + group percentiles
+$(PROCESSED_DIR)/pisa_precomputed.parquet: $(PROCESSED_DIR)/pisa_all.parquet
+	@echo "\n--- Precomputing group-level KDE + percentile stats ---"
+	python -W ignore src/build_data.py precompute 
+
+# Step 7: Precompute standard errors + 95% CIs
+$(PROCESSED_DIR)/pisa_se_stats.parquet: $(PROCESSED_DIR)/pisa_all.parquet
+	@echo "-n--- Computing standard errors ---"
+	python src/build_data.py standarderror
+
 
 # Report pipeline (Steps 1-3)
 # Step 1: Compute inline statistics
