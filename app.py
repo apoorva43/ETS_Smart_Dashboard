@@ -19,18 +19,14 @@ Run the app from the project root with:
 """
 import streamlit as st
 import pandas as pd
-# import matplotlib.pyplot as plt
 import numpy as np
-# import os
 from pathlib import Path
 
 from src.data_loader import query_pisa, load_precomputed
 from src.pisa_stats import (
     weighted_percentiles_pv,
     compute_escs_quartile_percentiles,
-    compute_group_percentiles,
-    get_oecd_percentiles,
-    compute_weighted_se_pv
+    compute_group_percentiles
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
@@ -43,8 +39,7 @@ from src.plotting_plotly import (
                           plot_country_shaded_density_precomputed,
                           plot_percentile_change_from_baseline_precomputed,
                           _cnt_label)
-from src.text_generator import (country_distribution_text,
-                                ses_difference_text,
+from src.text_generator import (ses_difference_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
@@ -248,7 +243,7 @@ CHART_HELP_TEXT = {
 
 GROUP_HOW_TO_READ = {
     "Score distribution": (
-        "This curve shows the full spread of student scores. "
+        "This plot shows the full spread of student scores. "
         "Darker, wider sections indicate where most students are concentrated (the middle 50%), "
         "while the thinner tails show the students at the lower and higher ends of the score distribution. "
         "The vertical line marks the median score. The asterisk shows the average score for the group, which may differ from the median if the distribution is skewed."
@@ -526,7 +521,7 @@ def render_chart(chart_type, subject, selected_countries,
             st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
-            render_chart_help(chart_type)
+            # render_chart_help(chart_type)
             fig = plot_country_shaded_density(
                 df, subject, valid_countries, year=selected_year, compact=compact
             )
@@ -585,14 +580,17 @@ def render_chart(chart_type, subject, selected_countries,
 
         # Add SES-specific finding into the blue note box instead of showing it above the chart
         if group_key == "Socioeconomic status":
-            ses_text = ses_difference_text(
-                df,
-                subject,
-                primary_country,
-                year=selected_year
-            )
-
-            chart_note = f"{chart_note}\n\n{ses_text}"
+            # Safely check data volume before calling the text generator
+            if len(df.dropna(subset=["ESCS", "W_FSTUWT"])) >= 30:
+                ses_text = ses_difference_text(
+                    df,
+                    subject,
+                    primary_country,
+                    year=selected_year
+                )
+                chart_note = f"{chart_note}\n\n{ses_text}"
+            else:
+                chart_note = f"{chart_note}\n\n⚠️ Insufficient socioeconomic data to calculate differences."
 
         # Render the chart ONCE, formatting the key dynamically
         safe_key = group_key.lower().replace(" ", "_")
@@ -712,9 +710,9 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing {selected_col} data).")
+            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing data).")
         
-        render_chart_help(chart_type)
+        # render_chart_help(chart_type)
         fig = plot_resource_scatter(
             df=df,
             subject=subject,
@@ -1235,7 +1233,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 findings.append(
                     f"At the median, {_cnt_label(story_country)}'s "
                     f"{subject_label} score {direction} by "
-                    f"{abs(delta_p50):.0f} points between "
+                    f"{abs(delta_p50):.0f} point(s) between "
                     f"{reference_year} and {latest_year} "
                     f"({ref_p50:.0f} → {last_p50:.0f})."
                 )
@@ -1257,16 +1255,16 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
                     # Dynamic phrasing based on whether rounded values are positive, negative, or flat
                     if lag_val < 0 and lead_val > 0:
-                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} pts) while the {leading} saw gains ({lead_val:+.0f} pts)"
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} points) while the {leading} saw gains ({lead_val:+.0f} points)"
                     elif lag_val < 0 and lead_val == 0:
-                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} pts) while the {leading} remained flat (0 pts)"
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} points) while the {leading} remained flat (0 points)"
                     elif lag_val == 0 and lead_val > 0:
-                        comparison = f"scores at the {lagging} remained flat (0 pts) while the {leading} saw gains ({lead_val:+.0f} pts)"
+                        comparison = f"scores at the {lagging} remained flat (0 points) while the {leading} saw gains ({lead_val:+.0f} points)"
                     elif lag_val < 0 and lead_val < 0:
-                        comparison = f"scores at the {lagging} dropped more ({lag_val:+.0f} pts) than at the {leading} ({lead_val:+.0f} pts)"
+                        comparison = f"scores at the {lagging} dropped more ({lag_val:+.0f} points) than at the {leading} ({lead_val:+.0f} points)"
                     else:
                         # Both are strictly > 0
-                        comparison = f"scores at the {leading} grew more ({lead_val:+.0f} pts) than at the {lagging} ({lag_val:+.0f} pts)"
+                        comparison = f"scores at the {leading} grew more ({lead_val:+.0f} points) than at the {lagging} ({lag_val:+.0f} points)"
 
                     findings.append(
                         f"The change is not uniform across the distribution — {comparison}."
@@ -1452,35 +1450,12 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 findings.append(
                     f"The socioeconomic difference within "
                     f"{_cnt_label(story_country)} "
-                    f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                    f"({ses_gap_entry['value']:.0f} points) is larger than "
                     f"the difference between this country and the OECD "
-                    f"average ({country_vs_oecd:.0f} pts). "
+                    f"average ({country_vs_oecd:.0f} points). "
                     f"Domestic equity is a bigger lever than "
                     f"international benchmarking."
                 )
-            # Make sure df_s1 is available or pass the appropriate df
-            # if df_pre is not None:
-            #     oecd_pre_check = df_pre[
-            #         (df_pre["CNT"]        == "OECD")        &
-            #         (df_pre["YEAR"]       == story_year)    &
-            #         (df_pre["SUBJECT"]    == story_subject) &
-            #         (df_pre["GROUP_TYPE"] == "oecd")
-            #     ]
-            #     oecd_m = np.array([oecd_pre_check.iloc[0]["P50"]]) if not oecd_pre_check.empty else np.array([np.nan])
-            # else:
-            #     oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
-            # if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
-            #     country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
-            #     if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
-            #         findings.append(
-            #             f"The socioeconomic difference within "
-            #             f"{_cnt_label(story_country)} "
-            #             f"({ses_gap_entry['value']:.0f} pts) is larger than "
-            #             f"the difference between this country and the OECD "
-            #             f"average ({country_vs_oecd:.0f} pts). "
-            #             f"Domestic equity is a bigger lever than "
-            #             f"international benchmarking."
-            #         )
         
         # Print combined findings
         _add_story_finding(findings)
