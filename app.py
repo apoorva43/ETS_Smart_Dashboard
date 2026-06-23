@@ -1193,6 +1193,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             reference_year   = min(country_years)
             latest_year      = max(country_years)
 
+            # Explicitly extract exactly the 3 percentiles needed
             if df_pre is not None:
                 trend_rows = df_pre[
                     (df_pre["CNT"]        == story_country) &
@@ -1201,19 +1202,30 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 ]
                 ref_row  = trend_rows[trend_rows["YEAR"] == reference_year].iloc[0]
                 last_row = trend_rows[trend_rows["YEAR"] == latest_year].iloc[0]
-                ref_percs  = np.array([ref_row["P10"],  ref_row["P25"],  ref_row["P50"],  ref_row["P75"],  ref_row["P90"]])
-                last_percs = np.array([last_row["P10"], last_row["P25"], last_row["P50"], last_row["P75"], last_row["P90"]])
+                
+                ref_p10, ref_p50, ref_p90 = float(ref_row["P10"]), float(ref_row["P50"]), float(ref_row["P90"])
+                last_p10, last_p50, last_p90 = float(last_row["P10"]), float(last_row["P50"]), float(last_row["P90"])
             else:
                 ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
                 last_subset = df_s2[df_s2["YEAR"] == latest_year]
+                
                 ref_percs  = weighted_percentiles_pv(ref_subset,  story_subject, [10, 50, 90])
                 last_percs = weighted_percentiles_pv(last_subset, story_subject, [10, 50, 90])
+                
+                ref_p10, ref_p50, ref_p90 = ref_percs[0], ref_percs[1], ref_percs[2]
+                last_p10, last_p50, last_p90 = last_percs[0], last_percs[1], last_percs[2]
 
-            if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
-                delta_p10 = last_percs[0] - ref_percs[0]
-                delta_p50 = last_percs[2] - ref_percs[2]  # P50 is index 2
-                delta_p90 = last_percs[4] - ref_percs[4]  # P90 is index 4
-                direction = "increased" if delta_p50 > 0 else "decreased"
+            if not (np.isnan(ref_p50) or np.isnan(last_p50)):
+                delta_p10 = last_p10 - ref_p10
+                delta_p50 = last_p50 - ref_p50
+                delta_p90 = last_p90 - ref_p90
+                
+                if delta_p50 > 0:
+                    direction = "increased"
+                elif delta_p50 < 0:
+                    direction = "decreased"
+                else:
+                    direction = "remained unchanged"
 
                 # Initialize the findings list
                 findings = []
@@ -1223,23 +1235,39 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                     f"{subject_label} score {direction} by "
                     f"{abs(delta_p50):.0f} points between "
                     f"{reference_year} and {latest_year} "
-                    f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
+                    f"({ref_p50:.0f} → {last_p50:.0f})."
                 )
 
                 # Conditional finding - uneven decline/gain across distribution
                 spread = abs(delta_p10 - delta_p90)
                 if spread > 10:
-                    worse_end = "lower end" if delta_p10 < delta_p90 else "upper end"
-                    better_end = "upper end" if worse_end == "lower end" else "lower end"
-                    worse_val  = delta_p10 if worse_end == "lower end" else delta_p90
-                    better_val = delta_p90 if worse_end == "lower end" else delta_p10
+                    # Round the deltas first to avoid -0.1 triggering a "decline" but displaying as "-0"
+                    d10_r = round(delta_p10)
+                    d90_r = round(delta_p90)
                     
+                    # Figure out which end performed "worse" relative to the other
+                    if d10_r < d90_r:
+                        lagging, lag_val = "lower end (P10)", d10_r
+                        leading, lead_val = "upper end (P90)", d90_r
+                    else:
+                        lagging, lag_val = "upper end (P90)", d90_r
+                        leading, lead_val = "lower end (P10)", d10_r
+
+                    # Dynamic phrasing based on whether rounded values are positive, negative, or flat
+                    if lag_val < 0 and lead_val > 0:
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} pts) while the {leading} saw gains ({lead_val:+.0f} pts)"
+                    elif lag_val < 0 and lead_val == 0:
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} pts) while the {leading} remained flat (0 pts)"
+                    elif lag_val == 0 and lead_val > 0:
+                        comparison = f"scores at the {lagging} remained flat (0 pts) while the {leading} saw gains ({lead_val:+.0f} pts)"
+                    elif lag_val < 0 and lead_val < 0:
+                        comparison = f"scores at the {lagging} dropped more ({lag_val:+.0f} pts) than at the {leading} ({lead_val:+.0f} pts)"
+                    else:
+                        # Both are strictly > 0
+                        comparison = f"scores at the {leading} grew more ({lead_val:+.0f} pts) than at the {lagging} ({lag_val:+.0f} pts)"
+
                     findings.append(
-                        f"The change is not uniform across the distribution — "
-                        f"students at the {worse_end} lost more "
-                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'lower end' else '90'}) "
-                        f"than those at the {better_end} "
-                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'lower end' else '10'}). "
+                        f"The change is not uniform across the distribution — {comparison}."
                     )
                 
                 # Render the combined insight box
