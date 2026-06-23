@@ -618,7 +618,7 @@ make data
 
     <div class="callout tip">
       <strong>Note</strong>
-      <p>See the Data pipeline section below for details on what each step does and how long each step takes. The raw PISA data files are not committed to the repo, they are downloaded as part of the data pipeline. Steps 1-3 download ~3-4 GB data and takes~15-20 minutes. Steps 6 and 7 (precomputations) are compute intenstive and take around 5-10 minutes. </p>
+      <p>See the Data pipeline section below for details on what each step does and how long each step takes. The raw PISA data files are not committed to the repo, they are downloaded as part of the data pipeline. Steps 1-3 download ~3-4 GB data and take around 15-20 minutes. Steps 6 and 7 (precomputations) are compute intenstive and take around 5-10 minutes. </p>
     </div>
 
     <h3>Keeping dependencies in sync</h3>
@@ -627,8 +627,7 @@ make data
       <li><code>environment.yml</code> - for local development via conda</li>
       <li><code>requirements.txt</code> - for Posit Cloud, which uses pip and reads this file on deploy</li>
     </ul>
-    <p>Failing to sync <code>requirements.txt</code> is the most common cause of a broken deployment.</p>
-  </section>
+   </section>
 
   <!-- ── Running ── -->
   <section id="running">
@@ -650,22 +649,25 @@ make data
     <div class="two-col">
       <div class="two-col-item">
         <h4>Posit Cloud</h4>
-        <p>Connected to the GitHub repo; auto-deploys on push to the <code>dev</code>. Dependencies read from <code>requirements.txt</code>. Trigger a manual redeploy from the Posit dashboard if the auto-deploy doesn't fire.</p>
+        <p>Posit is connected to the GitHub repo and auto-deploys on push to the <code>dev</code> branch. Dependencies are read from <code>requirements.txt</code>. Trigger a manual redeploy from the Posit dashboard if the auto-deploy does not fire.</p>
       </div>
       <div class="two-col-item">
         <h4>S3 bucket</h4>
-        <p>The current S3 bucket at <code>pisa-dashboard-data.s3.ca-central-1.amazonaws.com</code> is valid until <strong>10 August 2026</strong>. Contains four processed Parquet files. App tries local <code>data/processed/</code> first, falls back to S3. </p>
+        <p>The current S3 bucket at <code>pisa-dashboard-data.s3.ca-central-1.amazonaws.com</code> is valid until <strong>10 August 2026</strong>. It contains four processed Parquet files (combined parquet, country stats and precomputations). The app tries local <code>data/processed/</code> first, falls back to S3. </p>
       </div>
     </div>
 
+    <h3>Posit Cloud Link</h3>
+    <p>The hosted version is available at <a href="https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/">Posit Cloud</a>. </p>
+
     <h3>Uploading updated files</h3>
-    <p>After rebuilding any processed file locally, upload the updated version to the bucket so the deployed instance picks it up.</p>
+    <p>After rebuilding any processed file locally, upload the updated version to the S3 bucket so that the deployed instance can pick it up.</p>
 
     <h3>Changing the S3 base URL</h3>
-    <p>The S3 bucket URL is set in two places, we need to update both when it changes:</p>
+    <p>The S3 bucket URL is set in two places, we need to update both when it changes <strong>(needs to be changed before 10 August, 2026)</strong>:</p>
     <ul>
-      <li><code>app.py</code> — <code>S3_BASE_URL</code> constant near the top of the file</li>
-      <li><code>src/data_loader.py</code> — same constant used in the fallback fetch functions</li>
+      <li><code>app.py</code> - <code>S3_BASE_URL</code> constant near the top of the file</li>
+      <li><code>src/data_loader.py</code> - same constant used in the fallback fetch functions</li>
     </ul>
    </section>
 
@@ -673,14 +675,14 @@ make data
   <section id="pipeline">
     <h2>Data pipeline</h2>
 
-    <p>Everything runs through <code>src/build_data.py</code>, a Click CLI orchestrated by the Makefile. <code>make data</code> executes all seven steps in dependency order. Make only re-runs a step if its output file is missing or its inputs have changed.</p>
+    <p>Everything runs through <code>src/build_data.py</code>, a Click CLI orchestrated by the Makefile. The command <code>make data</code> executes all seven steps in dependency order. Make only re-runs a step if its output file is missing or its inputs have changed.</p>
 
     <div class="pipeline">
 
       <div class="pipeline-step">
         <div class="step-num">1</div>
         <div class="step-body">
-          <div class="step-title">Download</div>
+          <div class="step-title">Download the data</div>
           <p class="step-desc">Pulls the student and school questionnaire zip archives from OECD URLs defined in <code>src/data_loader.py</code>. It includes the 2015, 2018, and 2022 PISA cycles.</p>
         </div>
       </div>
@@ -688,7 +690,7 @@ make data
       <div class="pipeline-step">
         <div class="step-num">2</div>
         <div class="step-body">
-          <div class="step-title">Unzip</div>
+          <div class="step-title">Unzip the data</div>
           <p class="step-desc">Unzips the downloaded PISA archive into its parent directory.</p>
         </div>
       </div>
@@ -837,7 +839,7 @@ df = fetch(
 
     <h3>Two-layer cache</h3>
     <ul>
-      <li><strong>Streamlit <code>@st.cache_data</code></strong> - in-memory DataFrame cache keyed by <code>(countries, year, cols)</code> tuples. <code>ttl=3600</code>.</li>
+      <li><strong>Streamlit <code>@st.cache_data</code></strong> - in-memory DataFrame cache keyed by <code>(countries, year, cols)</code> tuples with <code>ttl=3600</code>.</li>
       <li><strong>Precomputed Parquet artefacts</strong> - <code>pisa_precomputed.parquet</code> removes all runtime KDE fitting; <code>pisa_se_stats.parquet</code> removes loading 80 replicate weight columns per render. Computed once in the pipeline, read as O(1) lookups at runtime.</li>
     </ul>
 
@@ -860,35 +862,34 @@ df = fetch(
     
 
     <h3>Callout system</h3>
-    <p>The three-level callout system in the Data Story reflects ETS feedback — earlier versions showed colored boxes on every chapter, which felt overwhelming. The conventions are:</p>
+    <p>The two-level callout system in the Data Story reflects the feedback we received - earlier versions showed colored boxes on every chapter, which felt overwhelming. The conventions are:</p>
     <ul>
-      <li><strong>Blue</strong> — key findings from the data</li>
-      <li><strong>Green</strong> — policy implications or actionable observations</li>
+      <li><strong>Blue</strong> - key findings from the data</li>
+      <li><strong>Green</strong> - policy implications or actionable observations</li>
     </ul>
-    <p>The "key insight" callout only appears when the data warrants it — for example when the SES gap within a country is larger than the gap to the OECD average.</p>
   </section>
 
   <!-- ── Stats ── -->
   <section id="stats">
     <h2>Statistical methods</h2>
 
-    <p>PISA's survey design imposes several methodological constraints that every statistic in the dashboard must respect. These are not optional refinements — they're required to produce estimates that generalize to national populations.</p>
+    <p>PISA's survey design imposes a few methodological constraints that every statistic in the dashboard must respect. These are required to produce estimates that generalize to national populations.</p>
 
     <h3>Plausible values</h3>
-    <p>PISA gives each student ten plausible values per subject — multiple draws from the posterior distribution of their latent ability, designed to account for measurement uncertainty in a short adaptive assessment. Every score statistic in the dashboard (means, percentiles, standard errors) is computed by averaging across all ten plausible values per the PISA technical standards. No chart uses a single PV as a point estimate.</p>
+    <p>PISA gives each student ten plausible values per subject - multiple draws from the posterior distribution of their latent ability, designed to account for measurement uncertainty in a short adaptive assessment. Every score statistic in the dashboard (means, percentiles, standard errors) is computed by averaging across all ten plausible values per the PISA technical standards. No chart uses a single PV as a point estimate.</p>
 
     <h3>Sampling weights</h3>
-    <p><code>W_FSTUWT</code> is the final student sampling weight and must be applied to all estimates so results generalize to the national population rather than just the students who happened to be tested. Country sample sizes vary substantially — Canada contributes around 23,000 student records in the working sample; the United States contributes about 4,500 — making correct weight application essential for any cross-country comparison.</p>
+    <p><code>W_FSTUWT</code> is the final student sampling weight and must be applied to all estimates so results generalize to the national population rather than just the students who happened to be tested. Country sample sizes vary substantially - Canada contributes around 23,000 student records; the United States contributes about 4,500 - making correct weight application essential for any cross-country comparison.</p>
 
-    <h3>Standard errors (Fay BRR)</h3>
-    <p>Standard errors follow the Fay Balanced Repeated Replication method using the 80 replicate weights (<code>W_FSTURWT1</code>–<code>W_FSTURWT80</code>). Total variance combines sampling variance from the BRR replicates and imputation variance across the ten plausible values. The SE warning card appears only when SE exceeds 3.5 points. The implementation lives in <code>src/pisa_stats.py</code> and was validated against an R reference; see <code>notebooks/standard_error.ipynb</code>.</p>
+    <h3>Standard errors</h3>
+    <p>Standard errors follow the Fay Balanced Repeated Replication method using the 80 replicate weights (<code>W_FSTURWT1</code>-<code>W_FSTURWT80</code>). Total variance combines sampling variance from the BRR replicates and imputation variance across the ten plausible values. The implementation lives in <code>src/pisa_stats.py</code> and was validated against values from the PISA data explorer; see <code>notebooks/standard_error.ipynb</code>.</p>
 
     <h3>Data suppression</h3>
     <p>Any subgroup breakdown with fewer than 30 valid observations is suppressed rather than shown. Applied in <code>check_group_sizes()</code> in <code>app.py</code> and inside the plotting functions themselves. Country-level figures with fewer than 100 valid rows after dropping missing weights are replaced with a warning panel.</p>
 
     <div class="callout tip">
       <strong>Scope of the tool</strong>
-      <p>Because PISA microdata cannot support causal claims, the dashboard is deliberately limited to descriptive and comparative reporting. It can show that two groups differ in score distributions, but it cannot determine why. Observed gaps may reflect socioeconomic sorting, language background, school resources, or regional policy context — factors that live outside the PISA dataset.</p>
+      <p>Because PISA microdata cannot support causal claims, the dashboard is deliberately limited to descriptive and comparative reporting. It can show that two groups differ in score distributions, but it cannot determine why. Observed gaps may reflect socioeconomic sorting, language background, school resources, or regional policy context - factors that live outside the PISA dataset.</p>
     </div>
   </section>
 
@@ -896,7 +897,7 @@ df = fetch(
   <section id="new-cycle">
     <h2>Adding a new PISA cycle</h2>
 
-    <p>The pipeline is designed to make adding a new cycle straightforward. Four things need updating:</p>
+    <p>The pipeline is designed to make adding a new cycle straightforward. The following four things need to be updated:</p>
 
     <div class="pattern">
       <h4>Checklist</h4>
@@ -920,7 +921,7 @@ df = fetch(
     <pre><code># 1. Define the chart function in src/plotting_plotly.py
 def plot_my_chart(df, subject, cnt, year=None) -> go.Figure:
     fig = go.Figure()
-    # ... build traces ...
+    # build traces 
     fig.update_layout(**_base_layout(title=f"My Chart | {SUBJECTS[subject]}"))
     return fig</code></pre>
 

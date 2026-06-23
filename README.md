@@ -61,6 +61,8 @@ The pipeline runs in order:
 6. **Precompute KDE and percentiles** - replaces runtime KDE fitting by precomputing KDE arrays and weighted percentiles (P10, P25, etc.) per group
 7. **Precompute standard errors** - precomputes Fay BRR standard error and 95% CI indexed by `(COUNTRY, YEAR, SUBJECT)`
 
+>Note: A smaller sample of the data (countries: Canada, US; year: 2022) is available [here](https://drive.google.com/file/d/1xBM1twCzTA8ikwzmEGn7psqxDJBU0X_t/view) and can be placed in `data/raw/sampledat.csv` to run the dashboard instead.  
+
 ---
 
 ## Run the App
