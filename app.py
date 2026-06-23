@@ -271,7 +271,8 @@ GROUP_HOW_TO_READ = {
         "• Native: Student and both parents born in-country.<br>"
         "• First-generation: Student born abroad.<br>"
         "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
-        "The vertical line marks the group's median score."
+        "The vertical line marks the group's median score. "
+        "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
     ),
     "Gender": (
         "Each shape shows the score distribution for male and female students. "
@@ -448,6 +449,7 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
             return (
                 "This chart compares score distributions by immigration background. "
                 "Use it to compare group medians while also checking how much the distributions overlap."
+                "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
             )
 
         if group_key == "Gender":
