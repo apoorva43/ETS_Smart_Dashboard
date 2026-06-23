@@ -19,6 +19,9 @@ Run via:
     python src/build_data.py precompute
 """
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import json
 import pandas as pd
 import numpy as np
