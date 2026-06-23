@@ -20,8 +20,8 @@ Rather than reporting country averages alone, the dashboard surfaces the **full 
  
 Two modes:
  
-- **Data Story** — guided narrative that walks policymakers through key patterns with contextual framing
-- **Explore** — lets analysts and researchers interact with the data directly
+- **Data Story** - guided narrative that walks policymakers through key patterns with contextual framing
+- **Explore** - lets analysts and researchers interact with the data directly
 
 ---
 
@@ -65,13 +65,16 @@ The pipeline runs in order:
 
 ## Run the App
 
-### Live Demo
-A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/).
-
 ### Run Locally
-The Streamlit App could be opened by using:
+
 ```bash
 PYTHONPATH=. streamlit run app.py
 ```
 
-The app will open at `http://localhost:8501`.
+The app will open at `http://localhost:8501`. Please ensure that you've run the `make data` command before this. 
+
+### Live Demo
+
+A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/).
+
+>Note: The current S3 bucket at `pisa-dashboard-data.s3.ca-central-1.amazonaws.com` is valid until 10 August 2026. It can be updated by changing the `S3_BASE_URL` constant in both `app.py` and `src/data_loader.py`.
