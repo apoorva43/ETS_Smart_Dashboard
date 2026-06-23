@@ -2,6 +2,27 @@
 
 **Gaurang Ahuja, Apoorva Srivastava, Sidharth Malik, Gloria Yi**
 
+An interactive equity-focused dashboard for exploring PISA (Programme for International Student Assessment) score distributions across 81 countries and three cycles (2015, 2018, 2022), built for the Educational Testing Service (ETS).
+
+---
+
+## Quick Links
+
+ - **Live dashboard** - [Posit Cloud deployment](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/) 
+- **Full documentation** - [GitHub Pages](https://apoorva43.github.io/ETS_Smart_Dashboard/) 
+- **Final report** - [`reports/final/final_report.pdf`](reports/final/final_report.pdf) *(update URL)*
+
+---
+
+## What this does
+ 
+Rather than reporting country averages alone, the dashboard surfaces the **full score distribution** - broken down by percentile, socioeconomic background, immigration status, school type, and location - for any combination of country, subject, and year.
+ 
+Two modes:
+ 
+- **Data Story** — guided narrative that walks policymakers through key patterns with contextual framing
+- **Explore** — lets analysts and researchers interact with the data directly
+
 ---
 
 ## Setup
@@ -21,9 +42,9 @@ conda activate ets_capstone
 pip install -e .
 ```
 
-### 3. Download the Data
+### 3. Build the data pipeline
 
-The repository includes a five-step pipeline that automatically downloads, merges, and optimizes PISA student and school data.
+The repository includes a seven-step pipeline that automatically downloads, merges, and optimizes PISA student and school data.
 To build the full multi-year dataset (2015, 2018, 2022):
 
 ```bash
@@ -37,6 +58,8 @@ The pipeline runs in order:
 3. **Convert** - merges student and school files and writes a per-year parquet to `data/processed`
 4. **Merge** - concatenates all years into a single optimized `pisa_all.parquet` with float32 downcastings and zstd compression
 5. **Country stats** - aggregates to one row per country-year and writes `pisa_country_stats.parquet`, used by the dashboard sidebar
+6. **Precompute KDE and percentiles** - replaces runtime KDE fitting by precomputing KDE arrays and weighted percentiles (P10, P25, etc.) per group
+7. **Precompute standard errors** - precomputes Fay BRR standard error and 95% CI indexed by `(COUNTRY, YEAR, SUBJECT)`
 
 ---
 
@@ -48,12 +71,7 @@ A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-
 ### Run Locally
 The Streamlit App could be opened by using:
 ```bash
-streamlit run app.py
+PYTHONPATH=. streamlit run app.py
 ```
 
-The app uses a two-tier data loading strategy:
-
-- **Sidebar** loads instantly from `pisa_country_stats.parquet` (~40 KB)
-- **Charts** query only the rows and columns they need from `pisa_all.parquet` via DuckDB
-
-If neither parquet is found locally, the app falls back to the public S3 copy of the parquet files, available at [https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com](https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com/pisa_all.parquet)
+The app will open at `http://localhost:8501`.
