@@ -859,7 +859,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     Intro → Ch 1: Standing → Ch 2: Trend → Ch 3: Equity → Ch 4: School context
     
     Callout hierarchy:
-    - Blue _insight_box     : key finding, always present, leads each chapter
+    - Blue _add_story_finding     : key finding, always present, leads each chapter
     - Amber _pullquote_box  : conditional, only when data is notably uneven
     - Green _policy_box     : always present, closes each chapter
     - _chart_expander       : chart + how-to-read, collapsed by default
@@ -878,6 +878,27 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     }
     </style>
 """, unsafe_allow_html=True)
+    
+    story_findings = []
+
+    def _clean_finding_text(text):
+        """Remove simple HTML tags before storing finding text for summary."""
+        import re
+        return re.sub(r"<.*?>", "", str(text)).strip()
+
+    def _add_story_finding(finding):
+        """
+        Show key finding box and store finding for the final summary section.
+        Accepts either a single string or a list of strings.
+        """
+        _insight_box(finding)
+
+        if isinstance(finding, list):
+            for f in finding:
+                if f:
+                    story_findings.append(_clean_finding_text(f))
+        else:
+            story_findings.append(_clean_finding_text(finding))
 
     # ── Page header ────────────────────────────────────────────────────────
     st.markdown(
@@ -1177,7 +1198,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                     )
                 
                 # Render the combined insight box
-                _insight_box(findings)
+                _add_story_finding(findings)
 
             fig2 = plot_percentile_change_from_baseline_precomputed(
                 df_pre=df_pre, subject=story_subject,
@@ -1387,7 +1408,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             #         )
         
         # Print combined findings
-        _insight_box(findings)
+        _add_story_finding(findings)
 
         # Print metric cards side-by-side
         card_cols = st.columns(len(equity_gaps))
@@ -1542,7 +1563,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         if not (np.isnan(pub_med) or np.isnan(priv_med)):
             diff = abs(priv_med - pub_med)
             higher = "private" if priv_med > pub_med else "public"
-            _insight_box(
+            _add_story_finding(
                 f"Students in {higher} schools in "
                 f"{_cnt_label(story_country)} score {diff:.0f} points "
                 f"higher than public schools at the median in {subject_label}."
@@ -1629,7 +1650,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             lowest_med = loc_medians[lowest_group]
             diff = highest_med - lowest_med
 
-            _insight_box(
+            _add_story_finding(
                 f"The largest difference in school-location scores in {_cnt_label(story_country)} is between "
                 f"{highest_group.lower()} and {lowest_group.lower()} schools: "
                 f"students in {highest_group.lower()} schools score "
@@ -1660,6 +1681,41 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         )
 
     st.divider()
+    
+    # ── Summary of key findings ────────────────────────────────────────────
+
+    st.markdown("## Summary of key findings")
+    st.markdown(
+        f"Main takeaways for {_cnt_label(story_country)} in {subject_label}."
+    )
+
+    if story_findings:
+        summary_items = "".join(
+            f"<li>{finding}</li>"
+            for finding in story_findings
+        )
+
+        st.markdown(
+            f"""
+            <div style="
+                background: #e8f4fd;
+                border: 1px solid #b3d9f5;
+                border-radius: 8px;
+                padding: 16px 20px;
+                margin: 10px 0 18px 0;
+                color: #1a3a52;
+                line-height: 1.55;
+            ">
+                <strong>Summary of key findings:</strong>
+                <ul style="margin-top: 8px; margin-bottom: 0; padding-left: 22px;">
+                    {summary_items}
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("No key findings were available for this country and subject.")
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
