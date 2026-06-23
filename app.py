@@ -2004,9 +2004,6 @@ elif app_mode == "🔍 Explore":
 
     primary_country = selected_countries[0]
 
-    #st.title("PISA Score Distribution Dashboard")
-    st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
-               f"{len(all_countries)} countries")
 
     # Chart-Specific Controls injected directly into the main view
     group_key = None
