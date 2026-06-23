@@ -1466,7 +1466,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     
     fig.update_layout(**layout_args)
     fig.update_xaxes(title=resource_label)
-    fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
+    fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} Score")
     
     fig.update_layout(hovermode="closest")
 

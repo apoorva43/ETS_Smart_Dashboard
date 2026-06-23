@@ -416,8 +416,8 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
         baseline_text = f" relative to {reference_year}" if reference_year else ""
         return (
             f"This chart shows how scores changed across PISA cycles{baseline_text}. "
-            "Each coloured line represents a percentile group, helping show whether changes were larger "
-            "among lower-, middle-, or higher-performing students."
+            "Each line of coloured markers represents a different percentile group, helping show whether changes were larger "
+            "among lower, middle, or higher performing students."
         )
 
     if chart_type == "Intersectional Heatmap":
@@ -450,21 +450,20 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
         if group_key == "Gender":
             return (
                 "This chart compares score distributions by gender. "
-                "Use it to see whether differences are concentrated in lower-, middle-, or higher-performing students."
+                "Use it to see whether differences are concentrated in lower, middle, or higher performing students."
             )
 
         if group_key == "School location":
             return (
                 "This chart compares score distributions by school location. "
-                "School location is grouped by the location category of the school, from village to large city. "
+                "School location is grouped by the size or type of the community where the school is situated. "
                 "Use it to see whether location differences appear mainly in the median or across the full distribution."
             )
 
         if group_key == "School type":
             return (
                 "This chart compares score distributions by school type. "
-                "Public schools are government-operated; government-dependent private schools are privately managed but receive substantial government funding; "
-                "independent private schools are primarily privately funded. "
+                "School types typically include public and private institutions, with variations in management and funding depending on the country. "
                 "Use it to compare typical performance while also considering the spread and overlap within each school type."
             )
 
@@ -1438,7 +1437,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         findings.append(
             f"The largest difference in {_cnt_label(story_country)} is by "
             f"<strong>{biggest['label'].lower()}</strong> — "
-            f"a {biggest['value']:.0f}-point difference at the median "
+            f"a {biggest['value']:.0f} point difference at the median "
             f"in {subject_label}. {biggest['sub']}."
         )
 
