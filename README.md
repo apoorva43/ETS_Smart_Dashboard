@@ -80,3 +80,38 @@ The app will open at `http://localhost:8501`. Please ensure that you've run the 
 A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/).
 
 >Note: The current S3 bucket at `pisa-dashboard-data.s3.ca-central-1.amazonaws.com` is valid until 10 August 2026. It can be updated by changing the `S3_BASE_URL` constant in both `app.py` and `src/data_loader.py`.
+
+---
+
+## Testing
+
+Tests live in the `tests/` folder and use synthetic data - no real PISA files needed.
+
+### Install test dependencies
+
+```bash
+pip install -r requirements.txt
+pip install pytest pytest-cov
+```
+
+### Run all unit tests
+
+```bash
+PYTHONPATH=. pytest tests/ \
+  --cov=src \
+  --cov-report=term-missing \
+  -v \
+  --ignore=tests/test_integration.py
+```
+
+### Run integration tests separately
+
+```bash
+PYTHONPATH=. pytest tests/test_integration.py -v
+```
+
+### Run a specific test file
+
+```bash
+PYTHONPATH=. pytest tests/test_data_loader.py -v
+```
