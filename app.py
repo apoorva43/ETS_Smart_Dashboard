@@ -559,7 +559,7 @@ def render_chart(chart_type, subject, selected_countries,
                 year=selected_year
             )
 
-            chart_note = f"{chart_note}\n\n**Current pattern:** {ses_text}"
+            chart_note = f"{chart_note}\n\n{ses_text}"
 
         # Render the chart ONCE, formatting the key dynamically
         safe_key = group_key.lower().replace(" ", "_")
