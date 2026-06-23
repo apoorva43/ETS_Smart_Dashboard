@@ -8,14 +8,25 @@ def weighted_mean_pv(data: pd.DataFrame, subject: str,
                      weight_col: str = "W_FSTUWT") -> float:
     """
     Correct PISA weighted mean: average of 10 per-PV weighted means.
-    Returns np.nan if fewer than MIN_GROUP_N valid rows.
+    Returns np.nan if fewer than MIN_GROUP_N valid rows or if columns are missing.
     """
-    pv_cols = [f"PV{i}{subject}" for i in range(1, 11)]
-    valid   = data.dropna(subset=[weight_col] + pv_cols)
+    # Expected columns
+    expected_pvs = [f"PV{i}{subject}" for i in range(1, 11)]
+    
+    # Filter to only the columns that actually exist in the dataframe
+    available_pvs = [c for c in expected_pvs if c in data.columns]
+    
+    if not available_pvs or weight_col not in data.columns:
+        return np.nan
+
+    valid = data.dropna(subset=[weight_col] + available_pvs)
+    
     if len(valid) < MIN_GROUP_N:
         return np.nan
+        
     w = valid[weight_col].values
-    return np.mean([np.average(valid[pv].values, weights=w) for pv in pv_cols])
+    
+    return float(np.mean([np.average(valid[pv].values, weights=w) for pv in available_pvs]))
 
 
 def weighted_percentiles_pv(data: pd.DataFrame, subject: str,
