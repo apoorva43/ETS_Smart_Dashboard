@@ -1618,29 +1618,60 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
+        # School type key finding:
+        # Compare the highest-median school type group with the lowest-median group.
         if df_pre is not None:
-            type_rows = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_type")]
-            pub_row  = type_rows[type_rows["GROUP_LABEL"] == "Public"]
-            priv_row = type_rows[type_rows["GROUP_LABEL"] == "Independent private"]
-            pub_med  = float(pub_row.iloc[0]["P50"])  if not pub_row.empty  else np.nan
-            priv_med = float(priv_row.iloc[0]["P50"]) if not priv_row.empty else np.nan
-        else:
-            type_curves = compute_group_percentiles(
-                df_type, story_subject, "SCHLTYPE",
-                {3: "Public", 1: "Independent private"},
-                [50], cnt=story_country, year=story_year
-            )
-            pub_med  = type_curves.get("Public",              [np.nan])[0]
-            priv_med = type_curves.get("Independent private", [np.nan])[0]
+            type_rows = df_pre[
+                (df_pre["CNT"] == story_country)
+                & (df_pre["YEAR"] == story_year)
+                & (df_pre["SUBJECT"] == story_subject)
+                & (df_pre["GROUP_TYPE"] == "school_type")
+            ].copy()
 
-        if not (np.isnan(pub_med) or np.isnan(priv_med)):
-            diff = abs(priv_med - pub_med)
-            higher = "private" if priv_med > pub_med else "public"
-            _add_story_finding(
-                f"Students in {higher} schools in "
-                f"{_cnt_label(story_country)} score {diff:.0f} points "
-                f"higher than public schools at the median in {subject_label}."
+            type_rows = type_rows.dropna(subset=["P50"])
+
+            type_medians = {
+                row["GROUP_LABEL"]: float(row["P50"])
+                for _, row in type_rows.iterrows()
+            }
+
+        else:
+            group_col_type, group_labels_type = GROUP_OPTIONS["School type"]
+
+            type_curves = compute_group_percentiles(
+                df_type,
+                story_subject,
+                group_col_type,
+                group_labels_type,
+                [50],
+                cnt=story_country,
+                year=story_year,
             )
+
+            type_medians = {
+                label: vals[0]
+                for label, vals in type_curves.items()
+                if vals is not None and len(vals) > 0 and not np.isnan(vals[0])
+            }
+
+        if len(type_medians) >= 2:
+            highest_group = max(type_medians, key=type_medians.get)
+            lowest_group = min(type_medians, key=type_medians.get)
+
+            highest_med = type_medians[highest_group]
+            lowest_med = type_medians[lowest_group]
+            highest_med_display = int(round(highest_med))
+            lowest_med_display = int(round(lowest_med))
+            diff_display = highest_med_display - lowest_med_display
+
+            _add_story_finding(
+                f"The largest difference in school-type scores in {_cnt_label(story_country)} is between "
+                f"{highest_group.lower()} and {lowest_group.lower()} schools: "
+                f"students in {highest_group.lower()} schools score "
+                f"{diff_display:.0f} points higher at the median in {subject_label} "
+                f"in {_cnt_label(story_country)}."
+            )
+        
 
         group_col, group_labels = GROUP_OPTIONS["School type"]
         fig4a = plot_group_shaded_density_precomputed(
@@ -1721,13 +1752,15 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
             highest_med = loc_medians[highest_group]
             lowest_med = loc_medians[lowest_group]
-            diff = highest_med - lowest_med
+            highest_med_display = int(round(highest_med))
+            lowest_med_display = int(round(lowest_med))
+            diff_display = highest_med_display - lowest_med_display
 
             _add_story_finding(
                 f"The largest difference in school-location scores in {_cnt_label(story_country)} is between "
                 f"{highest_group.lower()} and {lowest_group.lower()} schools: "
                 f"students in {highest_group.lower()} schools score "
-                f"{diff:.0f} points higher at the median in {subject_label}. "
+                f"{diff_display:.0f} points higher at the median in {subject_label}. "
             )
 
         group_col, group_labels = GROUP_OPTIONS["School location"]
