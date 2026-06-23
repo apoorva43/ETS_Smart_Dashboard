@@ -296,7 +296,6 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
             marker=dict(
                 color=f"rgb({r},{g},{b})",
                 size=[6, 6, 10, 6, 6],
-                # symbol="line-ns",
                 line=dict(color=f"rgb({r},{g},{b})", width=2)
             ),
             legendgroup=legendgroup,
@@ -402,7 +401,6 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
                 marker=dict(
                     color=f"rgb({r},{g},{b})",
                     size=[6, 6, 10, 6, 6],
-                    symbol="line-ns",
                     line=dict(color=f"rgb({r},{g},{b})", width=2)
                 ),
                 legendgroup=legendgroup,
@@ -980,7 +978,6 @@ def plot_country_shaded_density_precomputed(
             marker=dict(
                 color=f"rgb({r},{g},{b})",
                 size=[6, 6, 10, 6, 6],
-                symbol="line-ns",
                 line=dict(color=f"rgb({r},{g},{b})", width=2)
             ),
             legendgroup=legendgroup,
