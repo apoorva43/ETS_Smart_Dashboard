@@ -87,6 +87,7 @@ The pipeline runs in order:
 
 ### Run Locally
 
+From the root directory of the repository, run: 
 ```bash
 PYTHONPATH=. streamlit run app.py
 ```
@@ -97,23 +98,34 @@ The app will open at `http://localhost:8501`. Please ensure that you've run the 
 
 A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/).
 
->Note: The current S3 bucket at `pisa-dashboard-data.s3.ca-central-1.amazonaws.com` is valid until 10 August 2026. It can be updated by changing the `S3_BASE_URL` constant in both `app.py` and `src/data_loader.py`.
-
+> **Note on data hosting (S3 deployment dependency):**  
+> The current public S3 bucket (`pisa-dashboard-data.s3.ca-central-1.amazonaws.com`) is linked to an AWS account and will remain accessible until **10 August 2026**.
+>
+> After this date, the bucket will no longer be available, and any deployments (including Posit Cloud) relying on it will fail to load data.
+>
+> To ensure uninterrupted deployment, the four processed parquet files must be re-uploaded to a new S3 bucket, and the base URL must be updated accordingly in:
+>
+> - `S3_BASE_URL` in `app.py`
+> - `S3_BASE_URL` in `src/data_loader.py`
+>
+> No other code changes are required - only updating the base URL to point to the new bucket.
 ---
 
 ## Testing
 
-Tests live in the `tests/` folder and use synthetic data - no real PISA files needed.
+Tests live in the `tests/` folder and use synthetic data - no real PISA files needed. These tests are intended for development and validation purposes only, and do not affect end-user dashboard usage or runtime behavior. 
 
 ### Install test dependencies
 
+If not already installed via `requirements.txt`: 
+
 ```bash
-pip install -r requirements.txt
 pip install pytest pytest-cov
 ```
 
 ### Run all unit tests
 
+From the project root directory, run: 
 ```bash
 PYTHONPATH=. pytest tests/ \
   --cov=src \
@@ -128,10 +140,19 @@ PYTHONPATH=. pytest tests/ \
 PYTHONPATH=. pytest tests/test_integration.py -v
 ```
 
-### Run a specific test file (example)
+### Run a specific test file
 
 ```bash
-PYTHONPATH=. pytest tests/test_data_loader.py -v
+PYTHONPATH=. pytest tests/<test_file>.py -v
 ```
 
-Replace `test_data_loader.py` with any file in the `tests/` directory. 
+Replace `<test_file>` with any file in the `tests/` directory. 
+
+### Continuous Integration (CI)
+
+All tests are automatically executed via GitHub Actions:
+
+- on every push to `main` and `dev`
+- on every pull request targeting `main` or `dev`
+
+The CI pipeline runs unit tests, and executes integration tests separately on merge-related events. 
