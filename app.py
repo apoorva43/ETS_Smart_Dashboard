@@ -371,6 +371,37 @@ def render_plotly_chart_with_note(fig, note, key=None, use_container_width=True)
         "Hover over the chart to see exact values. "
         "Drag across the chart to zoom in, or use the toolbar to pan, reset axes, and download the chart."
     )
+
+
+def get_plotly_y_range(figs, pad=3):
+    """
+    Get shared y-axis range from multiple Plotly figures.
+    Used to make side-by-side comparisons visually comparable.
+    """
+    ys = []
+
+    for fig in figs:
+        for trace in fig.data:
+            if hasattr(trace, "y") and trace.y is not None:
+                vals = pd.to_numeric(pd.Series(trace.y),
+                                     errors="coerce").dropna()
+                ys.extend(vals.tolist())
+
+    if not ys:
+        return None
+
+    y_min = min(ys)
+    y_max = max(ys)
+
+    # Always include 0 for change-over-time charts
+    y_min = min(y_min, 0)
+    y_max = max(y_max, 0)
+
+    if y_min == y_max:
+        y_min -= 1
+        y_max += 1
+
+    return [y_min - pad, y_max + pad]
     
 
 def get_chart_note(chart_type, group_key=None, reference_year=None):
@@ -1921,44 +1952,148 @@ elif app_mode == "🔍 Explore":
 
     # ── Draw the main area for Explore ───────────────────────────────────────
     if side_by_side:
-        left_col, right_col = st.columns(2)
-        with left_col:
-            st.subheader(chart_type_left)
-            render_chart(
-                chart_type=chart_type_left, 
-                subject=subject, 
-                selected_countries=selected_countries,
-                selected_year=selected_year, 
-                available_years=available_years,
-                primary_country=country_left,
-                ref_year=ref_year, 
-                comp_year=comp_year,
-                compact=True,
-                widget_key="left"
-            )
-        with right_col:
-            st.subheader(chart_type_right)
-            render_chart(
-                chart_type=chart_type_right, 
-                subject=subject, 
-                selected_countries=selected_countries,
-                selected_year=selected_year, 
-                available_years=available_years,
-                primary_country=country_right,
-                ref_year=ref_year, 
-                comp_year=comp_year,
-                compact=True,
-                widget_key="right"
-            )
+
+        # Special case:
+        # When comparing two score-change-over-time charts, use the same y-axis
+        # so the two countries are visually comparable.
+        if (
+            chart_type_left == "Score change over time"
+            and chart_type_right == "Score change over time"
+        ):
+            reference_year = min(available_years)
+
+            # Build both figures first
+            if df_pre is not None:
+                fig_left = plot_percentile_change_from_baseline_precomputed(
+                    df_pre=df_pre,
+                    subject=subject,
+                    cnt=country_left,
+                    reference_year=reference_year,
+                )
+
+                fig_right = plot_percentile_change_from_baseline_precomputed(
+                    df_pre=df_pre,
+                    subject=subject,
+                    cnt=country_right,
+                    reference_year=reference_year,
+                )
+
+            else:
+                df_time = fetch(
+                    tuple(set([country_left, country_right])),
+                    None,
+                    tuple(BASE_COLS + PV_BY_SUBJ[subject])
+                )
+
+                fig_left = plot_percentile_change_from_baseline(
+                    df=df_time,
+                    subject=subject,
+                    cnt=country_left,
+                    reference_year=reference_year,
+                )
+
+                fig_right = plot_percentile_change_from_baseline(
+                    df=df_time,
+                    subject=subject,
+                    cnt=country_right,
+                    reference_year=reference_year,
+                )
+
+            # Compute shared y-axis range from both figures
+            y_values = []
+
+            for fig in [fig_left, fig_right]:
+                for trace in fig.data:
+                    if hasattr(trace, "y") and trace.y is not None:
+                        vals = pd.to_numeric(
+                            pd.Series(trace.y),
+                            errors="coerce"
+                        ).dropna()
+                        y_values.extend(vals.tolist())
+
+            if y_values:
+                y_min = min(min(y_values), 0)
+                y_max = max(max(y_values), 0)
+
+                # Add padding so the lines do not touch the plot boundary
+                pad = max(3, 0.08 * (y_max - y_min))
+
+                shared_y_range = [y_min - pad, y_max + pad]
+
+                fig_left.update_yaxes(range=shared_y_range)
+                fig_right.update_yaxes(range=shared_y_range)
+
+            # Apply compact layout after setting shared axis
+            fig_left = apply_compact_plotly_layout(fig_left)
+            fig_right = apply_compact_plotly_layout(fig_right)
+
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader(f"{chart_type_left}: {_cnt_label(country_left)}")
+                render_plotly_chart_with_note(
+                    fig_left,
+                    note=get_chart_note(
+                        "Score change over time",
+                        reference_year=reference_year,
+                    ),
+                    key=f"time_change_left_{subject}_{reference_year}_{country_left}",
+                )
+
+            with right_col:
+                st.subheader(f"{chart_type_right}: {_cnt_label(country_right)}")
+                render_plotly_chart_with_note(
+                    fig_right,
+                    note=get_chart_note(
+                        "Score change over time",
+                        reference_year=reference_year,
+                    ),
+                    key=f"time_change_right_{subject}_{reference_year}_{country_right}",
+                )
+
+        # All other side-by-side combinations keep the existing logic
+        else:
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader(chart_type_left)
+                render_chart(
+                    chart_type=chart_type_left,
+                    subject=subject,
+                    selected_countries=selected_countries,
+                    selected_year=selected_year,
+                    available_years=available_years,
+                    primary_country=country_left,
+                    ref_year=ref_year,
+                    comp_year=comp_year,
+                    compact=True,
+                    widget_key="left"
+                )
+
+            with right_col:
+                st.subheader(chart_type_right)
+                render_chart(
+                    chart_type=chart_type_right,
+                    subject=subject,
+                    selected_countries=selected_countries,
+                    selected_year=selected_year,
+                    available_years=available_years,
+                    primary_country=country_right,
+                    ref_year=ref_year,
+                    comp_year=comp_year,
+                    compact=True,
+                    widget_key="right"
+                )
+
     else:
         render_chart(
-            chart_type=chart_type, 
-            subject=subject, 
+            chart_type=chart_type,
+            subject=subject,
             selected_countries=selected_countries,
-            selected_year=selected_year, 
-            available_years=available_years, 
+            selected_year=selected_year,
+            available_years=available_years,
             primary_country=primary_country,
-            ref_year=ref_year, 
+            ref_year=ref_year,
             comp_year=comp_year,
             compact=False,
             widget_key="main"
