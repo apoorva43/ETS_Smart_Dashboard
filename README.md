@@ -44,7 +44,7 @@ pip install -e .
 
 ### 3. Build the data pipeline
 
-The repository includes a seven-step pipeline that automatically downloads, merges, and optimizes PISA student and school data.
+The repository includes a multi-step pipeline that automatically downloads, merges, and optimizes PISA student and school data.
 To build the full multi-year dataset (2015, 2018, 2022):
 
 ```bash
@@ -61,7 +61,25 @@ The pipeline runs in order:
 6. **Precompute KDE and percentiles** - replaces runtime KDE fitting by precomputing KDE arrays and weighted percentiles (P10, P25, etc.) per group
 7. **Precompute standard errors** - precomputes Fay BRR standard error and 95% CI indexed by `(COUNTRY, YEAR, SUBJECT)`
 
->Note: A smaller sample of the data (countries: Canada, US; year: 2022) is available [here](https://drive.google.com/file/d/1xBM1twCzTA8ikwzmEGn7psqxDJBU0X_t/view) and can be placed in `data/raw/sampledat.csv` to run the dashboard instead.  
+> **Note on data access and speed:**  
+> If you do not want to run the full download and preprocessing pipeline (which can take several minutes), you can directly use the precomputed datasets:
+> - [pisa_all.parquet](https://drive.google.com/file/d/14agrHgJC03yvsuj5nI936EAuwVCUSb2Z/view?usp=sharing)
+> - [pisa_country_stats.parquet](https://drive.google.com/file/d/1QNSRkj7o9AFi4T0_SqHi6Wz8WGf9AMBi/view?usp=sharing)
+> - [pisa_precomputed.parquet](https://drive.google.com/file/d/1cnu-5s6SNMumJ_0UMoqdxKJalDpLllHq/view?usp=sharing)
+> - [pisa_se_stats.parquet](https://drive.google.com/file/d/1jPE7wx6gagaCUPDStSFr1OXbW9BMShwX/view?usp=sharing)
+>
+> Place these files in:
+> ```
+> data/processed/
+> ```
+>
+> Alternatively, for a lightweight demo, a smaller sample dataset (Canada + US, 2022 only) is available [here](
+> https://drive.google.com/file/d/1xBM1twCzTA8ikwzmEGn7psqxDJBU0X_t/view).
+>
+> Place it in:
+> ```
+> data/raw/sampledat.csv
+> ``` 
 
 ---
 
@@ -110,8 +128,10 @@ PYTHONPATH=. pytest tests/ \
 PYTHONPATH=. pytest tests/test_integration.py -v
 ```
 
-### Run a specific test file
+### Run a specific test file (example)
 
 ```bash
 PYTHONPATH=. pytest tests/test_data_loader.py -v
 ```
+
+Replace `test_data_loader.py` with any file in the `tests/` directory. 
