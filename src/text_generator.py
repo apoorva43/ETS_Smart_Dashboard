@@ -259,6 +259,8 @@ def scatter_correlation_text(df, subject, resource_col, resource_label, year=Non
     Computes the global country-level correlation, and dynamically 
     reports the specific values for highlighted countries.
     """
+    if df.empty or "CNT" not in df.columns:
+        return "Insufficient data to compute macro-correlation."
     subset = df.copy()
     if year and "YEAR" in df.columns:
         subset = subset[subset["YEAR"] == year]
