@@ -1048,8 +1048,15 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         except KeyError:
             cnt_se = ci_lower = ci_upper = np.nan
 
-
+        if delta_val is not None and not np.isnan(delta_val):
+            direction = "higher than" if delta_val > 0 else "lower than"
+            _add_story_finding(
+                f"{_cnt_label(story_country)}'s average {subject_label} score is "
+                f"{abs(delta_val):.0f} points {direction} the OECD average "
+                f"({cnt_mean_score:.0f} vs {oecd_mean_score:.0f})."
+            )
         cols = st.columns(3)
+        
 
         # Card 1: country average score + standard error
         with cols[0]:
