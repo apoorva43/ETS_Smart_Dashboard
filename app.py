@@ -250,8 +250,8 @@ GROUP_HOW_TO_READ = {
     "Score distribution": (
         "This curve shows the full spread of student scores. "
         "Darker, wider sections indicate where most students are concentrated (the middle 50%), "
-        "while the thinner tails show the highest and lowest achievers. "
-        "The vertical line marks the median score."
+        "while the thinner tails show the students at the lower and higher ends of the score distribution. "
+        "The vertical line marks the median score. The asterisk shows the average score for the group, which may differ from the median if the distribution is skewed."
     ),
     "Change over time": (
         "The horizontal axis shows the baseline score at each percentile. "
@@ -1080,7 +1080,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         _policy_box(
             f"{_cnt_label(story_country)}'s position relative to the OECD average "
             f"is one signal, but the spread within the country often tells a more "
-            f"important story for domestic policy. A large internal spread suggests "
+            f"important story for domestic policy. For example, a large internal spread would suggest "
             f"that raising the floor — not just the average — is the priority."
         )
 
