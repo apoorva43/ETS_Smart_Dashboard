@@ -265,6 +265,7 @@ GROUP_HOW_TO_READ = {
         "• Q4: Highest 25%<br>"
         "• Q1: Lowest 25%<br>"
         "The vertical line marks the group's median score."
+        "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
     ),
     "Immigration status": (
         "Each shape shows the score distribution for one immigration background:<br>"
@@ -272,7 +273,7 @@ GROUP_HOW_TO_READ = {
         "• First-generation: Student born abroad.<br>"
         "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
         "The vertical line marks the group's median score. "
-        "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
+        "Percentages may not add exactly to 100 percent because some students do not have enough immigration information to be grouped."
     ),
     "Gender": (
         "Each shape shows the score distribution for male and female students. "
