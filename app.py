@@ -449,7 +449,6 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
             return (
                 "This chart compares score distributions by immigration background. "
                 "Use it to compare group medians while also checking how much the distributions overlap."
-                "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
             )
 
         if group_key == "Gender":
