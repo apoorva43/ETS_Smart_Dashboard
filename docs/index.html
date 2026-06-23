@@ -4,24 +4,31 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PISA Smart Dashboard — Developer Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
   <style>
+    /* ── Tokens ── */
     :root {
-      --blue:    #0072B2;
-      --green:   #27500A;
-      --amber:   #7a4f00;
-      --bg:      #f7f9fc;
-      --border:  #dde3ea;
-      --text:    #1a1a2e;
-      --muted:   #555;
-      --code-bg: #1e1e2e;
-      --code-fg: #cdd6f4;
-      --sidebar-w: 240px;
+      --blue:        #0060df;
+      --blue-soft:   #e8f0fe;
+      --text:        #111;
+      --muted:       #555;
+      --faint:       #888;
+      --border:      #e0e0e0;
+      --bg:          #f9f9f9;
+      --code-bg:     #f3f4f6;
+      --sidebar-w:   224px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
       font-size: 15px;
-      line-height: 1.7;
+      line-height: 1.75;
       color: var(--text);
       background: #fff;
       display: flex;
@@ -33,812 +40,934 @@
       min-height: 100vh;
       background: var(--bg);
       border-right: 1px solid var(--border);
-      padding: 28px 16px;
+      padding: 36px 0 60px;
       position: sticky;
       top: 0;
       align-self: flex-start;
+      max-height: 100vh;
+      overflow-y: auto;
       flex-shrink: 0;
     }
-    nav .logo {
-      font-weight: 700;
-      font-size: 0.95rem;
-      color: var(--blue);
-      margin-bottom: 24px;
-      display: block;
-      text-decoration: none;
+
+    .nav-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text);
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+      line-height: 1.4;
     }
+
+    .nav-title span {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 400;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .nav-group-label {
+      font-size: 0.67rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--faint);
+      padding: 14px 20px 4px;
+    }
+
     nav ul { list-style: none; }
-    nav ul li { margin-bottom: 2px; }
+
     nav ul li a {
       display: block;
-      padding: 5px 10px;
-      border-radius: 5px;
+      padding: 4px 20px;
+      font-size: 0.84rem;
       color: var(--muted);
       text-decoration: none;
-      font-size: 0.875rem;
-      transition: background 0.15s, color 0.15s;
-    }
-    nav ul li a:hover, nav ul li a.active {
-      background: #e0eaf5;
-      color: var(--blue);
-    }
-    nav .section-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #aaa;
-      margin: 18px 10px 6px;
+      border-left: 2px solid transparent;
+      transition: color 0.1s;
     }
 
-    /* ── Main content ── */
+    nav ul li a:hover { color: var(--text); }
+
+    nav ul li a.active {
+      color: var(--blue);
+      border-left-color: var(--blue);
+      font-weight: 500;
+    }
+
+    /* ── Main ── */
     main {
       flex: 1;
+      min-width: 0;
+      padding: 52px 64px 120px;
       max-width: 860px;
-      padding: 48px 56px 80px;
     }
 
-    h1 { font-size: 2rem; font-weight: 800; color: var(--blue); margin-bottom: 8px; }
+    /* ── Page title ── */
+    .page-title { margin-bottom: 40px; }
+
+    .page-title h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .page-title p {
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 560px;
+    }
+
+    /* ── Section headings ── */
     h2 {
-      font-size: 1.35rem; font-weight: 700;
-      margin: 48px 0 12px;
-      padding-bottom: 6px;
-      border-bottom: 2px solid var(--border);
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 16px;
       scroll-margin-top: 24px;
     }
-    h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 8px; color: #1F4E79; }
-    h4 { font-size: 0.95rem; font-weight: 700; margin: 20px 0 6px; }
-    p { margin-bottom: 12px; color: #333; }
-    a { color: var(--blue); }
 
-    /* code */
+    h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 28px 0 8px;
+      scroll-margin-top: 24px;
+    }
+
+    /* ── Body text ── */
+    p { color: var(--muted); margin-bottom: 14px; max-width: 640px; }
+    p:last-child { margin-bottom: 0; }
+    strong { color: var(--text); font-weight: 500; }
+
+    ul, ol { padding-left: 20px; margin-bottom: 14px; max-width: 640px; }
+    li { color: var(--muted); margin-bottom: 5px; }
+    li strong { color: var(--text); }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Section wrapper ── */
+    section {
+      padding-top: 52px;
+      border-top: 1px solid var(--border);
+      margin-top: 52px;
+    }
+
+    section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+
+    /* ── Code ── */
     code {
+      font-family: "SF Mono", "Fira Code", "Menlo", monospace;
+      font-size: 0.82em;
+      background: var(--code-bg);
+      border-radius: 3px;
+      padding: 1px 5px;
+      color: #c0392b;
+    }
+
+    pre {
+      background: #1c1c1e;
+      color: #d4d4d4;
+      border-radius: 6px;
+      padding: 18px 22px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      max-width: 640px;
+    }
+
+    pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+    /* ── Callouts ── */
+    .callout {
+      border-left: 3px solid var(--border);
+      padding: 12px 16px;
+      margin: 16px 0;
+      max-width: 640px;
+      font-size: 0.875rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .callout strong { display: block; margin-bottom: 2px; font-size: 0.85rem; color: var(--text); }
+    .callout p { font-size: 0.875rem; max-width: none; margin-bottom: 6px; color: var(--muted); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout code { font-size: 0.8em; }
+
+    .callout.note  { border-left-color: var(--blue); background: var(--blue-soft); }
+    .callout.warn  { border-left-color: #d97706; background: #fffbeb; }
+    .callout.tip   { border-left-color: #16a34a; background: #f0fdf4; }
+    .callout.stop  { border-left-color: #dc2626; background: #fef2f2; }
+
+    .callout.note  strong { color: #0050c0; }
+    .callout.warn  strong { color: #92400e; }
+    .callout.tip   strong { color: #15803d; }
+    .callout.stop  strong { color: #b91c1c; }
+
+    /* ── Pipeline steps ── */
+    .pipeline {
+      margin: 20px 0 28px;
+      max-width: 640px;
+    }
+
+    .pipeline-step {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 0 14px;
+      position: relative;
+    }
+
+    .pipeline-step:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 14px;
+      top: 28px;
+      bottom: 0;
+      width: 1px;
+      background: var(--border);
+      transform: translateX(-50%);
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--text);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 10px;
       font-family: "SF Mono", "Fira Code", monospace;
-      font-size: 0.85em;
-      background: #eef2f8;
+    }
+
+    .step-num.accent { background: var(--blue); }
+
+    .step-body {
+      padding: 10px 0 28px;
+    }
+
+    .step-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+
+    .step-title em {
+      font-style: normal;
+      font-weight: 400;
+      font-size: 0.78rem;
+      color: var(--faint);
+      margin-left: 8px;
+    }
+
+    .step-desc {
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .step-desc code { font-size: 0.8em; }
+
+    /* ── File table ── */
+    .file-table {
+      width: 100%;
+      max-width: 640px;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+      margin: 14px 0 20px;
+    }
+
+    .file-table thead th {
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--faint);
+      padding: 6px 12px 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .file-table tbody tr { border-bottom: 1px solid var(--border); }
+    .file-table tbody tr:last-child { border-bottom: none; }
+
+    .file-table td {
+      padding: 10px 12px 10px 0;
+      vertical-align: top;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .file-table td:first-child {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.8rem;
+      color: #c0392b;
+      white-space: nowrap;
+      padding-right: 24px;
+    }
+
+    /* ── Repo tree ── */
+    .repo-tree {
+      background: #1c1c1e;
+      border-radius: 6px;
+      padding: 18px 22px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.8rem;
+      line-height: 1.9;
+      color: #d4d4d4;
+      overflow-x: auto;
+      max-width: 640px;
+      margin: 12px 0 20px;
+    }
+
+    .tree-key  { color: #7fc8f8; }
+    .tree-dim  { color: #666; }
+    .tree-note { color: #888; font-size: 0.74rem; }
+
+    /* ─── TWO COLUMN LAYOUT ─── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      max-width: 680px;
+      margin: 16px 0;
+    }
+
+    .info-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+
+    .info-card-label {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--light-muted);
+      margin-bottom: 6px;
+    }
+
+    .info-card-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      font-family: var(--serif);
+      color: var(--navy);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .info-card-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .info-card-sub code {
+      background: var(--teal-pale);
+      color: var(--teal-dim);
       border-radius: 3px;
       padding: 1px 5px;
     }
-    pre {
-      background: var(--code-bg);
-      color: var(--code-fg);
-      border-radius: 8px;
-      padding: 18px 20px;
-      overflow-x: auto;
-      margin: 14px 0 20px;
-      font-size: 0.85rem;
-      line-height: 1.6;
-    }
-    pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
 
-    /* tables */
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-      margin: 16px 0 24px;
+    /* ─── STAT METHOD CARDS ─── */
+    .method-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      max-width: 680px;
+      margin: 18px 0;
     }
-    th {
+
+    .method-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .method-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--teal);
+    }
+
+    .method-card-num {
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--light-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .method-card h4 {
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+
+    .method-card p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: none;
+      margin: 0;
+    }
+
+    /* ── Extend pattern ── */
+    .pattern {
       background: var(--bg);
       border: 1px solid var(--border);
-      padding: 8px 12px;
-      text-align: left;
-      font-weight: 600;
-      color: #444;
-    }
-    td {
-      border: 1px solid var(--border);
-      padding: 8px 12px;
-      vertical-align: top;
-    }
-    tr:nth-child(even) td { background: #fafbfc; }
-
-    /* callouts */
-    .callout {
       border-radius: 6px;
-      padding: 14px 16px;
-      margin: 16px 0;
+      padding: 18px 20px;
+      max-width: 640px;
+      margin: 14px 0;
+    }
+
+    .pattern h4 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .pattern ol {
+      padding-left: 18px;
+      margin: 0;
+    }
+
+    .pattern ol li {
+      font-size: 0.86rem;
+      margin-bottom: 6px;
+    }
+
+    /* ── Troubleshoot ── */
+    .trouble-item {
+      border-top: 1px solid var(--border);
+      padding: 16px 0;
+      max-width: 640px;
+    }
+
+    .trouble-item:last-child { border-bottom: 1px solid var(--border); }
+
+    .trouble-q {
       font-size: 0.9rem;
-      line-height: 1.55;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
     }
-    .callout.blue  { background: #e8f4fd; border-left: 4px solid var(--blue);  color: #1a3a52; }
-    .callout.green { background: #EAF3DE; border-left: 4px solid var(--green); color: #27500A; }
-    .callout.amber { background: #fdf4e3; border-left: 4px solid #c97a00;      color: #5a3a00; }
 
-    /* badges */
-    .badge {
-      display: inline-block;
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 20px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-right: 4px;
+    .trouble-a {
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.65;
     }
-    .badge.blue  { background: #d0e8f7; color: var(--blue); }
-    .badge.green { background: #d5edbe; color: var(--green); }
-    .badge.gray  { background: #e8e8e8; color: #555; }
 
-    /* section anchors */
-    section { margin-bottom: 12px; }
+    .trouble-a p { font-size: 0.86rem; max-width: none; margin-bottom: 6px; color: var(--muted); }
+    .trouble-a p:last-child { margin-bottom: 0; }
+    .trouble-a pre { margin: 8px 0; }
 
-    /* pipeline diagram */
-    .pipeline {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin: 20px 0;
+    /* ── Deploy grid ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      max-width: 640px;
+      margin: 14px 0;
     }
-    .pipe-step {
-      background: #e8f4fd;
-      border: 1px solid #b3d9f5;
+
+    .two-col-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 8px 14px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--blue);
-      white-space: nowrap;
+      padding: 16px 18px;
     }
-    .pipe-arrow { color: #aaa; font-size: 1.1rem; }
 
-    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 32px; }
+    .two-col-item h4 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
 
-    hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+    .two-col-item p {
+      font-size: 0.84rem;
+      max-width: none;
+      margin: 0;
+    }
 
-    ul, ol { padding-left: 22px; margin-bottom: 12px; }
-    li { margin-bottom: 4px; }
+    /* ── Footer ── */
+    .page-footer {
+      margin-top: 80px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--faint);
+      max-width: 640px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 860px) {
+      nav { display: none; }
+      main { padding: 32px 24px 80px; }
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
   </style>
 </head>
 <body>
 
 <!-- ── Sidebar ── -->
-<nav>
-  <a class="logo" href="#">📊 PISA Dashboard</a>
-  <div class="section-label">Getting started</div>
+<nav aria-label="Documentation Navigation">
+  <div class="nav-title">
+    PISA Data Dashboard
+    <span>Developer Documentation</span>
+  </div>
+
+  <div class="nav-group-label">Getting started</div>
   <ul>
     <li><a href="#overview">Overview</a></li>
-    <li><a href="#setup">Setup</a></li>
-    <li><a href="#running">Running the app</a></li>
+    <li><a href="#setup">Environment setup</a></li>
+    <li><a href="#running">Running locally</a></li>
+    <li><a href="#deploy">Posit Cloud &amp; S3</a></li>
   </ul>
-  <div class="section-label">Data pipeline</div>
+
+  <div class="nav-group-label">Pipeline</div>
   <ul>
-    <li><a href="#pipeline">Pipeline steps</a></li>
-    <li><a href="#makefile">Makefile reference</a></li>
+    <li><a href="#pipeline">Data pipeline</a></li>
     <li><a href="#outputs">Output files</a></li>
   </ul>
-  <div class="section-label">Architecture</div>
+
+  <div class="nav-group-label">Architecture</div>
   <ul>
-    <li><a href="#repo">Repo layout</a></li>
-    <li><a href="#backend">Backend</a></li>
-    <li><a href="#frontend">Frontend</a></li>
+    <li><a href="#backend">Backend &amp; caching</a></li>
+    <li><a href="#frontend">Frontend &amp; charts</a></li>
     <li><a href="#stats">Statistical methods</a></li>
   </ul>
-  <div class="section-label">Extending</div>
+
+  <div class="nav-group-label">Extending</div>
   <ul>
     <li><a href="#new-cycle">New PISA cycle</a></li>
     <li><a href="#new-chart">New chart type</a></li>
-    <li><a href="#new-group">New equity group</a></li>
   </ul>
-  <div class="section-label">Deployment</div>
-  <ul>
-    <li><a href="#deploy">Posit Cloud + S3</a></li>
-    <li><a href="#troubleshoot">Troubleshooting</a></li>
-  </ul>
+
 </nav>
 
 <!-- ── Main ── -->
 <main>
 
-  <h1>PISA Smart Dashboard</h1>
-  <p class="subtitle">Developer documentation &amp; handoff guide — ETS Capstone 2025</p>
-
-  <div class="callout blue">
-    <strong>Quick start:</strong> &nbsp;
-    <code>make setup &amp;&amp; make all-data &amp;&amp; make run</code>
-    — then open <code>http://localhost:8501</code>.
+  <div class="page-title">
+    <h1>PISA Data Dashboard</h1>
+    <p>Data Product Handoff Guide</p>
   </div>
+
 
   <!-- ── Overview ── -->
   <section id="overview">
     <h2>Overview</h2>
-    <p>
-      The PISA Smart Dashboard is a Streamlit web application that visualises full student score
-      distributions from the 2015, 2018, and 2022 PISA cycles across 81 countries. Rather than
-      reporting country averages, it surfaces the distribution broken down by percentile,
-      socioeconomic background, immigration status, school type, and location.
-    </p>
-    <p>Two modes are available:</p>
-    <ul>
-      <li><strong>📖 Data Story</strong> — a guided four-chapter narrative for policymakers (OECD standing → trends → equity gaps → school context), with auto-generated key findings and policy notes.</li>
-      <li><strong>🔍 Explore</strong> — a free-form analyst view with side-by-side comparison, intersectional heatmap, and country scatterplot.</li>
-    </ul>
-    <p>
-      The backend uses <strong>DuckDB + Parquet</strong> to push filters and aggregations to the
-      data layer, so individual chart queries load only the columns and rows they need rather than
-      the full 1.7-million-row dataset.
-    </p>
-  </section>
 
-  <hr />
+    <p>Educational assessment data is frequently reported as static average scores, omitting crucial context and leading policymakers to attribute performance disparities to demographic groups rather than systemic inequities. To address this, we developed an interactive data product for the Educational Testing Service (ETS) that visualizes full score distributions and contextual variables using Programme for International Student Assessment (PISA) data.</p>
+
+    <p>The dashboard draws on student records from the 2015, 2018, and 2022 PISA cycles. Rather than reporting country averages alone, it surfaces the full score distribution, broken down by percentile, socioeconomic background, immigration status, school type, and location. A Parquet and DuckDB backend keeps query times low even at this scale, by pushing filters and aggregations down to the data layer before results reach the application.</p>
+
+    <p>The tool offers two modes: an open Explore view for analysts who want to slice the data themselves, and a guided Story mode that walks policymakers through key patterns with contextual framing. Sampling weights and plausible values are applied throughout, following PISA's methodology. The goal is to make it easier to ask more specific questions, not just how a country scores on average, but how different groups of students are distributed across the full range of performance.</p>
+
+  </section>
 
   <!-- ── Setup ── -->
   <section id="setup">
-    <h2>Setup</h2>
+    <h2>Environment setup</h2>
 
-    <h3>Prerequisites</h3>
-    <ul>
-      <li>Conda (Miniforge / Anaconda)</li>
-      <li>Make</li>
-      <li>~15 GB free disk space for raw data + processed Parquet files</li>
-      <li>Internet access for the initial OECD data download</li>
-    </ul>
+    <p>You will need <strong>Conda</strong> (Miniforge or Anaconda) and roughly <strong>6-7 GB of free disk space</strong> for raw data and processed Parquet files.</p>
 
-    <h3>1 — Clone and create the environment</h3>
-    <pre><code>git clone https://github.com/your-org/pisa-dashboard.git
-cd pisa-dashboard
-make setup</code></pre>
-    <p>This runs <code>conda env create -f environment.yml</code> and <code>pip install -e .</code>. Then activate:</p>
-    <pre><code>conda activate ets_capstone</code></pre>
+    <pre><code># Clone the repository
+git clone https://github.com/apoorva43/ETS_Smart_Dashboard
+cd ETS_Smart_Dashboard
 
-    <h3>2 — Build the full data pipeline</h3>
-    <pre><code>make all-data</code></pre>
-    <p>This runs all 7 pipeline steps end-to-end. See the <a href="#pipeline">Pipeline steps</a> section for details on what each step does and how long it takes.</p>
+# Set up the environment
+conda env create -f environment.yml
+conda activate ets_capstone
+pip install -e .
 
-    <div class="callout amber">
-      <strong>⚠️ Time estimate:</strong> Steps 1–3 download ~3 GB from the OECD and take 20–40 minutes. Steps 6–7 are CPU-intensive and take ~10–15 minutes each on a laptop.
+# Run the data pipeline
+make data
+</code></pre>
+
+    <div class="callout tip">
+      <strong>Note</strong>
+      <p>See the Data pipeline section below for details on what each step does and how long each step takes. The raw PISA data files are not committed to the repo, they are downloaded as part of the data pipeline. Steps 1-3 download ~3-4 GB data and takes~15-20 minutes. Steps 6 and 7 (precomputations) are compute intenstive and take around 5-10 minutes. </p>
     </div>
 
-    <h3>3 — Run the app</h3>
-    <pre><code>make run
-# or directly:
-PYTHONPATH=. streamlit run app.py</code></pre>
-    <p>The app opens at <code>http://localhost:8501</code>.</p>
+    <h3>Keeping dependencies in sync</h3>
+    <p>The conda environment and the Posit deployment use separate dependency files. When you add a package, update both:</p>
+    <ul>
+      <li><code>environment.yml</code> - for local development via conda</li>
+      <li><code>requirements.txt</code> - for Posit Cloud, which uses pip and reads this file on deploy</li>
+    </ul>
+    <p>Failing to sync <code>requirements.txt</code> is the most common cause of a broken deployment.</p>
   </section>
-
-  <hr />
 
   <!-- ── Running ── -->
   <section id="running">
-    <h2>Running the app</h2>
-    <p>
-      On startup, <code>app.py</code> calls <code>get_meta()</code>, <code>get_precomputed()</code>,
-      and <code>get_se_lookup()</code>. Each is decorated with <code>@st.cache_data(ttl=3600)</code>
-      and tries the local <code>data/processed/</code> path first, falling back to S3 if the file
-      is not present locally.
-    </p>
-    <p>
-      All chart data is fetched on demand via the <code>fetch(countries, year, cols)</code>
-      cached wrapper, which calls <code>query_pisa()</code> in <code>src/data_loader.py</code>.
-      Cache keys are tuples (not lists) to ensure hashability.
-    </p>
-    <div class="callout green">
-      <strong>Cache tip:</strong> If you update a processed Parquet file and the app shows stale
-      data, click the hamburger menu → <em>Clear cache</em> and hard-refresh the browser.
-    </div>
+    <h2>Running locally</h2>
+
+    <pre><code>PYTHONPATH=. streamlit run app.py</code></pre>
+
+    <p>The app opens at <code>http://localhost:8501</code>. On startup it loads three small pre-aggregated files - country metadata for the sidebar, precomputed KDE and weighted percentile stats, and the Standard Error lookup. Each of these is cached with <code>@st.cache_data</code> for the session. Chart data is fetched on demand via DuckDB queries against <code>pisa_all.parquet</code>, loading only the columns and rows each chart needs.</p>
+
+    <p><code>PYTHONPATH=.</code> ensures <code>src/</code> is importable without installing the package each time. If your IDE already manages <code>PYTHONPATH</code>, you can omit it.</p>
+
   </section>
 
-  <hr />
+
+  <!-- ── Deploy ── -->
+  <section id="deploy">
+    <h2>Deployment on Posit Cloud &amp; S3</h2>
+
+    <div class="two-col">
+      <div class="two-col-item">
+        <h4>Posit Cloud</h4>
+        <p>Connected to the GitHub repo; auto-deploys on push to the <code>dev</code>. Dependencies read from <code>requirements.txt</code>. Trigger a manual redeploy from the Posit dashboard if the auto-deploy doesn't fire.</p>
+      </div>
+      <div class="two-col-item">
+        <h4>S3 bucket</h4>
+        <p>The current S3 bucket at <code>pisa-dashboard-data.s3.ca-central-1.amazonaws.com</code> is valid until <strong>10 August 2026</strong>. Contains four processed Parquet files. App tries local <code>data/processed/</code> first, falls back to S3. </p>
+      </div>
+    </div>
+
+    <h3>Uploading updated files</h3>
+    <p>After rebuilding any processed file locally, upload the updated version to the bucket so the deployed instance picks it up.</p>
+
+    <h3>Changing the S3 base URL</h3>
+    <p>The S3 bucket URL is set in two places, we need to update both when it changes:</p>
+    <ul>
+      <li><code>app.py</code> — <code>S3_BASE_URL</code> constant near the top of the file</li>
+      <li><code>src/data_loader.py</code> — same constant used in the fallback fetch functions</li>
+    </ul>
+   </section>
 
   <!-- ── Pipeline ── -->
   <section id="pipeline">
     <h2>Data pipeline</h2>
 
+    <p>Everything runs through <code>src/build_data.py</code>, a Click CLI orchestrated by the Makefile. <code>make data</code> executes all seven steps in dependency order. Make only re-runs a step if its output file is missing or its inputs have changed.</p>
+
     <div class="pipeline">
-      <div class="pipe-step">① Download</div><div class="pipe-arrow">→</div>
-      <div class="pipe-step">② Unzip</div><div class="pipe-arrow">→</div>
-      <div class="pipe-step">③ Convert</div><div class="pipe-arrow">→</div>
-      <div class="pipe-step">④ Merge</div><div class="pipe-arrow">→</div>
-      <div class="pipe-step">⑤ Country stats</div><div class="pipe-arrow">→</div>
-      <div class="pipe-step">⑥ Precompute</div><div class="pipe-arrow">→</div>
-      <div class="pipe-step">⑦ SE stats</div>
+
+      <div class="pipeline-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Download</div>
+          <p class="step-desc">Pulls the student and school questionnaire zip archives from OECD URLs defined in <code>src/data_loader.py</code>. It includes the 2015, 2018, and 2022 PISA cycles.</p>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Unzip</div>
+          <p class="step-desc">Unzips the downloaded PISA archive into its parent directory.</p>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Convert to Parquet</div>
+          <p class="step-desc">Merges student and school files on the school identifier (<code>CNTSCHID</code>), selects the 133 relevant columns (30 plausible values, sampling and replicate weights, equity context variables), and writes a per-year Parquet file to <code>data/processed/pisa_YYYY.parquet</code>.</p>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Merge cycles</div>
+          <p class="step-desc">Concatenates the three per-year Parquet files into <code>pisa_all.parquet</code> with a <code>YEAR</code> column added. This is the file all runtime chart queries hit via DuckDB.</p>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-title">Country stats</div>
+          <p class="step-desc">Computes one summary row per country-year (weighted means, OECD membership flag) and writes <code>pisa_country_stats.parquet</code>. It's used only to populate the sidebar and is never passed to a chart function.</p>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <div class="step-title">Precompute KDE + weighted percentiles</div>
+          <p class="step-desc">For every combination of country x year x subject x group (gender, immigration status, SES quartile, school type, school location), fits Gaussian KDE curves across all ten plausible values and computes weighted P10/P25/P50/P75/P90. Results are saved in <code>pisa_precomputed.parquet</code> so the density charts render from lookup rather than fitting KDEs at runtime. Run with <code>python -W ignore</code> to suppress scipy bandwidth warnings on small groups.</p>
+        </div>
+      </div>
+
+      <div class="pipeline-step">
+        <div class="step-num">7</div>
+        <div class="step-body">
+          <div class="step-title">Standard errors + 95% CI</div>
+          <p class="step-desc">Computes Fay BRR standard errors and 95% confidence intervals for every country x year x subject combination and writes <code>pisa_se_stats.parquet</code>, indexed for O(1) lookup at render time. This replaces loading all 80 replicate weight columns per chart render.</p>
+        </div>
+      </div>
+
     </div>
 
-    <p>All steps are driven by <code>src/build_data.py</code> (a Click CLI) and orchestrated by the Makefile. Steps 1–5 are chained as Make file-based dependencies; Steps 6–7 are separate targets.</p>
+    <h3>Running individual steps</h3>
+    <p>You can bypass Make and run any step directly through the CLI:</p>
 
-    <table>
-      <tr><th>Step</th><th>Make target</th><th>CLI command</th><th>Output</th><th>Notes</th></tr>
-      <tr>
-        <td><span class="badge blue">1</span> Download</td>
-        <td>auto (via <code>make data</code>)</td>
-        <td><code>download --year YYYY --dataset student/school</code></td>
-        <td><code>data/raw/YYYY/*/pisa_*.zip</code></td>
-        <td>Downloads from OECD URLs defined in <code>PISA_URLS</code></td>
-      </tr>
-      <tr>
-        <td><span class="badge blue">2</span> Unzip</td>
-        <td>auto</td>
-        <td><code>unzip --year YYYY --dataset student/school</code></td>
-        <td>Extracted <code>.sav</code> files</td>
-        <td>Touch-file sentinel <code>.unzipped</code> prevents re-extraction</td>
-      </tr>
-      <tr>
-        <td><span class="badge blue">3</span> Convert</td>
-        <td>auto</td>
-        <td><code>convert --year YYYY</code></td>
-        <td><code>data/processed/pisa_YYYY.parquet</code></td>
-        <td>Merges student + school on <code>CNTSCHID</code>; selects 133 columns</td>
-      </tr>
-      <tr>
-        <td><span class="badge blue">4</span> Merge</td>
-        <td>auto</td>
-        <td><code>merge --years 2015,2018,2022</code></td>
-        <td><code>data/processed/pisa_all.parquet</code></td>
-        <td>Concatenates per-year files; adds <code>YEAR</code> column</td>
-      </tr>
-      <tr>
-        <td><span class="badge blue">5</span> Country stats</td>
-        <td>auto</td>
-        <td><code>country-stats</code></td>
-        <td><code>data/processed/pisa_country_stats.parquet</code></td>
-        <td>One row per country-year; used for sidebar population only</td>
-      </tr>
-      <tr>
-        <td><span class="badge green">6</span> Precompute</td>
-        <td><code>make precompute</code></td>
-        <td><code>precompute</code></td>
-        <td><code>data/processed/pisa_precomputed.parquet</code></td>
-        <td>KDE arrays + P10/P25/P50/P75/P90 per group; replaces runtime KDE fitting</td>
-      </tr>
-      <tr>
-        <td><span class="badge green">7</span> SE stats</td>
-        <td><code>make se</code></td>
-        <td><code>standarderror</code></td>
-        <td><code>data/processed/pisa_se_stats.parquet</code></td>
-        <td>Fay BRR SE + 95% CI indexed by <code>(CNT, YEAR, SUBJECT)</code></td>
-      </tr>
-    </table>
-
-    <h3>Running steps individually</h3>
-    <pre><code># Download only 2022 school data
-python src/build_data.py download --year 2022 --dataset school
-
-# Re-run SE computation only
+    <pre><code># Re-run only the SE computation
 python src/build_data.py standarderror
 
-# Rebuild precomputed file with a custom output path
-python src/build_data.py precompute --out-path data/processed/pisa_precomputed_v2.parquet</code></pre>
+# Re-run only precompute with a custom output path
+python -W ignore src/build_data.py precompute \
+    --out-path data/processed/pisa_precomputed_v2.parquet
+
+</code></pre>
   </section>
 
-  <hr />
-
-  <!-- ── Makefile ── -->
-  <section id="makefile">
-    <h2>Makefile reference</h2>
-    <table>
-      <tr><th>Target</th><th>Description</th></tr>
-      <tr><td><code>make setup</code></td><td>Create conda env + <code>pip install -e .</code></td></tr>
-      <tr><td><code>make data</code></td><td>Pipeline Steps 1–5 (download → country stats)</td></tr>
-      <tr><td><code>make precompute</code></td><td>Step 6 — KDE + group percentile pre-aggregation</td></tr>
-      <tr><td><code>make se</code></td><td>Step 7 — BRR standard errors + 95% CIs</td></tr>
-      <tr><td><code>make all-data</code></td><td>All 7 pipeline steps end-to-end</td></tr>
-      <tr><td><code>make run</code></td><td>Launch Streamlit app on port 8501</td></tr>
-      <tr><td><code>make stats</code></td><td>Compute inline stats for the report</td></tr>
-      <tr><td><code>make figures</code></td><td>Generate static report figures</td></tr>
-      <tr><td><code>make report</code></td><td>Render Quarto proposal PDF</td></tr>
-      <tr><td><code>make clean</code></td><td>Remove generated stats, figures, and PDF</td></tr>
-      <tr><td><code>make clean-raw</code></td><td>Remove all raw downloaded data</td></tr>
-    </table>
-  </section>
-
-  <hr />
-
-  <!-- ── Output files ── -->
+  <!-- ── Outputs ── -->
   <section id="outputs">
     <h2>Output files</h2>
-    <table>
-      <tr><th>File</th><th>Used by</th><th>Description</th></tr>
-      <tr>
-        <td><code>pisa_YYYY.parquet</code></td>
-        <td>Step 4 merge</td>
-        <td>Per-cycle student-level data, 133 columns, full weight set</td>
-      </tr>
-      <tr>
-        <td><code>pisa_all.parquet</code></td>
-        <td>All runtime <code>fetch()</code> calls</td>
-        <td>Combined multi-cycle file queried by DuckDB at render time</td>
-      </tr>
-      <tr>
-        <td><code>pisa_country_stats.parquet</code></td>
-        <td><code>get_meta()</code></td>
-        <td>One row per country-year with weighted means; populates sidebar only</td>
-      </tr>
-      <tr>
-        <td><code>pisa_precomputed.parquet</code></td>
-        <td><code>get_precomputed()</code></td>
-        <td>P10–P90 + serialised KDE arrays per (CNT, YEAR, SUBJECT, GROUP_TYPE, GROUP_LABEL). Eliminates runtime KDE fitting for teardrop charts.</td>
-      </tr>
-      <tr>
-        <td><code>pisa_se_stats.parquet</code></td>
-        <td><code>get_se_lookup()</code></td>
-        <td>Fay BRR SE + 95% CI indexed by (CNT, YEAR, SUBJECT). O(1) lookup; replaces loading 91 columns at render time.</td>
-      </tr>
+
+    <p>All the parquet files are saved in <code>data/processed/</code> and are mirrored to S3 for the deployed environment. Neither raw <code>.sav</code> files nor processed Parquet files are committed to the repo - the S3 fallback in <code>data_loader.py</code> handles this transparently on Posit.</p>
+
+    <table class="file-table">
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>pisa_YYYY.parquet</td>
+          <td>Per-cycle intermediate files (133 columns). Input to Step 4 of the data pipeline. This file is neither read at runtime nor is it uploaded to S3.</td>
+        </tr>
+        <tr>
+          <td>pisa_all.parquet</td>
+          <td>Combined multi-cycle file with a <code>YEAR</code> column. Every runtime chart query hits this via DuckDB, loading only the specific rows and columns requested.</td>
+        </tr>
+        <tr>
+          <td>pisa_country_stats.parquet</td>
+          <td>One row per country-year: weighted means and OECD membership flag. This is loaded once on startup for the sidebar and is never passed to a chart function.</td>
+        </tr>
+        <tr>
+          <td>pisa_precomputed.parquet</td>
+          <td>Serialised Gaussian KDE arrays and P10-P90 for every group combination. This eliminates all runtime KDE fitting for the density charts.</td>
+        </tr>
+        <tr>
+          <td>pisa_se_stats.parquet</td>
+          <td>Fay BRR standard errors and 95% CIs, indexed by <code>(CNT, YEAR, SUBJECT)</code> for O(1) lookup.</td>
+        </tr>
+      </tbody>
     </table>
+
   </section>
 
-  <hr />
-
-  <!-- ── Repo layout ── -->
+  <!-- ── Repo ── 
   <section id="repo">
-    <h2>Repository layout</h2>
-    <pre><code>.
-├── app.py                          # Streamlit entry point
-├── src/
-│   ├── build_data.py               # Click CLI for the data pipeline
-│   ├── data_loader.py              # DuckDB query helpers + download/ETL functions
-│   ├── precompute.py               # KDE + percentile pre-aggregation (Step 6)
-│   ├── pisa_stats.py               # Weighted percentiles, BRR SE, PV averaging
-│   ├── plotting_plotly.py          # All Plotly chart functions
-│   ├── text_generator.py           # Auto-generated chart narratives
-│   ├── compute_stats.py            # Inline stats for the Quarto report
-│   ├── figures.py                  # Static figures for the report
-│   └── config.py                   # SUBJECTS, PALETTE, COUNTRY_NAMES, GROUP_OPTIONS
-├── data/
-│   ├── raw/                        # Downloaded .sav files (not committed)
-│   └── processed/                  # Generated Parquet files (not committed)
-├── notebooks/                      # Exploratory analysis
-│   ├── equity_analysis.ipynb
-│   ├── standard_error.ipynb        # BRR SE validation vs R reference
-│   └── uncertainty_visualization.ipynb
-├── reports/
-│   ├── proposal/
-│   └── final/
-├── scripts/verify_parquet.py       # Schema validation helper
-├── Makefile
-├── environment.yml
-├── requirements.txt                # Posit Cloud deployment deps
-└── pyproject.toml</code></pre>
-  </section>
+    <h2>Repo layout</h2>
 
-  <hr />
+    <div class="repo-tree" role="img" aria-label="Repository directory structure">
+<span class="tree-key">.</span>
+├── <span class="tree-key">app.py</span>                      <span class="tree-note"># Streamlit entry point — routing, sidebar, render_chart()</span>
+├── src/
+│   ├── <span class="tree-key">build_data.py</span>           <span class="tree-note"># Click CLI: download → unzip → convert → merge → stats → precompute → se</span>
+│   ├── <span class="tree-key">data_loader.py</span>          <span class="tree-note"># DuckDB query helpers, ETL, S3 fallback logic</span>
+│   ├── precompute.py           <span class="tree-note"># KDE + percentile pre-aggregation (Step 6)</span>
+│   ├── <span class="tree-key">pisa_stats.py</span>           <span class="tree-note"># Weighted percentiles, Fay BRR SE, plausible value averaging</span>
+│   ├── <span class="tree-key">plotting_plotly.py</span>      <span class="tree-note"># Every chart function — returns go.Figure</span>
+│   ├── text_generator.py       <span class="tree-note"># Auto-generated chart narrative text</span>
+│   ├── compute_stats.py        <span class="tree-note"># Inline stats for the Quarto report</span>
+│   ├── figures.py              <span class="tree-note"># Static figures for the final report</span>
+│   └── <span class="tree-key">config.py</span>               <span class="tree-note"># SUBJECTS, PALETTE, COUNTRY_NAMES, GROUP_OPTIONS</span>
+├── data/
+│   ├── raw/                    <span class="tree-dim"># Downloaded .sav files — not committed</span>
+│   └── processed/              <span class="tree-dim"># Generated Parquet files — not committed</span>
+├── notebooks/                  <span class="tree-note"># Exploratory analysis and SE validation vs R</span>
+├── reports/                    <span class="tree-note"># proposal/ and final/ deliverables</span>
+├── scripts/verify_parquet.py   <span class="tree-note"># Schema validation helper</span>
+├── Makefile
+├── environment.yml             <span class="tree-note"># Conda env — local dev</span>
+└── requirements.txt            <span class="tree-note"># Pip deps for Posit Cloud deployment</span>
+    </div>
+  </section>
+  -->
 
   <!-- ── Backend ── -->
   <section id="backend">
-    <h2>Backend architecture</h2>
+    <h2>Backend &amp; caching</h2>
 
-    <h3>Query pattern</h3>
-    <p>
-      Every chart calls the cached <code>fetch(countries, year, cols)</code> wrapper in
-      <code>app.py</code>, which delegates to <code>query_pisa()</code> in
-      <code>src/data_loader.py</code>. DuckDB reads only the requested columns and rows from
-      <code>pisa_all.parquet</code> — no full dataset is loaded into memory.
-    </p>
-    <pre><code># Example: fetch maths PVs + weight for Canada in 2022
-pv_cols = tuple(f"PV{i}MATH" for i in range(1, 11))
-df = fetch(("CAN",), 2022, ("CNT", "YEAR", "W_FSTUWT") + pv_cols)</code></pre>
+    <p>The backend is built around the principle of never loading more data than a single chart needs. Every chart calls <code>fetch(countries, year, cols)</code> in <code>app.py</code>, which wraps <code>query_pisa()</code> in <code>src/data_loader.py</code>. DuckDB reads only the requested columns and rows from <code>pisa_all.parquet</code> - the full 1.7-million-row dataset is never loaded into memory.</p>
 
-    <h3>Cache hierarchy</h3>
-    <p>Three layers of caching reduce repeated computation:</p>
-    <ol>
-      <li><strong>Streamlit <code>@st.cache_data</code></strong> — in-memory cache of DataFrames, keyed by (countries, year, cols) tuples. TTL = 1 hour.</li>
-      <li><strong><code>persist="disk"</code></strong> — survives app restarts on Posit Cloud.</li>
-      <li><strong>Precomputed Parquet files</strong> — KDE arrays and SE stats are computed once at build time; the app does zero KDE fitting or BRR computation at render time.</li>
-    </ol>
+    <p>Arguments to <code>fetch()</code> are typed as tuples rather than lists because <code>@st.cache_data</code> requires hashable arguments. The cache has a one-hour TTL.</p>
+
+    <pre><code># Fetch math PVs + weight for Canada, 2022
+pv_cols   = tuple(f"PV{i}MATH" for i in range(1, 11))
+base_cols = ("CNT", "W_FSTUWT", "ESCS", "IMMIG")
+
+df = fetch(
+    countries=("CAN",),
+    year=2022,
+    cols=base_cols + pv_cols,
+)</code></pre>
+
+    <h3>Two-layer cache</h3>
+    <ul>
+      <li><strong>Streamlit <code>@st.cache_data</code></strong> - in-memory DataFrame cache keyed by <code>(countries, year, cols)</code> tuples. <code>ttl=3600</code>.</li>
+      <li><strong>Precomputed Parquet artefacts</strong> - <code>pisa_precomputed.parquet</code> removes all runtime KDE fitting; <code>pisa_se_stats.parquet</code> removes loading 80 replicate weight columns per render. Computed once in the pipeline, read as O(1) lookups at runtime.</li>
+    </ul>
 
     <h3>S3 fallback</h3>
-    <p>
-      <code>get_meta()</code>, <code>get_precomputed()</code>, and <code>get_se_lookup()</code>
-      each try the local <code>data/processed/</code> path first. If the file does not exist
-      (e.g. on a fresh Posit deployment), they fall back to:
-    </p>
-    <pre><code>S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"</code></pre>
-    <p>
-      When you update any processed file, upload it to the S3 bucket root so deployed instances
-      pick it up automatically.
-    </p>
-  </section>
+    <p><code>get_meta()</code>, <code>get_precomputed()</code>, and <code>get_se_lookup()</code> each try the local <code>data/processed/</code> path first. If the file isn't there (the normal case on Posit, since processed files aren't committed), they fall back to <code>S3_BASE_URL</code>.</p>
 
-  <hr />
+  </section>
 
   <!-- ── Frontend ── -->
   <section id="frontend">
-    <h2>Frontend architecture</h2>
+    <h2>Frontend &amp; charts</h2>
 
-    <h3>App routing</h3>
-    <p>
-      <code>app.py</code> uses a sidebar radio to switch between <strong>Data Story</strong> and
-      <strong>Explore</strong> modes. The Data Story calls <code>render_story_tab()</code>;
-      Explore calls <code>render_chart()</code> for single-panel or the <code>if side_by_side:</code>
-      block for two-panel views.
-    </p>
+    <p><code>app.py</code> has three main jobs: routing between the two modes, managing sidebar state, and calling the right chart function. The Data Story calls <code>render_story_tab()</code>, which walks through the four chapters in order. Explore calls <code>render_chart()</code>, which dispatches on <code>chart_type</code>.</p>
 
-    <h3>Chart rendering flow</h3>
-    <pre><code>render_chart(chart_type, ...)
-  └── fetch(countries, year, cols)          # DuckDB query, cached
-  └── plot_*() function                    # Returns go.Figure
-  └── render_plotly_chart_with_note(fig)   # st.plotly_chart + info + caption</code></pre>
+    <p>Every chart function in <code>src/plotting_plotly.py</code> returns a <code>go.Figure</code> using <code>_base_layout()</code> for consistent styling - the same font, margins, legend position, and grid color across all chart types.</p>
 
-    <h3>Precomputed vs runtime paths</h3>
-    <p>
-      Every chart that supports precomputed data has two code paths. When <code>df_pre is not None</code>
-      (always true in production), the <code>_precomputed</code> variant of the plotting function
-      is called. The raw-data fallback exists for local development without the precomputed file.
-    </p>
-    <pre><code>fig = plot_country_shaded_density_precomputed(df_pre, subject, countries, year)
-# vs fallback:
-fig = plot_country_shaded_density(df, subject, countries, year)</code></pre>
+    <h3>Precomputed vs. fallback code paths</h3>
+    <p>Where a precomputed version of a chart exists (all density and trend charts), there are two code paths: a <code>_precomputed</code> variant that reads from the Parquet artefact, and a raw-data fallback for local development without the precomputed file. In production <code>df_pre</code> is always available, so the fallback is rarely used.</p>
 
-    <h3>Key layout helpers in <code>app.py</code></h3>
-    <table>
-      <tr><th>Function</th><th>Purpose</th></tr>
-      <tr><td><code>_base_layout(title, height)</code></td><td>Shared Plotly layout dict (font, margins, legend position, grid)</td></tr>
-      <tr><td><code>apply_compact_plotly_layout(fig)</code></td><td>Shrinks fonts + margins for side-by-side panels. Do NOT use for time-change charts — it overrides legend position.</td></tr>
-      <tr><td><code>render_plotly_chart_with_note(fig, note, key)</code></td><td>Wraps <code>st.plotly_chart</code> with a note and interaction tip</td></tr>
-      <tr><td><code>_story_section_header(n, title, subtitle)</code></td><td>Styled section header for the Data Story</td></tr>
-      <tr><td><code>_insight_box(findings)</code></td><td>Blue key-finding callout; accepts str or list</td></tr>
-      <tr><td><code>_policy_box(text)</code></td><td>Green policy-implication callout at chapter close</td></tr>
-    </table>
+    
+
+    <h3>Callout system</h3>
+    <p>The three-level callout system in the Data Story reflects ETS feedback — earlier versions showed colored boxes on every chapter, which felt overwhelming. The conventions are:</p>
+    <ul>
+      <li><strong>Blue</strong> — key findings from the data</li>
+      <li><strong>Green</strong> — policy implications or actionable observations</li>
+    </ul>
+    <p>The "key insight" callout only appears when the data warrants it — for example when the SES gap within a country is larger than the gap to the OECD average.</p>
   </section>
-
-  <hr />
 
   <!-- ── Stats ── -->
   <section id="stats">
     <h2>Statistical methods</h2>
 
+    <p>PISA's survey design imposes several methodological constraints that every statistic in the dashboard must respect. These are not optional refinements — they're required to produce estimates that generalize to national populations.</p>
+
     <h3>Plausible values</h3>
-    <p>
-      PISA does not report a single test score per student. Each student has <strong>10 plausible
-      values</strong> per subject (e.g. <code>PV1MATH</code>–<code>PV10MATH</code>) — multiple
-      imputations from the posterior of their latent ability. All score statistics (means,
-      percentiles, SEs) are computed by averaging across all 10 PVs per the PISA technical
-      standards. No chart uses a single PV as a point estimate.
-    </p>
+    <p>PISA gives each student ten plausible values per subject — multiple draws from the posterior distribution of their latent ability, designed to account for measurement uncertainty in a short adaptive assessment. Every score statistic in the dashboard (means, percentiles, standard errors) is computed by averaging across all ten plausible values per the PISA technical standards. No chart uses a single PV as a point estimate.</p>
 
     <h3>Sampling weights</h3>
-    <p>
-      <code>W_FSTUWT</code> is the final student sampling weight. It must be applied to all
-      estimates so results generalise to the national population. Country sample sizes vary
-      substantially — Canada: ~23,000 students; USA: ~4,500 — making correct weight application
-      essential, not optional.
-    </p>
+    <p><code>W_FSTUWT</code> is the final student sampling weight and must be applied to all estimates so results generalize to the national population rather than just the students who happened to be tested. Country sample sizes vary substantially — Canada contributes around 23,000 student records in the working sample; the United States contributes about 4,500 — making correct weight application essential for any cross-country comparison.</p>
 
-    <h3>Standard errors — Fay BRR</h3>
-    <p>
-      Standard errors follow the <strong>Fay Balanced Repeated Replication</strong> method using
-      80 replicate weights (<code>W_FSTURWT1</code>–<code>W_FSTURWT80</code>). Total variance
-      combines:
-    </p>
-    <ul>
-      <li><strong>Sampling variance</strong> from the 80 BRR replicates</li>
-      <li><strong>Imputation variance</strong> across the 10 plausible values</li>
-    </ul>
-    <p>
-      These are pre-computed in Step 7 and stored in <code>pisa_se_stats.parquet</code>,
-      indexed by <code>(CNT, YEAR, SUBJECT)</code> for O(1) lookup at render time. A SE warning
-      card appears in the UI only when SE &gt; 3.5 points.
-    </p>
+    <h3>Standard errors (Fay BRR)</h3>
+    <p>Standard errors follow the Fay Balanced Repeated Replication method using the 80 replicate weights (<code>W_FSTURWT1</code>–<code>W_FSTURWT80</code>). Total variance combines sampling variance from the BRR replicates and imputation variance across the ten plausible values. The SE warning card appears only when SE exceeds 3.5 points. The implementation lives in <code>src/pisa_stats.py</code> and was validated against an R reference; see <code>notebooks/standard_error.ipynb</code>.</p>
 
     <h3>Data suppression</h3>
-    <p>
-      Subgroup breakdowns are suppressed when the underlying cell has fewer than 30 valid
-      observations. The threshold is set in <code>check_group_sizes()</code> in <code>app.py</code>
-      and <code>_check_sufficient_data()</code> in <code>plotting_plotly.py</code> (min_n=100 for
-      the full figure, 30 per group).
-    </p>
+    <p>Any subgroup breakdown with fewer than 30 valid observations is suppressed rather than shown. Applied in <code>check_group_sizes()</code> in <code>app.py</code> and inside the plotting functions themselves. Country-level figures with fewer than 100 valid rows after dropping missing weights are replaced with a warning panel.</p>
 
-    <h3>OECD average computation</h3>
-    <p>
-      The OECD average is computed as the mean of country-level means — one value per member
-      country, equally weighted — following the OECD's official methodology. Non-member partner
-      economies are excluded from this average.
-    </p>
+    <div class="callout tip">
+      <strong>Scope of the tool</strong>
+      <p>Because PISA microdata cannot support causal claims, the dashboard is deliberately limited to descriptive and comparative reporting. It can show that two groups differ in score distributions, but it cannot determine why. Observed gaps may reflect socioeconomic sorting, language background, school resources, or regional policy context — factors that live outside the PISA dataset.</p>
+    </div>
   </section>
-
-  <hr />
 
   <!-- ── New cycle ── -->
   <section id="new-cycle">
     <h2>Adding a new PISA cycle</h2>
-    <ol>
-      <li>
-        Add the download URLs to <code>PISA_URLS</code> and <code>PISA_SCHOOL_URLS</code>
-        in <code>src/data_loader.py</code>:
-        <pre><code>PISA_URLS = {
-    2015: "https://...",
-    2018: "https://...",
-    2022: "https://...",
-    2025: "https://..."   # ← add new cycle here
-}</code></pre>
-      </li>
-      <li>
-        Add the year to <code>YEARS</code> in the Makefile:
-        <pre><code>YEARS = 2022 2018 2015 2025</code></pre>
-      </li>
-      <li>
-        Run the full pipeline:
-        <pre><code>make data precompute se</code></pre>
-      </li>
-      <li>Upload the four updated Parquet files in <code>data/processed/</code> to S3.</li>
-      <li>
-        Check that the new year's column names match the existing schema. OECD occasionally
-        renames questionnaire variables between cycles — search for year-specific column handling
-        in <code>src/data_loader.py</code> and add any renames needed.
-      </li>
-    </ol>
-  </section>
 
-  <hr />
+    <p>The pipeline is designed to make adding a new cycle straightforward. Four things need updating:</p>
+
+    <div class="pattern">
+      <h4>Checklist</h4>
+      <ol>
+        <li>Add the download URLs to <code>PISA_URLS</code> and <code>PISA_SCHOOL_URLS</code> in <code>src/data_loader.py</code>.</li>
+        <li>Add the year to <code>YEARS</code> in the Makefile and to the <code>--years</code> argument in the merge step.</li>
+        <li>Run <code>make data</code> to rebuild through Step 5, then run Steps 6 and 7 manually via the CLI.</li>
+        <li>Upload the updated Parquet files to S3 so the deployed instance picks them up.</li>
+      </ol>
+    </div>
+
+    <p>The one thing to check manually is whether the new cycle uses the same column names as the previous ones. The OECD occasionally renames questionnaire variables between administrations. Search <code>src/data_loader.py</code> for any year-specific column handling and add new renames there if needed before running the pipeline.</p>
+  </section>
 
   <!-- ── New chart ── -->
   <section id="new-chart">
     <h2>Adding a new chart type</h2>
-    <ol>
-      <li>
-        Write the Plotly figure function in <code>src/plotting_plotly.py</code>.
-        Always use <code>_base_layout()</code> and return a <code>go.Figure</code>:
-        <pre><code>def plot_my_chart(df, subject, cnt, year=None) -> go.Figure:
+
+    <p>Chart types are self-contained: a function in <code>plotting_plotly.py</code>, a name in <code>CHART_TYPES</code>, and a branch in <code>render_chart()</code>. The pattern is always the same:</p>
+
+    <pre><code># 1. Define the chart function in src/plotting_plotly.py
+def plot_my_chart(df, subject, cnt, year=None) -> go.Figure:
     fig = go.Figure()
     # ... build traces ...
     fig.update_layout(**_base_layout(title=f"My Chart | {SUBJECTS[subject]}"))
     return fig</code></pre>
-      </li>
-      <li>
-        Add the name to <code>CHART_TYPES</code> in <code>app.py</code>:
-        <pre><code>CHART_TYPES = [
-    "Percentile score profile",
-    "Score change over time",
-    "Intersectional Heatmap",
-    "Group comparison",
-    "Country Scatterplot",
-    "My New Chart",   # ← add here
-]</code></pre>
-      </li>
-      <li>
-        Add a branch inside <code>render_chart()</code> in <code>app.py</code>:
-        <pre><code>elif chart_type == "My New Chart":
-    df = fetch(tuple(selected_countries), selected_year,
-               tuple(BASE_COLS + pv_cols))
+
+    <pre><code># 2. Register the name in app.py
+CHART_TYPES = [..., "My New Chart"]</code></pre>
+
+    <pre><code># 3. Add a branch in render_chart()
+elif chart_type == "My New Chart":
+    df = fetch(
+        tuple(selected_countries),
+        selected_year,
+        tuple(BASE_COLS + pv_cols),
+    )
     fig = plot_my_chart(df, subject, primary_country, year=selected_year)
     render_plotly_chart_with_note(
         fig,
         note=get_chart_note("My New Chart"),
         key=f"my_chart_{widget_key}_{subject}_{selected_year}",
     )</code></pre>
-      </li>
-      <li>
-        Optionally add a <code>get_chart_note()</code> entry and a
-        <code>CHART_HELP_TEXT</code> entry for the collapsible help expander.
-      </li>
-    </ol>
+
+    <p>Always use <code>_base_layout()</code> so the new chart inherits consistent styling. Add an entry to <code>get_chart_note()</code> for the text shown below the chart, and optionally to <code>CHART_HELP_TEXT</code> for the collapsible how-to-read expander.</p>
   </section>
 
-  <hr />
+  
 
-  <!-- ── New group ── -->
-  <section id="new-group">
-    <h2>Adding a new equity group breakdown</h2>
-    <ol>
-      <li>
-        Add the variable mapping to <code>GROUP_OPTIONS</code> in <code>src/config.py</code>:
-        <pre><code>GROUP_OPTIONS = {
-    ...
-    "Grade repetition": ("REPEAT", {0.0: "Never repeated", 1.0: "Repeated at least once"}),
-}</code></pre>
-      </li>
-      <li>
-        Add a sort rank for the new group labels to <code>_get_oecd_rank()</code> inside
-        both <code>plot_group_shaded_density()</code> and
-        <code>plot_group_shaded_density_precomputed()</code> in
-        <code>src/plotting_plotly.py</code>.
-      </li>
-      <li>
-        Add the column to the column set fetched in <code>render_chart()</code>'s
-        Group comparison branch in <code>app.py</code> if it is not already included
-        in <code>EQUITY_COLS</code>.
-      </li>
-      <li>
-        Re-run <code>make precompute</code> so the new group's KDE and percentile
-        data is included in <code>pisa_precomputed.parquet</code>.
-      </li>
-    </ol>
-    <div class="callout blue">
-      The <code>GROUP_OPTIONS</code> dict in <code>config.py</code> is the single source
-      of truth for which breakdowns appear in the Explore tab's Group comparison selectbox.
-      Adding an entry there is all that's needed for the UI to pick it up.
-    </div>
-  </section>
-
-  <hr />
-
-  <!-- ── Deploy ── -->
-  <section id="deploy">
-    <h2>Deployment — Posit Cloud + S3</h2>
-
-    <h3>Posit Cloud</h3>
-    <p>The app is connected to this GitHub repo and auto-deploys on push to <code>main</code>.
-    Dependencies are read from <code>requirements.txt</code> (not the conda environment).
-    Trigger a manual redeploy from the Posit Cloud dashboard if needed.</p>
-
-    <h3>S3 bucket</h3>
-    <p>Bucket: <code>pisa-dashboard-data.s3.ca-central-1.amazonaws.com</code></p>
-    <p>When any processed Parquet file changes, upload it to the bucket root:</p>
-    <pre><code>aws s3 cp data/processed/pisa_precomputed.parquet \
-    s3://pisa-dashboard-data/pisa_precomputed.parquet
-
-aws s3 cp data/processed/pisa_se_stats.parquet \
-    s3://pisa-dashboard-data/pisa_se_stats.parquet
-
-aws s3 cp data/processed/pisa_country_stats.parquet \
-    s3://pisa-dashboard-data/pisa_country_stats.parquet</code></pre>
-
-    <h3>Posit Cloud memory constraints</h3>
-    <p>
-      Posit Cloud's free tier has ~1 GB RAM. The dashboard avoids loading the full dataset
-      by querying only necessary columns via DuckDB. If you hit memory limits after adding
-      new chart types, check that <code>fetch()</code> is called with a minimal <code>cols</code>
-      tuple rather than <code>BASE_COLS + PV_ALL + EQUITY_COLS</code>.
-    </p>
-  </section>
-
-  <hr />
-
-  <!-- ── Troubleshoot ── -->
-  <section id="troubleshoot">
-    <h2>Troubleshooting</h2>
-
-    <table>
-      <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
-      <tr>
-        <td>App shows stale chart data after pipeline re-run</td>
-        <td>Streamlit in-memory cache</td>
-        <td>Hamburger menu → Clear cache → hard refresh</td>
-      </tr>
-      <tr>
-        <td><code>KeyError: (CNT, YEAR, SUBJECT)</code> in SE lookup</td>
-        <td>Country/year combo missing from <code>pisa_se_stats.parquet</code></td>
-        <td>Re-run <code>make se</code>; check that the country has ≥30 records with all 80 replicate weights</td>
-      </tr>
-      <tr>
-        <td>Immigration hover text not showing</td>
-        <td><code>GROUP_LABEL</code> values don't match keys in <code>IMMIG_DEFINITIONS</code></td>
-        <td>Print <code>rows["GROUP_LABEL"].unique()</code> and add matching substrings to the dict</td>
-      </tr>
-      <tr>
-        <td>Side-by-side time charts have mismatched y-axes</td>
-        <td>Figures built independently with auto-range</td>
-        <td>Ensure the <code>both_time</code> block in <code>app.py</code> pre-builds both figures and calls <code>fig_.update_layout(yaxis=dict(range=[y_min, y_max]))</code> before rendering</td>
-      </tr>
-      <tr>
-        <td>Legend floats to top of time chart in side-by-side view</td>
-        <td><code>apply_compact_plotly_layout()</code> overrides legend to <code>y=1.08</code></td>
-        <td>Do not call <code>apply_compact_plotly_layout()</code> for time-change charts; <code>_base_layout()</code> already sets the correct <code>y=-0.25</code></td>
-      </tr>
-      <tr>
-        <td><code>S3 latency ~4s on cold start</code></td>
-        <td>S3 fallback triggered because local Parquet files absent</td>
-        <td>Ensure processed files are present in <code>data/processed/</code> on Posit, or pre-warm the cache</td>
-      </tr>
-      <tr>
-        <td>Percentile labels overlapping in density chart</td>
-        <td>All five labels at the same <code>y</code></td>
-        <td>Stagger P25/P75 labels with <code>y_center - 0.75</code> vs P10/Median/P90 at <code>y_center - 0.55</code> using <code>fig.add_annotation()</code></td>
-      </tr>
-    </table>
-  </section>
-
-  <hr />
-  <p style="font-size:0.8rem; color:#aaa; text-align:center; padding-top: 12px;">
-    PISA Smart Dashboard · ETS Capstone 2025 · Built with Streamlit, Plotly, DuckDB
-  </p>
+  <div class="page-footer">
+    ETS Capstone 2025-26 &middot; Gaurang Ahuja, Apoorva Srivastava, Sidharth Malik, Gloria Yi
+  </div>
 
 </main>
 
 <script>
-  // Highlight active nav link on scroll
   const sections = document.querySelectorAll("section[id]");
-  const links    = document.querySelectorAll("nav a");
-  const observer = new IntersectionObserver(entries => {
+  const links    = document.querySelectorAll("nav a[href^='#']");
+
+  const io = new IntersectionObserver(entries => {
     entries.forEach(e => {
       if (e.isIntersecting) {
         links.forEach(l => l.classList.remove("active"));
-        const active = document.querySelector(`nav a[href="#${e.target.id}"]`);
-        if (active) active.classList.add("active");
+        const a = document.querySelector(`nav a[href="#${e.target.id}"]`);
+        if (a) a.classList.add("active");
       }
     });
-  }, { rootMargin: "-30% 0px -60% 0px" });
-  sections.forEach(s => observer.observe(s));
+  }, { rootMargin: "-15% 0px -70% 0px" });
+
+  sections.forEach(s => io.observe(s));
 </script>
+
 </body>
 </html>
