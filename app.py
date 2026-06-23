@@ -546,19 +546,26 @@ def render_chart(chart_type, subject, selected_countries,
             sort_by_median=sort_by_med
         )
 
-        # Print the SES-specific text if applicable
+
+        # Build chart note
+        chart_note = get_chart_note("Group comparison", group_key=group_key)
+
+        # Add SES-specific finding into the blue note box instead of showing it above the chart
         if group_key == "Socioeconomic status":
-            st.markdown(
-                ses_difference_text(
-                    df, subject, primary_country, year=selected_year
-                )
+            ses_text = ses_difference_text(
+                df,
+                subject,
+                primary_country,
+                year=selected_year
             )
+
+            chart_note = f"{chart_note}\n\n**Current pattern:** {ses_text}"
 
         # Render the chart ONCE, formatting the key dynamically
         safe_key = group_key.lower().replace(" ", "_")
         render_plotly_chart_with_note(
             fig,
-            note=get_chart_note("Group comparison", group_key=group_key),
+            note=chart_note,
             key=f"group_{safe_key}_{widget_key}_{subject}_{selected_year}_{primary_country}",
         )
 
