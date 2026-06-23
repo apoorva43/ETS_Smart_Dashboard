@@ -250,8 +250,8 @@ GROUP_HOW_TO_READ = {
     "Score distribution": (
         "This curve shows the full spread of student scores. "
         "Darker, wider sections indicate where most students are concentrated (the middle 50%), "
-        "while the thinner tails show the highest and lowest achievers. "
-        "The vertical line marks the median score."
+        "while the thinner tails show the students at the lower and higher ends of the score distribution. "
+        "The vertical line marks the median score. The asterisk shows the average score for the group, which may differ from the median if the distribution is skewed."
     ),
     "Change over time": (
         "The horizontal axis shows the baseline score at each percentile. "
@@ -265,13 +265,15 @@ GROUP_HOW_TO_READ = {
         "• Q4: Highest 25%<br>"
         "• Q1: Lowest 25%<br>"
         "The vertical line marks the group's median score."
+        "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
     ),
     "Immigration status": (
         "Each shape shows the score distribution for one immigration background:<br>"
         "• Native: Student and both parents born in-country.<br>"
         "• First-generation: Student born abroad.<br>"
         "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
-        "The vertical line marks the group's median score."
+        "The vertical line marks the group's median score. "
+        "Percentages may not add exactly to 100 percent because some students do not have enough immigration information to be grouped."
     ),
     "Gender": (
         "Each shape shows the score distribution for male and female students. "
@@ -371,6 +373,37 @@ def render_plotly_chart_with_note(fig, note, key=None, use_container_width=True)
         "Hover over the chart to see exact values. "
         "Drag across the chart to zoom in, or use the toolbar to pan, reset axes, and download the chart."
     )
+
+
+def get_plotly_y_range(figs, pad=3):
+    """
+    Get shared y-axis range from multiple Plotly figures.
+    Used to make side-by-side comparisons visually comparable.
+    """
+    ys = []
+
+    for fig in figs:
+        for trace in fig.data:
+            if hasattr(trace, "y") and trace.y is not None:
+                vals = pd.to_numeric(pd.Series(trace.y),
+                                     errors="coerce").dropna()
+                ys.extend(vals.tolist())
+
+    if not ys:
+        return None
+
+    y_min = min(ys)
+    y_max = max(ys)
+
+    # Always include 0 for change-over-time charts
+    y_min = min(y_min, 0)
+    y_max = max(y_max, 0)
+
+    if y_min == y_max:
+        y_min -= 1
+        y_max += 1
+
+    return [y_min - pad, y_max + pad]
     
 
 def get_chart_note(chart_type, group_key=None, reference_year=None):
@@ -546,19 +579,26 @@ def render_chart(chart_type, subject, selected_countries,
             sort_by_median=sort_by_med
         )
 
-        # Print the SES-specific text if applicable
+
+        # Build chart note
+        chart_note = get_chart_note("Group comparison", group_key=group_key)
+
+        # Add SES-specific finding into the blue note box instead of showing it above the chart
         if group_key == "Socioeconomic status":
-            st.markdown(
-                ses_difference_text(
-                    df, subject, primary_country, year=selected_year
-                )
+            ses_text = ses_difference_text(
+                df,
+                subject,
+                primary_country,
+                year=selected_year
             )
+
+            chart_note = f"{chart_note}\n\n{ses_text}"
 
         # Render the chart ONCE, formatting the key dynamically
         safe_key = group_key.lower().replace(" ", "_")
         render_plotly_chart_with_note(
             fig,
-            note=get_chart_note("Group comparison", group_key=group_key),
+            note=chart_note,
             key=f"group_{safe_key}_{widget_key}_{subject}_{selected_year}_{primary_country}",
         )
 
@@ -859,7 +899,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     Intro → Ch 1: Standing → Ch 2: Trend → Ch 3: Equity → Ch 4: School context
     
     Callout hierarchy:
-    - Blue _insight_box     : key finding, always present, leads each chapter
+    - Blue _add_story_finding     : key finding, always present, leads each chapter
     - Amber _pullquote_box  : conditional, only when data is notably uneven
     - Green _policy_box     : always present, closes each chapter
     - _chart_expander       : chart + how-to-read, collapsed by default
@@ -878,6 +918,27 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     }
     </style>
 """, unsafe_allow_html=True)
+    
+    story_findings = []
+
+    def _clean_finding_text(text):
+        """Remove simple HTML tags before storing finding text for summary."""
+        import re
+        return re.sub(r"<.*?>", "", str(text)).strip()
+
+    def _add_story_finding(finding):
+        """
+        Show key finding box and store finding for the final summary section.
+        Accepts either a single string or a list of strings.
+        """
+        _insight_box(finding)
+
+        if isinstance(finding, list):
+            for f in finding:
+                if f:
+                    story_findings.append(_clean_finding_text(f))
+        else:
+            story_findings.append(_clean_finding_text(finding))
 
     # ── Page header ────────────────────────────────────────────────────────
     st.markdown(
@@ -1027,8 +1088,15 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         except KeyError:
             cnt_se = ci_lower = ci_upper = np.nan
 
-
+        if delta_val is not None and not np.isnan(delta_val):
+            direction = "higher than" if delta_val > 0 else "lower than"
+            _add_story_finding(
+                f"{_cnt_label(story_country)}'s average {subject_label} score is "
+                f"{abs(delta_val):.0f} points {direction} the OECD average "
+                f"({cnt_mean_score:.0f} vs {oecd_mean_score:.0f})."
+            )
         cols = st.columns(3)
+        
 
         # Card 1: country average score + standard error
         with cols[0]:
@@ -1066,9 +1134,11 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         # Chart + how to read
         fig1 = plot_country_shaded_density_precomputed(
-            df_pre, story_subject, [story_country], year=story_year
+            df_pre, story_subject, [
+                story_country], year=story_year, show_mean_marker=True,
         ) if df_pre is not None else plot_country_shaded_density(
-            df_s1, story_subject, [story_country], year=story_year
+            df_s1, story_subject, [
+                story_country], year=story_year, show_mean_marker=True,
         )
         _chart_expander(
                 "Collapse chart", fig1,
@@ -1078,7 +1148,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         _policy_box(
             f"{_cnt_label(story_country)}'s position relative to the OECD average "
             f"is one signal, but the spread within the country often tells a more "
-            f"important story for domestic policy. A large internal spread suggests "
+            f"important story for domestic policy. For example, a large internal spread would suggest "
             f"that raising the floor — not just the average — is the priority."
         )
 
@@ -1125,6 +1195,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             reference_year   = min(country_years)
             latest_year      = max(country_years)
 
+            # Explicitly extract exactly the 3 percentiles needed
             if df_pre is not None:
                 trend_rows = df_pre[
                     (df_pre["CNT"]        == story_country) &
@@ -1133,19 +1204,30 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 ]
                 ref_row  = trend_rows[trend_rows["YEAR"] == reference_year].iloc[0]
                 last_row = trend_rows[trend_rows["YEAR"] == latest_year].iloc[0]
-                ref_percs  = np.array([ref_row["P10"],  ref_row["P25"],  ref_row["P50"],  ref_row["P75"],  ref_row["P90"]])
-                last_percs = np.array([last_row["P10"], last_row["P25"], last_row["P50"], last_row["P75"], last_row["P90"]])
+                
+                ref_p10, ref_p50, ref_p90 = float(ref_row["P10"]), float(ref_row["P50"]), float(ref_row["P90"])
+                last_p10, last_p50, last_p90 = float(last_row["P10"]), float(last_row["P50"]), float(last_row["P90"])
             else:
                 ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
                 last_subset = df_s2[df_s2["YEAR"] == latest_year]
+                
                 ref_percs  = weighted_percentiles_pv(ref_subset,  story_subject, [10, 50, 90])
                 last_percs = weighted_percentiles_pv(last_subset, story_subject, [10, 50, 90])
+                
+                ref_p10, ref_p50, ref_p90 = ref_percs[0], ref_percs[1], ref_percs[2]
+                last_p10, last_p50, last_p90 = last_percs[0], last_percs[1], last_percs[2]
 
-            if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
-                delta_p10 = last_percs[0] - ref_percs[0]
-                delta_p50 = last_percs[2] - ref_percs[2]  # P50 is index 2
-                delta_p90 = last_percs[4] - ref_percs[4]  # P90 is index 4
-                direction = "increased" if delta_p50 > 0 else "decreased"
+            if not (np.isnan(ref_p50) or np.isnan(last_p50)):
+                delta_p10 = last_p10 - ref_p10
+                delta_p50 = last_p50 - ref_p50
+                delta_p90 = last_p90 - ref_p90
+                
+                if delta_p50 > 0:
+                    direction = "increased"
+                elif delta_p50 < 0:
+                    direction = "decreased"
+                else:
+                    direction = "remained unchanged"
 
                 # Initialize the findings list
                 findings = []
@@ -1155,27 +1237,43 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                     f"{subject_label} score {direction} by "
                     f"{abs(delta_p50):.0f} points between "
                     f"{reference_year} and {latest_year} "
-                    f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
+                    f"({ref_p50:.0f} → {last_p50:.0f})."
                 )
 
                 # Conditional finding - uneven decline/gain across distribution
                 spread = abs(delta_p10 - delta_p90)
                 if spread > 10:
-                    worse_end = "lower end" if delta_p10 < delta_p90 else "upper end"
-                    better_end = "upper end" if worse_end == "lower end" else "lower end"
-                    worse_val  = delta_p10 if worse_end == "lower end" else delta_p90
-                    better_val = delta_p90 if worse_end == "lower end" else delta_p10
+                    # Round the deltas first to avoid -0.1 triggering a "decline" but displaying as "-0"
+                    d10_r = round(delta_p10)
+                    d90_r = round(delta_p90)
                     
+                    # Figure out which end performed "worse" relative to the other
+                    if d10_r < d90_r:
+                        lagging, lag_val = "lower end (P10)", d10_r
+                        leading, lead_val = "upper end (P90)", d90_r
+                    else:
+                        lagging, lag_val = "upper end (P90)", d90_r
+                        leading, lead_val = "lower end (P10)", d10_r
+
+                    # Dynamic phrasing based on whether rounded values are positive, negative, or flat
+                    if lag_val < 0 and lead_val > 0:
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} pts) while the {leading} saw gains ({lead_val:+.0f} pts)"
+                    elif lag_val < 0 and lead_val == 0:
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} pts) while the {leading} remained flat (0 pts)"
+                    elif lag_val == 0 and lead_val > 0:
+                        comparison = f"scores at the {lagging} remained flat (0 pts) while the {leading} saw gains ({lead_val:+.0f} pts)"
+                    elif lag_val < 0 and lead_val < 0:
+                        comparison = f"scores at the {lagging} dropped more ({lag_val:+.0f} pts) than at the {leading} ({lead_val:+.0f} pts)"
+                    else:
+                        # Both are strictly > 0
+                        comparison = f"scores at the {leading} grew more ({lead_val:+.0f} pts) than at the {lagging} ({lag_val:+.0f} pts)"
+
                     findings.append(
-                        f"The change is not uniform across the distribution — "
-                        f"students at the {worse_end} lost more "
-                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'lower end' else '90'}) "
-                        f"than those at the {better_end} "
-                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'lower end' else '10'}). "
+                        f"The change is not uniform across the distribution — {comparison}."
                     )
                 
                 # Render the combined insight box
-                _insight_box(findings)
+                _add_story_finding(findings)
 
             fig2 = plot_percentile_change_from_baseline_precomputed(
                 df_pre=df_pre, subject=story_subject,
@@ -1207,7 +1305,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
     st.markdown(
         "High average scores can mask large differences between student groups. "
-        "The figures below show the difference in median scores between groups — "
+        "The figures below show the difference in distribution and median scores between groups — "
         "they reflect structural inequalities in access to resources and support, "
         "not differences in student ability."
     )
@@ -1385,7 +1483,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             #         )
         
         # Print combined findings
-        _insight_box(findings)
+        _add_story_finding(findings)
 
         # Print metric cards side-by-side
         card_cols = st.columns(len(equity_gaps))
@@ -1522,29 +1620,60 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
+        # School type key finding:
+        # Compare the highest-median school type group with the lowest-median group.
         if df_pre is not None:
-            type_rows = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_type")]
-            pub_row  = type_rows[type_rows["GROUP_LABEL"] == "Public"]
-            priv_row = type_rows[type_rows["GROUP_LABEL"] == "Independent private"]
-            pub_med  = float(pub_row.iloc[0]["P50"])  if not pub_row.empty  else np.nan
-            priv_med = float(priv_row.iloc[0]["P50"]) if not priv_row.empty else np.nan
-        else:
-            type_curves = compute_group_percentiles(
-                df_type, story_subject, "SCHLTYPE",
-                {3: "Public", 1: "Independent private"},
-                [50], cnt=story_country, year=story_year
-            )
-            pub_med  = type_curves.get("Public",              [np.nan])[0]
-            priv_med = type_curves.get("Independent private", [np.nan])[0]
+            type_rows = df_pre[
+                (df_pre["CNT"] == story_country)
+                & (df_pre["YEAR"] == story_year)
+                & (df_pre["SUBJECT"] == story_subject)
+                & (df_pre["GROUP_TYPE"] == "school_type")
+            ].copy()
 
-        if not (np.isnan(pub_med) or np.isnan(priv_med)):
-            diff = abs(priv_med - pub_med)
-            higher = "private" if priv_med > pub_med else "public"
-            _insight_box(
-                f"Students in {higher} schools in "
-                f"{_cnt_label(story_country)} score {diff:.0f} points "
-                f"higher at the median in {subject_label}."
+            type_rows = type_rows.dropna(subset=["P50"])
+
+            type_medians = {
+                row["GROUP_LABEL"]: float(row["P50"])
+                for _, row in type_rows.iterrows()
+            }
+
+        else:
+            group_col_type, group_labels_type = GROUP_OPTIONS["School type"]
+
+            type_curves = compute_group_percentiles(
+                df_type,
+                story_subject,
+                group_col_type,
+                group_labels_type,
+                [50],
+                cnt=story_country,
+                year=story_year,
             )
+
+            type_medians = {
+                label: vals[0]
+                for label, vals in type_curves.items()
+                if vals is not None and len(vals) > 0 and not np.isnan(vals[0])
+            }
+
+        if len(type_medians) >= 2:
+            highest_group = max(type_medians, key=type_medians.get)
+            lowest_group = min(type_medians, key=type_medians.get)
+
+            highest_med = type_medians[highest_group]
+            lowest_med = type_medians[lowest_group]
+            highest_med_display = int(round(highest_med))
+            lowest_med_display = int(round(lowest_med))
+            diff_display = highest_med_display - lowest_med_display
+
+            _add_story_finding(
+                f"The largest difference in school-type scores in {_cnt_label(story_country)} is between "
+                f"{highest_group.lower()} and {lowest_group.lower()} schools: "
+                f"students in {highest_group.lower()} schools score "
+                f"{diff_display:.0f} points higher at the median in {subject_label} "
+                f"in {_cnt_label(story_country)}."
+            )
+        
 
         group_col, group_labels = GROUP_OPTIONS["School type"]
         fig4a = plot_group_shaded_density_precomputed(
@@ -1581,27 +1710,59 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
-        if df_pre is not None:
-            loc_rows    = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_loc")]
-            city_row    = loc_rows[loc_rows["GROUP_LABEL"] == "City"]
-            village_row = loc_rows[loc_rows["GROUP_LABEL"] == "Village"]
-            city_med    = float(city_row.iloc[0]["P50"])    if not city_row.empty    else np.nan
-            village_med = float(village_row.iloc[0]["P50"]) if not village_row.empty else np.nan
-        else:
-            loc_curves = compute_group_percentiles(
-                df_loc, story_subject, "SC001Q01TA",
-                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
-                [50], cnt=story_country, year=story_year
-            )
-            city_med    = loc_curves.get("City",    [np.nan])[0]
-            village_med = loc_curves.get("Village", [np.nan])[0]
 
-        if not (np.isnan(city_med) or np.isnan(village_med)):
-            diff = abs(city_med - village_med)
-            _insight_box(
-                f"Students in city schools score {diff:.0f} points "
-                f"higher than those in villages at the median "
-                f"in {subject_label} in {_cnt_label(story_country)}."
+
+        # School location key finding:
+        # Compare the highest-median location group with the lowest-median location group.
+        if df_pre is not None:
+            loc_rows = df_pre[
+                (df_pre["CNT"] == story_country)
+                & (df_pre["YEAR"] == story_year)
+                & (df_pre["SUBJECT"] == story_subject)
+                & (df_pre["GROUP_TYPE"] == "school_loc")
+            ].copy()
+
+            loc_rows = loc_rows.dropna(subset=["P50"])
+
+            loc_medians = {
+                row["GROUP_LABEL"]: float(row["P50"])
+                for _, row in loc_rows.iterrows()
+            }
+
+        else:
+            group_col, group_labels = GROUP_OPTIONS["School location"]
+
+            loc_curves = compute_group_percentiles(
+                df_loc,
+                story_subject,
+                group_col,
+                group_labels,
+                [50],
+                cnt=story_country,
+                year=story_year,
+            )
+
+            loc_medians = {
+                label: vals[0]
+                for label, vals in loc_curves.items()
+                if vals is not None and len(vals) > 0 and not np.isnan(vals[0])
+            }
+
+        if len(loc_medians) >= 2:
+            highest_group = max(loc_medians, key=loc_medians.get)
+            lowest_group = min(loc_medians, key=loc_medians.get)
+
+            highest_med = loc_medians[highest_group]
+            lowest_med = loc_medians[lowest_group]
+            highest_med_display = int(round(highest_med))
+            lowest_med_display = int(round(lowest_med))
+            diff_display = highest_med_display - lowest_med_display
+
+            _add_story_finding(
+                f"The largest difference in school-location scores in {_cnt_label(story_country)} is between "
+                f"{highest_group.lower()} and {lowest_group.lower()} schools: "
+                f"students in {highest_group.lower()} schools score "
+                f"{diff_display:.0f} points higher at the median in {subject_label}. "
             )
 
         group_col, group_labels = GROUP_OPTIONS["School location"]
@@ -1628,6 +1789,41 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         )
 
     st.divider()
+    
+    # ── Summary of key findings ────────────────────────────────────────────
+
+    st.markdown("## Summary of key findings")
+    st.markdown(
+        f"Main takeaways for {_cnt_label(story_country)} in {subject_label}."
+    )
+
+    if story_findings:
+        summary_items = "".join(
+            f"<li>{finding}</li>"
+            for finding in story_findings
+        )
+
+        st.markdown(
+            f"""
+            <div style="
+                background: #e8f4fd;
+                border: 1px solid #b3d9f5;
+                border-radius: 8px;
+                padding: 16px 20px;
+                margin: 10px 0 18px 0;
+                color: #1a3a52;
+                line-height: 1.55;
+            ">
+                <strong>Summary of key findings:</strong>
+                <ul style="margin-top: 8px; margin-bottom: 0; padding-left: 22px;">
+                    {summary_items}
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("No key findings were available for this country and subject.")
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
@@ -1808,9 +2004,6 @@ elif app_mode == "🔍 Explore":
 
     primary_country = selected_countries[0]
 
-    st.title("PISA Score Distribution Dashboard")
-    st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
-               f"{len(all_countries)} countries")
 
     # Chart-Specific Controls injected directly into the main view
     group_key = None
@@ -1819,44 +2012,148 @@ elif app_mode == "🔍 Explore":
 
     # ── Draw the main area for Explore ───────────────────────────────────────
     if side_by_side:
-        left_col, right_col = st.columns(2)
-        with left_col:
-            st.subheader(chart_type_left)
-            render_chart(
-                chart_type=chart_type_left, 
-                subject=subject, 
-                selected_countries=selected_countries,
-                selected_year=selected_year, 
-                available_years=available_years,
-                primary_country=country_left,
-                ref_year=ref_year, 
-                comp_year=comp_year,
-                compact=True,
-                widget_key="left"
-            )
-        with right_col:
-            st.subheader(chart_type_right)
-            render_chart(
-                chart_type=chart_type_right, 
-                subject=subject, 
-                selected_countries=selected_countries,
-                selected_year=selected_year, 
-                available_years=available_years,
-                primary_country=country_right,
-                ref_year=ref_year, 
-                comp_year=comp_year,
-                compact=True,
-                widget_key="right"
-            )
+
+        # Special case:
+        # When comparing two score-change-over-time charts, use the same y-axis
+        # so the two countries are visually comparable.
+        if (
+            chart_type_left == "Score change over time"
+            and chart_type_right == "Score change over time"
+        ):
+            reference_year = min(available_years)
+
+            # Build both figures first
+            if df_pre is not None:
+                fig_left = plot_percentile_change_from_baseline_precomputed(
+                    df_pre=df_pre,
+                    subject=subject,
+                    cnt=country_left,
+                    reference_year=reference_year,
+                )
+
+                fig_right = plot_percentile_change_from_baseline_precomputed(
+                    df_pre=df_pre,
+                    subject=subject,
+                    cnt=country_right,
+                    reference_year=reference_year,
+                )
+
+            else:
+                df_time = fetch(
+                    tuple(set([country_left, country_right])),
+                    None,
+                    tuple(BASE_COLS + PV_BY_SUBJ[subject])
+                )
+
+                fig_left = plot_percentile_change_from_baseline(
+                    df=df_time,
+                    subject=subject,
+                    cnt=country_left,
+                    reference_year=reference_year,
+                )
+
+                fig_right = plot_percentile_change_from_baseline(
+                    df=df_time,
+                    subject=subject,
+                    cnt=country_right,
+                    reference_year=reference_year,
+                )
+
+            # Compute shared y-axis range from both figures
+            y_values = []
+
+            for fig in [fig_left, fig_right]:
+                for trace in fig.data:
+                    if hasattr(trace, "y") and trace.y is not None:
+                        vals = pd.to_numeric(
+                            pd.Series(trace.y),
+                            errors="coerce"
+                        ).dropna()
+                        y_values.extend(vals.tolist())
+
+            if y_values:
+                y_min = min(min(y_values), 0)
+                y_max = max(max(y_values), 0)
+
+                # Add padding so the lines do not touch the plot boundary
+                pad = max(3, 0.08 * (y_max - y_min))
+
+                shared_y_range = [y_min - pad, y_max + pad]
+
+                fig_left.update_yaxes(range=shared_y_range)
+                fig_right.update_yaxes(range=shared_y_range)
+
+            # Apply compact layout after setting shared axis
+            fig_left = apply_compact_plotly_layout(fig_left)
+            fig_right = apply_compact_plotly_layout(fig_right)
+
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader(f"{chart_type_left}: {_cnt_label(country_left)}")
+                render_plotly_chart_with_note(
+                    fig_left,
+                    note=get_chart_note(
+                        "Score change over time",
+                        reference_year=reference_year,
+                    ),
+                    key=f"time_change_left_{subject}_{reference_year}_{country_left}",
+                )
+
+            with right_col:
+                st.subheader(f"{chart_type_right}: {_cnt_label(country_right)}")
+                render_plotly_chart_with_note(
+                    fig_right,
+                    note=get_chart_note(
+                        "Score change over time",
+                        reference_year=reference_year,
+                    ),
+                    key=f"time_change_right_{subject}_{reference_year}_{country_right}",
+                )
+
+        # All other side-by-side combinations keep the existing logic
+        else:
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader(chart_type_left)
+                render_chart(
+                    chart_type=chart_type_left,
+                    subject=subject,
+                    selected_countries=selected_countries,
+                    selected_year=selected_year,
+                    available_years=available_years,
+                    primary_country=country_left,
+                    ref_year=ref_year,
+                    comp_year=comp_year,
+                    compact=True,
+                    widget_key="left"
+                )
+
+            with right_col:
+                st.subheader(chart_type_right)
+                render_chart(
+                    chart_type=chart_type_right,
+                    subject=subject,
+                    selected_countries=selected_countries,
+                    selected_year=selected_year,
+                    available_years=available_years,
+                    primary_country=country_right,
+                    ref_year=ref_year,
+                    comp_year=comp_year,
+                    compact=True,
+                    widget_key="right"
+                )
+
     else:
         render_chart(
-            chart_type=chart_type, 
-            subject=subject, 
+            chart_type=chart_type,
+            subject=subject,
             selected_countries=selected_countries,
-            selected_year=selected_year, 
-            available_years=available_years, 
+            selected_year=selected_year,
+            available_years=available_years,
             primary_country=primary_country,
-            ref_year=ref_year, 
+            ref_year=ref_year,
             comp_year=comp_year,
             compact=False,
             widget_key="main"
