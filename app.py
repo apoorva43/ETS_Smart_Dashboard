@@ -1583,27 +1583,57 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
-        if df_pre is not None:
-            loc_rows    = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_loc")]
-            city_row    = loc_rows[loc_rows["GROUP_LABEL"] == "City"]
-            village_row = loc_rows[loc_rows["GROUP_LABEL"] == "Village"]
-            city_med    = float(city_row.iloc[0]["P50"])    if not city_row.empty    else np.nan
-            village_med = float(village_row.iloc[0]["P50"]) if not village_row.empty else np.nan
-        else:
-            loc_curves = compute_group_percentiles(
-                df_loc, story_subject, "SC001Q01TA",
-                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
-                [50], cnt=story_country, year=story_year
-            )
-            city_med    = loc_curves.get("City",    [np.nan])[0]
-            village_med = loc_curves.get("Village", [np.nan])[0]
 
-        if not (np.isnan(city_med) or np.isnan(village_med)):
-            diff = abs(city_med - village_med)
+
+        # School location key finding:
+        # Compare the highest-median location group with the lowest-median location group.
+        if df_pre is not None:
+            loc_rows = df_pre[
+                (df_pre["CNT"] == story_country)
+                & (df_pre["YEAR"] == story_year)
+                & (df_pre["SUBJECT"] == story_subject)
+                & (df_pre["GROUP_TYPE"] == "school_loc")
+            ].copy()
+
+            loc_rows = loc_rows.dropna(subset=["P50"])
+
+            loc_medians = {
+                row["GROUP_LABEL"]: float(row["P50"])
+                for _, row in loc_rows.iterrows()
+            }
+
+        else:
+            group_col, group_labels = GROUP_OPTIONS["School location"]
+
+            loc_curves = compute_group_percentiles(
+                df_loc,
+                story_subject,
+                group_col,
+                group_labels,
+                [50],
+                cnt=story_country,
+                year=story_year,
+            )
+
+            loc_medians = {
+                label: vals[0]
+                for label, vals in loc_curves.items()
+                if vals is not None and len(vals) > 0 and not np.isnan(vals[0])
+            }
+
+        if len(loc_medians) >= 2:
+            highest_group = max(loc_medians, key=loc_medians.get)
+            lowest_group = min(loc_medians, key=loc_medians.get)
+
+            highest_med = loc_medians[highest_group]
+            lowest_med = loc_medians[lowest_group]
+            diff = highest_med - lowest_med
+
             _insight_box(
-                f"Students in city schools score {diff:.0f} points "
-                f"higher than those in villages at the median "
-                f"in {subject_label} in {_cnt_label(story_country)}."
+                f"The largest difference in school-location scores in {_cnt_label(story_country)} is between "
+                f"{highest_group.lower()} and {lowest_group.lower()} schools: "
+                f"students in {highest_group.lower()} schools score "
+                f"{diff:.0f} points higher at the median in {subject_label}. "
             )
 
         group_col, group_labels = GROUP_OPTIONS["School location"]
