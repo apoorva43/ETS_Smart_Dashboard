@@ -1545,7 +1545,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             _insight_box(
                 f"Students in {higher} schools in "
                 f"{_cnt_label(story_country)} score {diff:.0f} points "
-                f"higher at the median in {subject_label}."
+                f"higher than public schools at the median in {subject_label}."
             )
 
         group_col, group_labels = GROUP_OPTIONS["School type"]
