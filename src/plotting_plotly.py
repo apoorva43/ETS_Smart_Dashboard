@@ -59,8 +59,9 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
     Helper function to validate data sufficiency.
     Returns an empty Plotly figure with a warning message if data is insufficient.
     """
-    cols_to_check = list(set(target_cols + ["W_FSTUWT"]))
-    valid_data = df.dropna(subset=cols_to_check)
+    # Filter columns to avoid KeyErrors if df is empty or missing columns
+    cols_to_check = [c for c in list(set(target_cols + ["W_FSTUWT"])) if c in df.columns]
+    valid_data = df.dropna(subset=cols_to_check) if not df.empty else df
     
     if len(valid_data) < min_n:
         fig = go.Figure()
