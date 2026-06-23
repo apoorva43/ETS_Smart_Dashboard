@@ -17,9 +17,7 @@ from src.precompute import (
     _compute_se,
     _compute_ses_groups,
     build_precomputed,
-    PERCENTILES,
-    X_GRID,
-    GROUP_CONFIGS,
+    X_GRID
 )
 
 
@@ -27,8 +25,7 @@ PV_COLS = [f"PV{i}MATH" for i in range(1, 11)]
 REP_COLS = [f"W_FSTURWT{r}" for r in range(1, 81)]
 
 
-# ── _compute_ses_groups ───────────────────────────────────────────────────────
-
+# _compute_ses_groups
 class TestComputeSesGroups:
     def test_returns_four_groups(self, base_df):
         # SES binning produces exactly four quartile groups
@@ -55,8 +52,7 @@ class TestComputeSesGroups:
         assert max(sizes) - min(sizes) < len(sub) * 0.1   # within 10%
 
 
-# ── _compute_kde ──────────────────────────────────────────────────────────────
-
+#_compute_kde
 class TestComputeKde:
     def test_returns_json_strings(self, base_df):
         # Returns two JSON strings for valid data
@@ -99,8 +95,7 @@ class TestComputeKde:
         assert dx is None and dy is None
 
 
-# ── _compute_se ───────────────────────────────────────────────────────────────
-
+# _compute_se
 class TestComputeSe:
     def test_returns_positive_float(self, base_df):
         # SE is a finite positive number for valid data
@@ -120,8 +115,7 @@ class TestComputeSe:
         assert np.isnan(result)
 
 
-# ── build_precomputed (integration) ───────────────────────────────────────────
-
+# build_precomputed (integration)
 class TestBuildPrecomputed:
     def test_output_parquet_created(self, base_df, tmp_path):
         # build_precomputed writes a Parquet file to the specified path
