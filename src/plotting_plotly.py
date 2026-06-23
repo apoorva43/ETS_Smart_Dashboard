@@ -59,8 +59,9 @@ def _check_sufficient_data(df, target_cols, cnt, min_n=100, msg="Insufficient da
     Helper function to validate data sufficiency.
     Returns an empty Plotly figure with a warning message if data is insufficient.
     """
-    cols_to_check = list(set(target_cols + ["W_FSTUWT"]))
-    valid_data = df.dropna(subset=cols_to_check)
+    # Filter columns to avoid KeyErrors if df is empty or missing columns
+    cols_to_check = [c for c in list(set(target_cols + ["W_FSTUWT"])) if c in df.columns]
+    valid_data = df.dropna(subset=cols_to_check) if not df.empty else df
     
     if len(valid_data) < min_n:
         fig = go.Figure()
@@ -319,7 +320,6 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
             marker=dict(
                 color=f"rgb({r},{g},{b})",
                 size=[6, 6, 10, 6, 6],
-                # symbol="line-ns",
                 line=dict(color=f"rgb({r},{g},{b})", width=2)
             ),
             legendgroup=legendgroup,
@@ -425,7 +425,6 @@ def _render_shaded_density_rows(fig, rows, x_grid, BANDS, bar_height, show_botto
                 marker=dict(
                     color=f"rgb({r},{g},{b})",
                     size=[6, 6, 10, 6, 6],
-                    symbol="line-ns",
                     line=dict(color=f"rgb({r},{g},{b})", width=2)
                 ),
                 legendgroup=legendgroup,
@@ -1061,7 +1060,6 @@ def plot_country_shaded_density_precomputed(
             marker=dict(
                 color=f"rgb({r},{g},{b})",
                 size=[6, 6, 10, 6, 6],
-                symbol="line-ns",
                 line=dict(color=f"rgb({r},{g},{b})", width=2)
             ),
             legendgroup=legendgroup,
@@ -1353,6 +1351,9 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     """
     Plotly Scatterplot: country-level resource variable vs mean score.
     """
+    if df.empty or "CNT" not in df.columns:
+         return _check_sufficient_data(pd.DataFrame(), [], "", msg="Insufficient data for scatter")[1]
+
     subset = df.copy()
     if year and "YEAR" in df.columns:
         subset = subset[subset["YEAR"] == year]

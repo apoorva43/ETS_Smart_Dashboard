@@ -66,6 +66,11 @@ def _compute_ses_groups(subset: pd.DataFrame) -> dict:
 
 def _compute_kde(group: pd.DataFrame, pv_cols: list) -> tuple:
     """Compute averaged KDE density. Returns (x_json, density_json) or (None, None)."""
+    available_pvs = [pv for pv in pv_cols if pv in group.columns]
+    
+    if not available_pvs:
+        return None, None
+    
     if len(group) > 2000:
         group = group.sample(n=2000, weights="W_FSTUWT", random_state=42)
 
