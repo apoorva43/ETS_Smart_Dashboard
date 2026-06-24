@@ -1580,9 +1580,8 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         )
 
     else:
-        st.info(
-            f"Insufficient data to compute equity differences "
-            f"for {_cnt_label(story_country)}."
+        st.warning(
+            f"⚠️ Insufficient data to compute equity differences for {_cnt_label(story_country)} in {story_year}."
         )
 
     st.divider()
@@ -1683,11 +1682,14 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             group_title="School Type", year=story_year,
             sort_by_median=True
         )
-        _chart_expander(
-            "Show school type chart",
-            fig4a,
-            GROUP_HOW_TO_READ.get("School type", "Each bar shows the score distribution for one group.")
-        )
+        if not fig4a.data:
+            st.warning(f"⚠️ {_cnt_label(story_country)} does not have enough school location data.")
+        else:
+            _chart_expander(
+                "Collapse chart",
+                fig4a,
+                GROUP_HOW_TO_READ.get("School type", "Each bar shows the score distribution for one group.")
+            )
 
         _policy_box(
             "Differences between public and private school scores "
@@ -1773,11 +1775,15 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             group_title="School Location", year=story_year,
             sort_by_median=True
         )
-        _chart_expander(
-            "Show school location chart",
-            fig4b,
-            GROUP_HOW_TO_READ.get("School location", "Each bar shows the score distribution for one group.")
-        )
+
+        if not fig4b.data:
+            st.warning(f"⚠️ {_cnt_label(story_country)} does not have enough school location data.")
+        else:
+            _chart_expander(
+                "Collapse chart",
+                fig4b,
+                GROUP_HOW_TO_READ.get("School location", "Each bar shows the score distribution for one group.")
+            )
 
         _policy_box(
             "Urban-rural score differences in PISA typically reflect "
@@ -1821,7 +1827,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             unsafe_allow_html=True,
         )
     else:
-        st.info("No key findings were available for this country and subject.")
+        st.warning(f"⚠️ No key findings are available for {_cnt_label(story_country)} in {subject_label}.")
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
