@@ -530,9 +530,23 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
     if year is not None and "YEAR" in subset.columns:
         subset = subset[subset["YEAR"] == year]
 
+    # Drop records missing PVs and weights FIRST
+    subset = subset.dropna(subset=["W_FSTUWT"] + pv_cols)
+
     # Handle continuous variables (ESCS) by binning into quartiles
     if group_labels is None:
         subset = subset.dropna(subset=[group_col])
+        
+        # Check if we have enough data before running pd.qcut
+        if len(subset) < min_group_n:
+            fig = go.Figure()
+            fig.add_annotation(text=f"⚠️ Insufficient {group_title} data.", xref="paper", yref="paper",
+                               x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+            fig.update_layout(**_base_layout(height=400))
+            fig.update_xaxes(visible=False)
+            fig.update_yaxes(visible=False)
+            return fig
+
         subset["_group_bin"] = pd.qcut(
             subset[group_col].rank(method="first"), q=4,
             labels=["Q1 (lowest)", "Q2", "Q3", "Q4 (highest)"]
@@ -542,14 +556,17 @@ def plot_group_shaded_density(df, subject, cnt, group_col, group_labels,
             "Q1 (lowest)": "Q1 (lowest)", "Q2": "Q2",
             "Q3": "Q3", "Q4 (highest)": "Q4 (highest)"
         }
-
-    subset = subset.dropna(subset=["W_FSTUWT"] + pv_cols)
-
-    if len(subset) < min_group_n:
-        fig = go.Figure()
-        fig.add_annotation(text="⚠️ Insufficient data.", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
-        return fig
+    else:
+        # Drop missing categorical values
+        subset = subset.dropna(subset=[group_col])
+        if len(subset) < min_group_n:
+            fig = go.Figure()
+            fig.add_annotation(text=f"⚠️ Insufficient {group_title} data.", xref="paper", yref="paper",
+                               x=0.5, y=0.5, showarrow=False, font=dict(size=14, color="gray"))
+            fig.update_layout(**_base_layout(height=400))
+            fig.update_xaxes(visible=False)
+            fig.update_yaxes(visible=False)
+            return fig
 
     # Compute group sizes and percentages for y-axis labels
     total = len(subset)
@@ -1449,7 +1466,7 @@ def plot_resource_scatter(df, subject: str, resource_col: str,
     
     fig.update_layout(**layout_args)
     fig.update_xaxes(title=resource_label)
-    fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} score")
+    fig.update_yaxes(title=f"Mean {SUBJECTS[subject]} Score")
     
     fig.update_layout(hovermode="closest")
 
