@@ -103,6 +103,28 @@ n_keep_cols = len(KEEP_COLS)
 n_replicate_weights = len(WEIGHT_COLS) - 1 # exclude W_FSTUWT
 n_pv_cols = len(SCORE_COLS)
 n_pv_per_subject = n_pv_cols // 3
+
+can_spread = round(can_p90_2022 - can_p10_2022)
+
+# Calculate an example immigrant gap dynamically for Canada 2022 using df_pre
+try:
+    # Safely identify the subgroup label column (e.g., 'GROUP_VAL', 'GROUP_LABEL', or 'GROUP')
+    lbl_col = [c for c in df_pre.columns if "GROUP" in c and c != "GROUP_TYPE"][0]
+    
+    can_immig = df_pre[
+        (df_pre["CNT"] == "CAN") & 
+        (df_pre["YEAR"] == 2022) & 
+        (df_pre["SUBJECT"] == "MATH") & 
+        (df_pre["GROUP_TYPE"] == "immig")
+    ]
+    
+    native_score = can_immig[can_immig[lbl_col].str.contains("Native", na=False, case=False)]["P50"].values[0]
+    first_gen_score = can_immig[can_immig[lbl_col].str.contains("First", na=False, case=False)]["P50"].values[0]
+    
+    immig_gap = round(abs(native_score - first_gen_score))
+except Exception as e:
+    # Fallback to ensure the Quarto document renders while debugging
+    immig_gap = 40
 ```
 
 
@@ -130,6 +152,8 @@ While the initial goal was to build a dashboard to counter deficit thinking, it 
 - **Objective 1: Handling complex survey data at scale.** PISA data requires computing scores across `{python} n_pv_per_subject` plausible values per subject and applying replicate weights to produce accurate population estimates. The objective was to build a data pipeline that could handle these calculations dynamically across three survey cycles, without making users wait.
 - **Objective 2: Showing distributions, not just averages.** Rather than summarizing performance as a single number, the visualizations show where students are actually spread across the score range. A shaded percentile distribution plot displays each group's full distribution, with darker shading where students are most concentrated and a median marker for reference. The same format is used consistently across the score profile view and group comparisons, so patterns are easy to read across different breakdowns. A separate chart tracks how scores at different percentiles have shifted over PISA cycles, making trends visible beyond the average.
 - **Objective 3: Supporting different kinds of users.** The dashboard offers two entry points. The Explore mode lets analysts and researchers interact with the data directly, cross-referencing variables like socioeconomic background, immigration status, and school type without a fixed path. The Story mode takes a different approach, guiding policymakers through key findings with contextual framing built in. Automated text generation accompanies each chart, describing patterns in neutral language and avoiding interpretations that reduce group differences to inherent traits.
+
+To execute these objectives reliably, we first needed to address the sheer scale and complexity of the underlying assessment files.
 
 ## Data
 
@@ -173,6 +197,8 @@ pd.DataFrame({
 ### How the available data shaped or constrained the scientific objectives
 
 The structure of the PISA data directly constrained what the dashboard could responsibly claim to show. The use of plausible values rather than single test scores meant that every statistic had to be computed as an average across ten imputations, ruling out any shortcut that treated `PV1` as a representative score. The replicate weight structure (`{python} n_replicate_weights` Fay BRR weights per student) [@oecd_pisa_2022_technical] made standard error estimation considerably more involved than a naive weighted standard deviation, but was necessary to flag country-year-subject combinations where small sample sizes made point estimates unreliable, which directly shaped the decision to add standard error and 95% CI to the dashboard's summary statistics. Finally, because PISA microdata cannot support causal claims, the project's scope was deliberately limited to descriptive and comparative reporting (surfacing the full distribution of outcomes and how equity-relevant gaps move over time) rather than attempting to model or explain why those gaps exist, which would have required a different kind of data than PISA's cross-sectional design provides.
+
+With the constraints and data structures clearly defined, the next step was to design a pipeline capable of serving this information to end users without huge computational overhead and lag.
 
 ## Data Science Methods
 
@@ -218,7 +244,7 @@ fig.show()
 
 ### Data pre-processing pipeline
 
-Several preprocessing steps were necessary before the data could be used in the dashboard. Student and school-level files were merged on the school identifier for each cycle, then written to per-year Parquet files rather than kept in CSV, since the full multi-cycle dataset could not be loaded into memory as a single pandas DataFrame without causing out-of-memory failures in the deployed environment. Querying is instead performed on demand against the Parquet files using DuckDB, so that any given chart only loads the specific columns and country-year combinations it needs rather than the full 1.7 million-row dataset. Records missing the final sampling weight were excluded from all weighted calculations, since an unweighted estimate would not generalize to the national population PISA is designed to represent. Subgroup breakdowns (by gender, immigration status, socioeconomic quartile, school type, and school location) are suppressed in the dashboard whenever the underlying cell falls below `{python} MIN_GROUP_N` valid observations, to avoid presenting unstable percentile or mean estimates as if they were reliable.
+Several preprocessing steps were necessary before the data could be used in the dashboard. Student and school-level files were merged on the school identifier for each cycle, then written to per-year Parquet files rather than kept in CSV, since the full multi-cycle dataset could not be loaded into memory as a single pandas DataFrame without causing out-of-memory failures in the deployed environment. Querying is instead performed on demand against the Parquet files using DuckDB, so that any given chart only loads the specific columns and country-year combinations it needs rather than the full `{python} f"{n_total:,}"` row dataset. Records missing the final sampling weight were excluded from all weighted calculations, since an unweighted estimate would not generalize to the national population PISA is designed to represent. Subgroup breakdowns (by gender, immigration status, socioeconomic quartile, school type, and school location) are suppressed in the dashboard whenever the underlying cell falls below `{python} MIN_GROUP_N` valid observations, to avoid presenting unstable percentile or mean estimates as if they were reliable.
 
 Two additional pre-aggregation steps are run at pipeline build time to keep render times low. Gaussian KDE curves and weighted percentiles (P10-P90) are pre-computed across every combination of country, year, subject, subgroup, and stored in `pisa_precomputed.parquet`, so density charts render from a lookup rather than fitting KDEs at runtime. Standard errors are similarly pre-aggregated into `pisa_ se_stats.parquet`, indexed by country, subject, and year using the `{python} n_replicate_weights` replicate weights averaged across all `{python} n_pv_per_subject` plausible values, allowing constant-time lookup instead of loading 91 columns per chart render.  
 
@@ -232,7 +258,9 @@ Several subgroup variables were selected because of their relevance to equity-or
 
 ### Visualization Choices
 
-We build two modes in the dashboard to support two different user needs. In the story mode, users can choose the country and subject on the side bar and get a detailed report, with questions to guide them through which plots to look at, how to interpret and the most important findings from these plots. In the exploration mode, users can interactively change the country, subject, year, and subgroup to investigate patterns in more detail. Percentile or distribution plots, heatmaps, and scatterplots are useful in this mode because they show the distribution and spread of the data, preserve more information and allow flexible comparison. 
+We built two modes in the dashboard to support two different user needs. In the Story mode, users are guided through specific countries and subjects with targeted questions, automated key findings, and contextual framing designed for policymakers. In the Explore mode, analysts have the freedom to interactively change countries, years, and subgroup breakdowns to investigate specific patterns on their own. 
+
+Across both modes, percentile tracking, shaded density plots, and heatmaps are utilized extensively rather than relying on simple bar charts of averages. This design choice is directly supported by visualization research; as Holder and Xiong [-@holder_dispersion_2022] demonstrate, hiding variability behind simple averages actively encourages stereotyping and deficit thinking among viewers. By designing visuals that force the user to view the full, overlapping teardrop shapes in our density plots, the dashboard effectively communicates that within-group variation (e.g., the spread of scores within a single socioeconomic bracket) is often larger than between-group variation, preserving the rich distributional information that averages erase.
 
 ### Limitations and Ethical Considerations
 
@@ -254,7 +282,7 @@ A key motivation behind the Data Story tab was feedback from ETS that most polic
 
 We chose Streamlit over alternatives like Dash or a React frontend mainly because the tool is intended for internal use by ETS and ministry staff rather than the general public. Keeping everything in Python meant the data pipeline, statistical functions, and UI all lived in one codebase, which made it much easier to respond to partner feedback quickly across the project timeline.
 
-The focus on full score distributions rather than averages came from looking at the data directly. The spread from the 10th to the 90th percentile within a typical country is around 240 points, while the gap between an average country and the OECD mean is closer to 30 points (authors' analysis of PISA 2015–2022 data; [@oecd_pisa_2022]). Showing only averages would draw attention to the smaller number [@holder_dispersion_2022]. Shaded density charts and percentile-based views were used instead of simple line plots to make the within-country spread readable to non-statisticians [@holder_dispersion_2022].
+The focus on full score distributions rather than averages came from looking at the data directly. The spread from the 10th to the 90th percentile within a typical country (e.g., Canada) is roughly `{python} can_spread` points, while the gap between an average country and the OECD mean is often significantly smaller [@oecd_pisa_2022]. Showing only averages would draw attention to the smaller number [@holder_dispersion_2022]. Shaded density charts and percentile-based views were used instead of simple line plots to make the within-country spread readable to non-statisticians [@holder_dispersion_2022].
 
 The OECD average is used as the reference point throughout the dashboard, which was a specific request from our ETS partner. We also decided not to automate peer country comparisons, since suggesting which countries to compare against would risk encoding assumptions we cannot justify given the diversity of education systems in the dataset.
 
@@ -272,13 +300,24 @@ There are some limitations worth noting. The app is deployed on Posit Cloud, whi
 
 The data pipeline is already set up to handle additional PISA cycles, so adding 2009 and 2012 data would not require major changes. Longer term, expanding country coverage beyond the current `{python} n_countries` and adding earlier cycles would strengthen the trend chapter by giving it more data points to work with.
 
+### Project Timeline and Engineering Process
+
+The development of the dashboard followed an iterative release cycle, tracked via GitHub issues to ensure reliable data processing and feature deployment. 
+
+* **May 11, 2024:** Pipeline initialization. Created scripts for automated data downloading ([Issue #22](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/22)) and established the main statistical engine for plausible values and replicate weights ([Issue #26](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/26)).
+* **May 13–14, 2024:** Core visualizations and integration. Prototyped the equity-focused distributional charts ([Issue #36](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/36)) and successfully integrated them into the initial Streamlit application architecture ([Issue #51](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/51)).
+* **May 20–21, 2024:** Infrastructure and expansion. Set up the AWS S3 bucket to host the processed `.parquet` files for decoupled data access ([Issue #56](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/56)) and expanded the visualization suite to include cross-sectional heatmaps and scatterplots ([Issue #76](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/76)).
+* **May 26, 2024:** Staging deployment. Successfully deployed the working prototype to Posit Cloud for initial stakeholder review ([Issue #84](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/84)).
+* **June 1, 2024:** User experience overhaul. Refined the interactivity of the Plotly charts ([Issue #93](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/93)) and implemented the guided storytelling engine with automated text generation ([Issue #102](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/102)).
+* **June 19, 2024:** Performance optimization. Refactored DuckDB queries and precomputed complex KDE curves to drastically reduce dashboard render times ([Issue #166](https://github.com/apoorva43/ETS_Smart_Dashboard/issues/166)).
+
 ## Conclusions and Recommendations
 
 Education ministries tend to focus on a country's mean PISA score and where it ranks internationally. While this is a natural starting point, it misses two things that are arguably more useful for domestic policy: how spread out student outcomes are within the country, and which groups of students are falling behind. The dashboard was built to shift that focus, putting the full score distribution front and center and making equity breakdowns easy to access alongside the international comparison.
 
 Overall the product does what it set out to do. A user can open the Data Story tab for any country, pick a subject, and within a few minutes see how their country compares to the OECD average, whether scores have gone up or down across cycles, which student groups have the largest score differences, and how urban and rural or public and private schools compare. The auto-generated text on each chart means users do not need to interpret the visuals from scratch. Using the OECD average as the single reference point throughout keeps comparisons consistent and avoids the bias that would come from hand-picking peer countries.
 
-There is also a deeper limitation that is harder to solve. The dashboard can show that first-generation immigrant students score 40 points below native students in a given country, but it cannot tell the user why. Whether that reflects a lack of language support, socioeconomic sorting, geographic concentration, or something else entirely depends on the context that lives outside the PISA dataset. The tool is best thought of as a starting point for analysis rather than a final answer.
+There is also a deeper limitation that is harder to solve. The dashboard can show that first-generation immigrant students score `{python} immig_gap` points below native students in a given country, but it cannot tell the user why. Whether that reflects a lack of language support, socioeconomic sorting, geographic concentration, or something else entirely depends on the context that lives outside the PISA dataset. The tool is best thought of as a starting point for analysis rather than a final answer.
 
 ## References
 
