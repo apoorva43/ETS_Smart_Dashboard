@@ -103,7 +103,8 @@ fig = plot_group_shaded_density_precomputed(
   cnt="CAN",
   group_type="school_loc",
   group_title="School Location",
-  year=2022
+  year=2022,
+  compact=True
 )
 
 fig.show()

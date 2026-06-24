@@ -10,7 +10,7 @@ An interactive equity-focused dashboard for exploring PISA (Programme for Intern
 
  - **Live dashboard** - [Posit Cloud deployment](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/) 
 - **Full documentation** - [GitHub Pages](https://apoorva43.github.io/ETS_Smart_Dashboard/) 
-- **Final report** - [`reports/final/final_report.pdf`](reports/final/final_report.pdf) *(update URL)*
+- **Final report** - [`reports/final/final_report.pdf`](reports/final/final_report.pdf) 
 
 ---
 
@@ -109,6 +109,7 @@ A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-
 > - `S3_BASE_URL` in `src/data_loader.py`
 >
 > No other code changes are required - only updating the base URL to point to the new bucket.
+
 ---
 
 ## Testing
@@ -156,3 +157,14 @@ All tests are automatically executed via GitHub Actions:
 - on every pull request targeting `main` or `dev`
 
 The CI pipeline runs unit tests, and executes integration tests separately on merge-related events. 
+
+---
+
+## Generate Final Report
+
+Before rendering the report, ensure the environment is fully installed and the processed parquet files are available in `data/processed`:
+
+```
+cd reports/final
+quarto render final_report.qmd --to pdf
+```
