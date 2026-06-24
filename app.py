@@ -47,10 +47,10 @@ st.set_page_config(page_title="PISA Dashboard", layout="wide")
 S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 CHART_TYPES = [
-    "Percentile score profile",
-    "Score change over time",
+    "Percentile Score Profile",
+    "Score Change Over Time",
     "Intersectional Heatmap",
-    "Group comparison",
+    "Group Comparison",
     "Country Scatterplot"
 ]
 
@@ -385,14 +385,14 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
     """
     Short chart-specific explanation shown below each chart.
     """
-    if chart_type == "Percentile score profile":
+    if chart_type == "Percentile Score Profile":
         return (
             "This chart shows the full score distribution for the selected country or countries. "
             "Darker shading shows where most students are concentrated, while the markers show key percentiles. "
             "Use it to compare both the typical score and the spread of student outcomes."
         )
 
-    if chart_type == "Score change over time":
+    if chart_type == "Score Change Over Time":
         baseline_text = f" relative to {reference_year}" if reference_year else ""
         return (
             f"This chart shows how scores changed across PISA cycles{baseline_text}. "
@@ -413,7 +413,7 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
             "Each point is a country. Use it to identify broad cross-country patterns, but **do not interpret the relationship as causal**."
         )
 
-    if chart_type == "Group comparison":
+    if chart_type == "Group Comparison":
         if group_key == "Socioeconomic status":
             return (
                 "This chart compares score distributions across socioeconomic quartiles. "
@@ -486,7 +486,7 @@ def render_chart(chart_type, subject, selected_countries,
     pv_cols = PV_BY_SUBJ[subject]
 
     # 1. Percentile Profile
-    if chart_type == "Percentile score profile":
+    if chart_type == "Percentile Score Profile":
         fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
@@ -505,12 +505,12 @@ def render_chart(chart_type, subject, selected_countries,
             )
             render_plotly_chart_with_note(
                 fig,
-                note=get_chart_note("Percentile score profile"),
+                note=get_chart_note("Percentile Score Profile"),
                 key=f"percentile_profile_{widget_key}_{subject}_{selected_year}",
             )
 
     # 2. Group Comparison
-    elif chart_type == "Group comparison":
+    elif chart_type == "Group Comparison":
         group_key = st.selectbox(
             "Break down by:", 
             list(GROUP_OPTIONS.keys()), 
@@ -521,7 +521,7 @@ def render_chart(chart_type, subject, selected_countries,
 
         if len(selected_countries) > 1:
             st.info(
-                f"Group comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
+                f"Group Comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
         # Fetch data ONCE for whatever group was selected
@@ -554,7 +554,7 @@ def render_chart(chart_type, subject, selected_countries,
 
 
         # Build chart note
-        chart_note = get_chart_note("Group comparison", group_key=group_key)
+        chart_note = get_chart_note("Group Comparison", group_key=group_key)
 
         # Add SES-specific finding into the blue note box instead of showing it above the chart
         if group_key == "Socioeconomic status":
@@ -579,7 +579,7 @@ def render_chart(chart_type, subject, selected_countries,
         )
 
     # 3. Score Change Over Time
-    elif chart_type == "Score change over time":
+    elif chart_type == "Score Change Over Time":
         df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         if len(available_years) < 2:
             st.warning(
@@ -612,7 +612,7 @@ def render_chart(chart_type, subject, selected_countries,
             render_plotly_chart_with_note(
                 fig,
                 note=get_chart_note(
-                    "Score change over time",
+                    "Score Change Over Time",
                     reference_year=reference_year
                 ),
                 key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
@@ -1937,7 +1937,7 @@ elif app_mode == "🔍 Explore":
     country_pool = all_countries
 
     DEFAULT_COUNTRIES = ["CAN", "USA"]
-    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison", "Intersectional Heatmap"]
+    SINGLE_COUNTRY_CHARTS = ["Score Change Over Time", "Group Comparison", "Intersectional Heatmap"]
 
     if "memory_countries" not in st.session_state:
         st.session_state.memory_countries = [
@@ -2002,10 +2002,10 @@ elif app_mode == "🔍 Explore":
     st.sidebar.markdown("---")
     
     is_time_chart = (
-        (not side_by_side and chart_type == "Score change over time") or
+        (not side_by_side and chart_type == "Score Change Over Time") or
         (side_by_side and (
-            chart_type_left == "Score change over time" or
-            chart_type_right == "Score change over time"
+            chart_type_left == "Score Change Over Time" or
+            chart_type_right == "Score Change Over Time"
             ))
     )
 
@@ -2035,8 +2035,8 @@ elif app_mode == "🔍 Explore":
         # When comparing two score-change-over-time charts, use the same y-axis
         # so the two countries are visually comparable.
         if (
-            chart_type_left == "Score change over time"
-            and chart_type_right == "Score change over time"
+            chart_type_left == "Score Change Over Time"
+            and chart_type_right == "Score Change Over Time"
         ):
             reference_year = min(available_years)
 
@@ -2112,7 +2112,7 @@ elif app_mode == "🔍 Explore":
                 render_plotly_chart_with_note(
                     fig_left,
                     note=get_chart_note(
-                        "Score change over time",
+                        "Score Change Over Time",
                         reference_year=reference_year,
                     ),
                     key=f"time_change_left_{subject}_{reference_year}_{country_left}",
@@ -2123,7 +2123,7 @@ elif app_mode == "🔍 Explore":
                 render_plotly_chart_with_note(
                     fig_right,
                     note=get_chart_note(
-                        "Score change over time",
+                        "Score Change Over Time",
                         reference_year=reference_year,
                     ),
                     key=f"time_change_right_{subject}_{reference_year}_{country_right}",
