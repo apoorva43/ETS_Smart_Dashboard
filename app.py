@@ -243,48 +243,40 @@ CHART_HELP_TEXT = {
 
 GROUP_HOW_TO_READ = {
     "Score distribution": (
-        "This plot shows the full spread of student scores. "
-        "Darker, wider sections indicate where most students are concentrated (the middle 50%), "
-        "while the thinner tails show the students at the lower and higher ends of the score distribution. "
-        "The vertical line marks the median score. The asterisk shows the average score for the group, which may differ from the median if the distribution is skewed."
+        "This density plot shows the full spread of student scores. Darker, wider sections indicate where most students are concentrated (the middle 50%), while the thinner tails show the students at the lower and higher ends. A teardrop shape shifted further to the right indicates higher overall performance. A wider, more stretched-out shape means student scores are more spread out. The vertical line marks the median score, and the asterisk shows the average.<br>"
+         "<em>Hover over the plot for key percentile values.</em>"
     ),
     "Change over time": (
-        "The horizontal axis shows the baseline score at each percentile. "
-        "The vertical axis shows the change in score in subsequent cycles. "
-        "Points on the zero line mean no change. Points above indicate improvement; points below indicate decline."
+        "This change plot tracks how scores have shifted for different performance groups over time. The horizontal axis shows the assessment years, and the vertical axis shows the change in score compared to the baseline year (the zero line). Each line and marker represents a specific percentile of students. Markers above the zero line mean that group's scores have improved since the baseline year; markers below mean they have declined. <br>"
+        "<em>Hover over the markers for the exact score changes from the baseline.</em>"
     ),
     "Socioeconomic status": (
-        "Each shape shows the score distribution for one socioeconomic group. "
-        "Students are divided into four equal groups based on family background "
-        "(parental education, occupation, and home resources):<br>"
+        "This grouped density plot compares performance across socioeconomic tiers. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the overlap between the shapes reveals if gaps exist across all students or just at the extremes. The vertical line marks the median. Students are divided into four equal groups based on family wealth and resources:<br>"
         "• Q4: Highest 25%<br>"
         "• Q1: Lowest 25%<br>"
-        "The vertical line marks the group's median score."
-        "Percentages may not add exactly to 100 percent because some students do not have enough socioeconomic information to be grouped."
+        "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     ),
     "Immigration status": (
-        "Each shape shows the score distribution for one immigration background:<br>"
+        "This grouped density plot compares performance across immigration backgrounds. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the degree of overlap reveals the size of the performance gap across the distribution. The vertical line marks the median. Categories include:<br>"
         "• Native: Student and both parents born in-country.<br>"
         "• First-generation: Student born abroad.<br>"
         "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
-        "The vertical line marks the group's median score. "
-        "Percentages may not add exactly to 100 percent because some students do not have enough immigration information to be grouped."
+         "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     ),
     "Gender": (
-        "Each shape shows the score distribution for male and female students. "
-        "The vertical line marks the group's median score."
+        "This grouped density plot compares performance between male and female students. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the degree of overlap reveals the size of the performance gap across the entire distribution. The vertical line marks the group's median.<br>" 
+        "<em>Hover over the plot for key percentile values.</em>"
     ),
     "School type": (
-        "Each shape shows the score distribution for one school type:<br>"
+        "This grouped density plot compares performance across school structures. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the overlap reveals the size of the performance gap across the distribution. The vertical line marks the median. Categories include:<br>"
         "• Public: Government-operated.<br>"
         "• Government-dependent private: Privately managed but significantly government-funded.<br>"
         "• Independent private: Primarily privately funded.<br>"
-        "Percentages indicate the share of students in each school type."
+        "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     ),
     "School location": (
-        "Each shape shows the score distribution based on the community size where the school is located. "
-        "The vertical line marks the group's median score. "
-        "Percentages indicate the share of students in each location."
+        "This grouped density plot compares performance based on the community size where the school is located. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the overlap reveals the size of the performance gap across the distribution. The vertical line marks the median.</br>"
+        "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     )
 }           
 
@@ -833,7 +825,7 @@ def _chart_expander(label: str, fig, how_to_read: str, expanded: bool = True):
                 border-top: 1px solid rgba(130, 130, 130, 0.3);
                 margin-top: 6px;
             ">
-                <strong>How to read:</strong> {how_to_read}
+                <strong>How to read and interpret:</strong> {how_to_read}
             </div>
             """,
             unsafe_allow_html=True,
