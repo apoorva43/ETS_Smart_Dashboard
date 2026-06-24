@@ -1697,7 +1697,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             sort_by_median=True
         )
         if not fig4a.data:
-            st.warning(f"⚠️ **Data unavailable:** School location comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
+            st.warning(f"⚠️ **Data unavailable:** School type comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
         else:
             _chart_expander(
                 "Collapse chart",
@@ -1705,13 +1705,13 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 GROUP_HOW_TO_READ.get("School type", "Each bar shows the score distribution for one group.")
             )
 
-        _policy_box(
-            "Differences between public and private school scores "
-            "often reflect the socioeconomic composition of each "
-            "school type rather than school quality itself. "
-            "Interpreting these figures alongside the SES data "
-            "in Chapter 3 is important."
-        )
+            _policy_box(
+                "Differences between public and private school scores "
+                "often reflect the socioeconomic composition of each "
+                "school type rather than school quality itself. "
+                "Interpreting these figures alongside the SES data "
+                "in Chapter 3 is important."
+            )
 
     # ── Urban vs rural ────────────────────────────────────────────────────
     st.markdown("#### Urban vs rural")
@@ -1791,7 +1791,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         )
 
         if not fig4b.data:
-            st.warning(f"⚠️ **Data unavailable:** School type comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
+            st.warning(f"⚠️ **Data unavailable:** School location comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
         else:
             _chart_expander(
                 "Collapse chart",
@@ -1799,12 +1799,12 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 GROUP_HOW_TO_READ.get("School location", "Each bar shows the score distribution for one group.")
             )
 
-        _policy_box(
-            "Urban-rural score differences in PISA typically reflect "
-            "resource allocation across school systems — teacher "
-            "quality, infrastructure, and support services. "
-            "These are addressable through targeted policy."
-        )
+            _policy_box(
+                "Urban-rural score differences in PISA typically reflect "
+                "resource allocation across school systems — teacher "
+                "quality, infrastructure, and support services. "
+                "These are addressable through targeted policy."
+            )
 
     st.divider()
     
