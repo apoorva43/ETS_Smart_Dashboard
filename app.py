@@ -826,10 +826,11 @@ def _chart_expander(label: str, fig, how_to_read: str, expanded: bool = True):
             f"""
             <div style="
                 font-size: 0.82rem;
-                color: #555;
+                color: var(--text-color);
+                opacity: 0.85; 
                 line-height: 1.6;
                 padding: 6px 2px 2px 2px;
-                border-top: 0.5px solid #e0e0e0;
+                border-top: 1px solid rgba(130, 130, 130, 0.3);
                 margin-top: 6px;
             ">
                 <strong>How to read:</strong> {how_to_read}
