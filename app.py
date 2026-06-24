@@ -19,18 +19,14 @@ Run the app from the project root with:
 """
 import streamlit as st
 import pandas as pd
-# import matplotlib.pyplot as plt
 import numpy as np
-# import os
 from pathlib import Path
 
 from src.data_loader import query_pisa, load_precomputed
 from src.pisa_stats import (
     weighted_percentiles_pv,
     compute_escs_quartile_percentiles,
-    compute_group_percentiles,
-    get_oecd_percentiles,
-    compute_weighted_se_pv
+    compute_group_percentiles
 )
 from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
 from src.plotting_plotly import (
@@ -43,19 +39,18 @@ from src.plotting_plotly import (
                           plot_country_shaded_density_precomputed,
                           plot_percentile_change_from_baseline_precomputed,
                           _cnt_label)
-from src.text_generator import (country_distribution_text,
-                                ses_difference_text,
+from src.text_generator import (ses_difference_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
-S3_BASE = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
+S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 CHART_TYPES = [
-    "Percentile score profile",
-    "Score change over time",
+    "Percentile Score Profile",
+    "Score Change Over Time",
     "Intersectional Heatmap",
-    "Group comparison",
+    "Group Comparison",
     "Country Scatterplot"
 ]
 
@@ -98,7 +93,7 @@ def get_meta() -> pd.DataFrame:
     local = Path("data/processed/pisa_country_stats.parquet")
     if local.exists():
         return pd.read_parquet(local)
-    return pd.read_parquet(f"{S3_BASE}/pisa_country_stats.parquet")
+    return pd.read_parquet(f"{S3_BASE_URL}/pisa_country_stats.parquet")
 
 @st.cache_data(ttl=3600)
 def get_precomputed() -> pd.DataFrame:
@@ -115,7 +110,7 @@ def get_se_lookup() -> pd.DataFrame:
     replaces the runtime 91-column fetch + Fay BRR computation.
     """
     local = Path("data/processed/pisa_se_stats.parquet")
-    df = pd.read_parquet(local) if local.exists() else pd.read_parquet(f"{S3_BASE}/pisa_se_stats.parquet")
+    df = pd.read_parquet(local) if local.exists() else pd.read_parquet(f"{S3_BASE_URL}/pisa_se_stats.parquet")
     return df.set_index(["CNT", "YEAR", "SUBJECT"])
     
 
@@ -248,68 +243,42 @@ CHART_HELP_TEXT = {
 
 GROUP_HOW_TO_READ = {
     "Score distribution": (
-        "This curve shows the full spread of student scores. "
-        "Darker, wider sections indicate where most students are concentrated (the middle 50%), "
-        "while the thinner tails show the highest and lowest achievers. "
-        "The vertical line marks the median score."
+        "This density plot shows the full spread of student scores. Darker, wider sections indicate where most students are concentrated (the middle 50%), while the thinner tails show the students at the lower and higher ends. A teardrop shape shifted further to the right indicates higher overall performance. A wider, more stretched-out shape means student scores are more spread out. The vertical line marks the median score, and the asterisk shows the average.<br>"
+         "<em>Hover over the plot for key percentile values.</em>"
     ),
     "Change over time": (
-        "The horizontal axis shows the baseline score at each percentile. "
-        "The vertical axis shows the change in score in subsequent cycles. "
-        "Points on the zero line mean no change. Points above indicate improvement; points below indicate decline."
+        "This change plot tracks how scores have shifted for different performance groups over time. The horizontal axis shows the assessment years, and the vertical axis shows the change in score compared to the baseline year (the zero line). Each line and marker represents a specific percentile of students. Markers above the zero line mean that group's scores have improved since the baseline year; markers below mean they have declined. <br>"
+        "<em>Hover over the markers for the exact score changes from the baseline.</em>"
     ),
     "Socioeconomic status": (
-        "Each shape shows the score distribution for one socioeconomic group. "
-        "Students are divided into four equal groups based on family background "
-        "(parental education, occupation, and home resources):<br>"
+        "This grouped density plot compares performance across socioeconomic tiers. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the overlap between the shapes reveals if gaps exist across all students or just at the extremes. The vertical line marks the median. Students are divided into four equal groups based on family wealth and resources:<br>"
         "• Q4: Highest 25%<br>"
         "• Q1: Lowest 25%<br>"
-        "The vertical line marks the group's median score."
+        "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     ),
     "Immigration status": (
-        "Each shape shows the score distribution for one immigration background:<br>"
+        "This grouped density plot compares performance across immigration backgrounds. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the degree of overlap reveals the size of the performance gap across the distribution. The vertical line marks the median. Categories include:<br>"
         "• Native: Student and both parents born in-country.<br>"
         "• First-generation: Student born abroad.<br>"
         "• Second-generation: Student born in-country, at least one parent born abroad.<br>"
-        "The vertical line marks the group's median score."
+         "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     ),
     "Gender": (
-        "Each shape shows the score distribution for male and female students. "
-        "The vertical line marks the group's median score."
+        "This grouped density plot compares performance between male and female students. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the degree of overlap reveals the size of the performance gap across the entire distribution. The vertical line marks the group's median.<br>" 
+        "<em>Hover over the plot for key percentile values.</em>"
     ),
     "School type": (
-        "Each shape shows the score distribution for one school type:<br>"
+        "This grouped density plot compares performance across school structures. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the overlap reveals the size of the performance gap across the distribution. The vertical line marks the median. Categories include:<br>"
         "• Public: Government-operated.<br>"
         "• Government-dependent private: Privately managed but significantly government-funded.<br>"
         "• Independent private: Primarily privately funded.<br>"
-        "Percentages indicate the share of students in each school type."
+        "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     ),
     "School location": (
-        "Each shape shows the score distribution based on the community size where the school is located. "
-        "The vertical line marks the group's median score. "
-        "Percentages indicate the share of students in each location."
+        "This grouped density plot compares performance based on the community size where the school is located. Look at how the teardrop shapes overlap. A shape shifted further right indicates higher overall scores, while the overlap reveals the size of the performance gap across the distribution. The vertical line marks the median.</br>"
+        "Percentages may not sum to 100% because some students lack sufficient background data. <em>Hover over the plot for key percentile values.</em>"
     )
-}
-
-def render_chart_help(chart_type, group_key=None):
-    """Renders a collapsible help section above complex charts."""
-    
-    # Determine which help text to grab
-    help_key = None
-    if chart_type == "Score distribution":
-        help_key = "Score distribution"
-    elif chart_type == "Score by gender":
-        help_key = "Score by gender"
-    elif chart_type == "Country Scatterplot":
-        help_key = "Country Scatterplot"
-    elif chart_type == "Group comparison" and group_key == "School location":
-        help_key = "Box Plot"
-
-    # Render it if it exists
-    if help_key and help_key in CHART_HELP_TEXT:
-        with st.expander(f"How to read the {chart_type.lower()} chart"):
-            st.markdown(CHART_HELP_TEXT[help_key])
-            
+}           
 
 def apply_compact_plotly_layout(fig, hide_legend=False):
     """
@@ -371,25 +340,56 @@ def render_plotly_chart_with_note(fig, note, key=None, use_container_width=True)
         "Hover over the chart to see exact values. "
         "Drag across the chart to zoom in, or use the toolbar to pan, reset axes, and download the chart."
     )
+
+
+def get_plotly_y_range(figs, pad=3):
+    """
+    Get shared y-axis range from multiple Plotly figures.
+    Used to make side-by-side comparisons visually comparable.
+    """
+    ys = []
+
+    for fig in figs:
+        for trace in fig.data:
+            if hasattr(trace, "y") and trace.y is not None:
+                vals = pd.to_numeric(pd.Series(trace.y),
+                                     errors="coerce").dropna()
+                ys.extend(vals.tolist())
+
+    if not ys:
+        return None
+
+    y_min = min(ys)
+    y_max = max(ys)
+
+    # Always include 0 for change-over-time charts
+    y_min = min(y_min, 0)
+    y_max = max(y_max, 0)
+
+    if y_min == y_max:
+        y_min -= 1
+        y_max += 1
+
+    return [y_min - pad, y_max + pad]
     
 
 def get_chart_note(chart_type, group_key=None, reference_year=None):
     """
     Short chart-specific explanation shown below each chart.
     """
-    if chart_type == "Percentile score profile":
+    if chart_type == "Percentile Score Profile":
         return (
             "This chart shows the full score distribution for the selected country or countries. "
             "Darker shading shows where most students are concentrated, while the markers show key percentiles. "
             "Use it to compare both the typical score and the spread of student outcomes."
         )
 
-    if chart_type == "Score change over time":
+    if chart_type == "Score Change Over Time":
         baseline_text = f" relative to {reference_year}" if reference_year else ""
         return (
             f"This chart shows how scores changed across PISA cycles{baseline_text}. "
-            "Each coloured line represents a percentile group, helping show whether changes were larger "
-            "among lower-, middle-, or higher-performing students."
+            "Each line of coloured markers represents a different percentile group, helping show whether changes were larger "
+            "among lower, middle, or higher performing students."
         )
 
     if chart_type == "Intersectional Heatmap":
@@ -405,12 +405,12 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
             "Each point is a country. Use it to identify broad cross-country patterns, but **do not interpret the relationship as causal**."
         )
 
-    if chart_type == "Group comparison":
+    if chart_type == "Group Comparison":
         if group_key == "Socioeconomic status":
             return (
                 "This chart compares score distributions across socioeconomic quartiles. "
-                "Students are ranked by the ESCS index and split into four equal-sized groups: Q1 is the lowest socioeconomic quartile and Q4 is the highest. "
-                "Use it to see whether SES gaps are consistent across the distribution or larger for particular student groups."
+                "Students are ranked by the index of economic, social, and cultural status (ESCS) and split into four equal-sized groups: Q1 is the lowest quartile and Q4 is the highest. "
+                "Use it to see whether socioeconomic gaps are consistent across the distribution or larger for particular student groups."
             )
 
         if group_key == "Immigration status":
@@ -422,21 +422,20 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
         if group_key == "Gender":
             return (
                 "This chart compares score distributions by gender. "
-                "Use it to see whether differences are concentrated in lower-, middle-, or higher-performing students."
+                "Use it to see whether differences are concentrated in lower, middle, or higher performing students."
             )
 
         if group_key == "School location":
             return (
                 "This chart compares score distributions by school location. "
-                "School location is grouped by the location category of the school, from village to large city. "
+                "School location is grouped by the size or type of the community where the school is situated. "
                 "Use it to see whether location differences appear mainly in the median or across the full distribution."
             )
 
         if group_key == "School type":
             return (
                 "This chart compares score distributions by school type. "
-                "Public schools are government-operated; government-dependent private schools are privately managed but receive substantial government funding; "
-                "independent private schools are primarily privately funded. "
+                "School types typically include public and private institutions, with variations in management and funding depending on the country. "
                 "Use it to compare typical performance while also considering the spread and overlap within each school type."
             )
 
@@ -479,7 +478,7 @@ def render_chart(chart_type, subject, selected_countries,
     pv_cols = PV_BY_SUBJ[subject]
 
     # 1. Percentile Profile
-    if chart_type == "Percentile score profile":
+    if chart_type == "Percentile Score Profile":
         fetch_cnts = tuple(set(selected_countries) | set(oecd_countries))
         df = fetch(fetch_cnts, selected_year, tuple(BASE_COLS + pv_cols))
         
@@ -493,18 +492,17 @@ def render_chart(chart_type, subject, selected_countries,
             st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
-            render_chart_help(chart_type)
             fig = plot_country_shaded_density(
                 df, subject, valid_countries, year=selected_year, compact=compact
             )
             render_plotly_chart_with_note(
                 fig,
-                note=get_chart_note("Percentile score profile"),
+                note=get_chart_note("Percentile Score Profile"),
                 key=f"percentile_profile_{widget_key}_{subject}_{selected_year}",
             )
 
     # 2. Group Comparison
-    elif chart_type == "Group comparison":
+    elif chart_type == "Group Comparison":
         group_key = st.selectbox(
             "Break down by:", 
             list(GROUP_OPTIONS.keys()), 
@@ -515,7 +513,7 @@ def render_chart(chart_type, subject, selected_countries,
 
         if len(selected_countries) > 1:
             st.info(
-                f"Group comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
+                f"Group Comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
         # Fetch data ONCE for whatever group was selected
@@ -546,24 +544,34 @@ def render_chart(chart_type, subject, selected_countries,
             sort_by_median=sort_by_med
         )
 
-        # Print the SES-specific text if applicable
+
+        # Build chart note
+        chart_note = get_chart_note("Group Comparison", group_key=group_key)
+
+        # Add SES-specific finding into the blue note box instead of showing it above the chart
         if group_key == "Socioeconomic status":
-            st.markdown(
-                ses_difference_text(
-                    df, subject, primary_country, year=selected_year
+            # Safely check data volume before calling the text generator
+            if len(df.dropna(subset=["ESCS", "W_FSTUWT"])) >= 30:
+                ses_text = ses_difference_text(
+                    df,
+                    subject,
+                    primary_country,
+                    year=selected_year
                 )
-            )
+                chart_note = f"{chart_note}\n\n{ses_text}"
+            else:
+                chart_note = f"{chart_note}\n\n⚠️ Insufficient socioeconomic data to calculate differences."
 
         # Render the chart ONCE, formatting the key dynamically
         safe_key = group_key.lower().replace(" ", "_")
         render_plotly_chart_with_note(
             fig,
-            note=get_chart_note("Group comparison", group_key=group_key),
+            note=chart_note,
             key=f"group_{safe_key}_{widget_key}_{subject}_{selected_year}_{primary_country}",
         )
 
     # 3. Score Change Over Time
-    elif chart_type == "Score change over time":
+    elif chart_type == "Score Change Over Time":
         df = fetch((primary_country,), None, tuple(BASE_COLS + pv_cols))
         if len(available_years) < 2:
             st.warning(
@@ -571,29 +579,36 @@ def render_chart(chart_type, subject, selected_countries,
             )
             return
 
+        # Extract the actual years this specific country has data for
+        country_years = sorted(df["YEAR"].dropna().astype(int).unique().tolist())
+
         if len(selected_countries) > 1:
             st.info(
                 f"Time comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
-        reference_year = min(available_years)
-        comparison_years = [y for y in available_years if y != reference_year]
-        
-        fig = plot_percentile_change_from_baseline(
-            df=df,
-            subject=subject,
-            cnt=primary_country,
-            reference_year=reference_year
-        )
-
-        render_plotly_chart_with_note(
-            fig,
-            note=get_chart_note(
-                "Score change over time",
+        # Country-specific check: Are there enough years to draw a line?
+        if len(country_years) < 2:
+            st.warning(f"⚠️ **Data unavailable:** {_cnt_label(primary_country)} requires at least two years of data to show historical trends.")
+        else:
+            # Set the baseline to the earliest year THIS country actually participated in
+            reference_year = min(country_years)
+            
+            fig = plot_percentile_change_from_baseline(
+                df=df,
+                subject=subject,
+                cnt=primary_country,
                 reference_year=reference_year
-            ),
-            key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
-        )
+            )
+
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note(
+                    "Score Change Over Time",
+                    reference_year=reference_year
+                ),
+                key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
+            )
 
     # 4. Intersectional Heatmap
     elif chart_type == "Intersectional Heatmap":
@@ -672,9 +687,8 @@ def render_chart(chart_type, subject, selected_countries,
         valid_countries = [c for c in selected_countries if c not in missing_cnts]
 
         if missing_cnts:
-            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing {selected_col} data).")
+            st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing data).")
         
-        render_chart_help(chart_type)
         fig = plot_resource_scatter(
             df=df,
             subject=subject,
@@ -715,17 +729,17 @@ def _story_section_header(number, title, subtitle):
             border-left: 4px solid #0072B2;
             padding: 8px 16px;
             margin: 24px 0 8px 0;
-            background: #f7f9fc;
+            background-color: rgba(0, 114, 178, 0.05);
             border-radius: 0 6px 6px 0;
         ">
             <span style="color:#0072B2; font-size:0.8rem; font-weight:700;
                          letter-spacing:0.08em; text-transform:uppercase;">
                 Section {number}
             </span><br>
-            <span style="font-size:1.25rem; font-weight:700; color:#1a1a2e;">
+            <span style="font-size:1.25rem; font-weight:700; color: var(--text-color);">
                 {title}
             </span><br>
-            <span style="font-size:0.9rem; color:#555;">{subtitle}</span>
+            <span style="font-size:0.9rem; color: var(--text-color); opacity: 0.75;">{subtitle}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -804,13 +818,14 @@ def _chart_expander(label: str, fig, how_to_read: str, expanded: bool = True):
             f"""
             <div style="
                 font-size: 0.82rem;
-                color: #555;
+                color: var(--text-color);
+                opacity: 0.85; 
                 line-height: 1.6;
                 padding: 6px 2px 2px 2px;
-                border-top: 0.5px solid #e0e0e0;
+                border-top: 1px solid rgba(130, 130, 130, 0.3);
                 margin-top: 6px;
             ">
-                <strong>How to read:</strong> {how_to_read}
+                <strong>How to read and interpret:</strong> {how_to_read}
             </div>
             """,
             unsafe_allow_html=True,
@@ -859,7 +874,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     Intro → Ch 1: Standing → Ch 2: Trend → Ch 3: Equity → Ch 4: School context
     
     Callout hierarchy:
-    - Blue _insight_box     : key finding, always present, leads each chapter
+    - Blue _add_story_finding     : key finding, always present, leads each chapter
     - Amber _pullquote_box  : conditional, only when data is notably uneven
     - Green _policy_box     : always present, closes each chapter
     - _chart_expander       : chart + how-to-read, collapsed by default
@@ -867,6 +882,21 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     story_year    = 2022 if 2022 in available_years else max(available_years)
     subject_label = SUBJECTS[story_subject]
     pv_cols       = PV_BY_SUBJ[story_subject]
+
+    if df_pre is not None:
+        country_years = sorted(df_pre[
+            (df_pre["CNT"] == story_country) & 
+            (df_pre["SUBJECT"] == story_subject)
+        ]["YEAR"].dropna().unique().tolist())
+    else:
+        # If no precomputed data is available, skip the hint to avoid a heavy raw data query
+        country_years = []
+
+    if len(country_years) > 0 and story_year not in country_years:
+        years_str = ", ".join([str(int(y)) for y in country_years])
+        data_hint = f" **Tip:** Data is available for {years_str}. Switch to Explore Mode to view it."
+    else:
+        data_hint = ""
 
     st.markdown("""
     <style>
@@ -878,6 +908,27 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     }
     </style>
 """, unsafe_allow_html=True)
+    
+    story_findings = []
+
+    def _clean_finding_text(text):
+        """Remove simple HTML tags before storing finding text for summary."""
+        import re
+        return re.sub(r"<.*?>", "", str(text)).strip()
+
+    def _add_story_finding(finding):
+        """
+        Show key finding box and store finding for the final summary section.
+        Accepts either a single string or a list of strings.
+        """
+        _insight_box(finding)
+
+        if isinstance(finding, list):
+            for f in finding:
+                if f:
+                    story_findings.append(_clean_finding_text(f))
+        else:
+            story_findings.append(_clean_finding_text(finding))
 
     # ── Page header ────────────────────────────────────────────────────────
     st.markdown(
@@ -925,7 +976,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     _story_section_header(
         1,
         "Where does this country stand?",
-        f"Comparing {_cnt_label(story_country)} to the OECD average in {subject_label}"
+        f"Comparing {_cnt_label(story_country)} to the {story_year} OECD average in {subject_label}"
     )
 
     if df_pre is None:
@@ -950,8 +1001,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
     if missing_s1:
         st.warning(
-            f"⚠️ Data unavailable for {_cnt_label(story_country)} "
-            f"in {subject_label}."
+            f"⚠️ **Data unavailable:** No overall {subject_label} scores for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}"
         )
     else:
             
@@ -1027,8 +1077,32 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         except KeyError:
             cnt_se = ci_lower = ci_upper = np.nan
 
+        if delta_val is not None and not np.isnan(delta_val):
+            # Round the means FIRST to prevent visual math mismatches
+            cnt_mean_r = round(cnt_mean_score)
+            oecd_mean_r = round(oecd_mean_score)
+            visual_delta = cnt_mean_r - oecd_mean_r
+            
+            if visual_delta > 0:
+                direction = "higher than"
+            elif visual_delta < 0:
+                direction = "lower than"
+            else:
+                direction = "equal to"
+            
+            # Format the text dynamically based on whether there is a gap or a tie
+            if visual_delta == 0:
+                gap_text = "is equal to"
+            else:
+                gap_text = f"is {abs(visual_delta)} points {direction}"
 
+            _add_story_finding(
+                f"In {story_year}, {_cnt_label(story_country)}'s average {subject_label} score "
+                f"{gap_text} the OECD average "
+                f"({cnt_mean_r} vs {oecd_mean_r})."
+            )
         cols = st.columns(3)
+        
 
         # Card 1: country average score + standard error
         with cols[0]:
@@ -1066,9 +1140,11 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         # Chart + how to read
         fig1 = plot_country_shaded_density_precomputed(
-            df_pre, story_subject, [story_country], year=story_year
+            df_pre, story_subject, [
+                story_country], year=story_year, show_mean_marker=True,
         ) if df_pre is not None else plot_country_shaded_density(
-            df_s1, story_subject, [story_country], year=story_year
+            df_s1, story_subject, [
+                story_country], year=story_year, show_mean_marker=True,
         )
         _chart_expander(
                 "Collapse chart", fig1,
@@ -1078,7 +1154,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         _policy_box(
             f"{_cnt_label(story_country)}'s position relative to the OECD average "
             f"is one signal, but the spread within the country often tells a more "
-            f"important story for domestic policy. A large internal spread suggests "
+            f"important story for domestic policy. For example, a large internal spread would suggest "
             f"that raising the floor — not just the average — is the priority."
         )
 
@@ -1118,13 +1194,14 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         if len(country_years) < 2:
             st.warning(
-                f"⚠️ {_cnt_label(story_country)} does not have enough "
-                f"historical data to show trends."
+                f"⚠️ **Data unavailable:** {_cnt_label(story_country)} "
+                f"requires at least two years of data to show historical trends."
             )
         else:
             reference_year   = min(country_years)
             latest_year      = max(country_years)
 
+            # Explicitly extract exactly the 3 percentiles needed
             if df_pre is not None:
                 trend_rows = df_pre[
                     (df_pre["CNT"]        == story_country) &
@@ -1133,49 +1210,82 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 ]
                 ref_row  = trend_rows[trend_rows["YEAR"] == reference_year].iloc[0]
                 last_row = trend_rows[trend_rows["YEAR"] == latest_year].iloc[0]
-                ref_percs  = np.array([ref_row["P10"],  ref_row["P25"],  ref_row["P50"],  ref_row["P75"],  ref_row["P90"]])
-                last_percs = np.array([last_row["P10"], last_row["P25"], last_row["P50"], last_row["P75"], last_row["P90"]])
+                
+                ref_p10, ref_p50, ref_p90 = float(ref_row["P10"]), float(ref_row["P50"]), float(ref_row["P90"])
+                last_p10, last_p50, last_p90 = float(last_row["P10"]), float(last_row["P50"]), float(last_row["P90"])
             else:
                 ref_subset  = df_s2[df_s2["YEAR"] == reference_year]
                 last_subset = df_s2[df_s2["YEAR"] == latest_year]
+                
                 ref_percs  = weighted_percentiles_pv(ref_subset,  story_subject, [10, 50, 90])
                 last_percs = weighted_percentiles_pv(last_subset, story_subject, [10, 50, 90])
+                
+                ref_p10, ref_p50, ref_p90 = ref_percs[0], ref_percs[1], ref_percs[2]
+                last_p10, last_p50, last_p90 = last_percs[0], last_percs[1], last_percs[2]
 
-            if not (np.isnan(ref_percs).all() or np.isnan(last_percs).all()):
-                delta_p10 = last_percs[0] - ref_percs[0]
-                delta_p50 = last_percs[2] - ref_percs[2]  # P50 is index 2
-                delta_p90 = last_percs[4] - ref_percs[4]  # P90 is index 4
-                direction = "increased" if delta_p50 > 0 else "decreased"
+            if not (np.isnan(ref_p50) or np.isnan(last_p50)):
+                # Round everything FIRST to sync the math with the visual display
+                ref_p10_r, ref_p50_r, ref_p90_r = round(ref_p10), round(ref_p50), round(ref_p90)
+                last_p10_r, last_p50_r, last_p90_r = round(last_p10), round(last_p50), round(last_p90)
+
+                # Calculate deltas using the rounded integers
+                delta_p10 = last_p10_r - ref_p10_r
+                delta_p50 = last_p50_r - ref_p50_r
+                delta_p90 = last_p90_r - ref_p90_r
+                
+                if delta_p50 > 0:
+                    direction = "increased"
+                elif delta_p50 < 0:
+                    direction = "decreased"
+                else:
+                    direction = "remained unchanged"
 
                 # Initialize the findings list
                 findings = []
 
+                # Use the pre-rounded variables (ref_p50_r, last_p50_r) in the text string!
                 findings.append(
                     f"At the median, {_cnt_label(story_country)}'s "
                     f"{subject_label} score {direction} by "
-                    f"{abs(delta_p50):.0f} points between "
+                    f"{abs(delta_p50)} points between "
                     f"{reference_year} and {latest_year} "
-                    f"({ref_percs[1]:.0f} → {last_percs[1]:.0f})."
+                    f"({ref_p50_r} → {last_p50_r})."
                 )
 
                 # Conditional finding - uneven decline/gain across distribution
                 spread = abs(delta_p10 - delta_p90)
                 if spread > 10:
-                    worse_end = "lower end" if delta_p10 < delta_p90 else "upper end"
-                    better_end = "upper end" if worse_end == "lower end" else "lower end"
-                    worse_val  = delta_p10 if worse_end == "lower end" else delta_p90
-                    better_val = delta_p90 if worse_end == "lower end" else delta_p10
+                    # Round the deltas first to avoid -0.1 triggering a "decline" but displaying as "-0"
+                    d10_r = round(delta_p10)
+                    d90_r = round(delta_p90)
                     
+                    # Figure out which end performed "worse" relative to the other
+                    if d10_r < d90_r:
+                        lagging, lag_val = "lower end (P10)", d10_r
+                        leading, lead_val = "upper end (P90)", d90_r
+                    else:
+                        lagging, lag_val = "upper end (P90)", d90_r
+                        leading, lead_val = "lower end (P10)", d10_r
+
+                    # Dynamic phrasing based on whether rounded values are positive, negative, or flat
+                    if lag_val < 0 and lead_val > 0:
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} points) while the {leading} saw gains ({lead_val:+.0f} points)"
+                    elif lag_val < 0 and lead_val == 0:
+                        comparison = f"scores at the {lagging} declined ({lag_val:+.0f} points) while the {leading} remained flat (0 points)"
+                    elif lag_val == 0 and lead_val > 0:
+                        comparison = f"scores at the {lagging} remained flat (0 points) while the {leading} saw gains ({lead_val:+.0f} points)"
+                    elif lag_val < 0 and lead_val < 0:
+                        comparison = f"scores at the {lagging} dropped more ({lag_val:+.0f} points) than at the {leading} ({lead_val:+.0f} points)"
+                    else:
+                        # Both are strictly > 0
+                        comparison = f"scores at the {leading} grew more ({lead_val:+.0f} points) than at the {lagging} ({lag_val:+.0f} points)"
+
                     findings.append(
-                        f"The change is not uniform across the distribution — "
-                        f"students at the {worse_end} lost more "
-                        f"({worse_val:+.0f} pts at P{'10' if worse_end == 'lower end' else '90'}) "
-                        f"than those at the {better_end} "
-                        f"({better_val:+.0f} pts at P{'90' if worse_end == 'lower end' else '10'}). "
+                        f"The change is not uniform across the distribution — {comparison}."
                     )
                 
                 # Render the combined insight box
-                _insight_box(findings)
+                _add_story_finding(findings)
 
             fig2 = plot_percentile_change_from_baseline_precomputed(
                 df_pre=df_pre, subject=story_subject,
@@ -1207,7 +1317,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
     st.markdown(
         "High average scores can mask large differences between student groups. "
-        "The figures below show the difference in median scores between groups — "
+        "The figures below show the difference in distribution and median scores between groups — "
         "they reflect structural inequalities in access to resources and support, "
         "not differences in student ability."
     )
@@ -1253,15 +1363,32 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             })
 
         # Immigration gap
-        nat_row  = immig_rows[immig_rows["GROUP_LABEL"] == "Native"]
-        gen1_row = immig_rows[immig_rows["GROUP_LABEL"] == "1st-gen immigrant"]
-        if not nat_row.empty and not gen1_row.empty:
-            nat_med  = float(nat_row.iloc[0]["P50"])
-            gen1_med = float(gen1_row.iloc[0]["P50"])
+        immig_medians = {}
+        for lbl in immig_rows["GROUP_LABEL"].unique():
+            row = immig_rows[immig_rows["GROUP_LABEL"] == lbl]
+            if not row.empty and not np.isnan(float(row.iloc[0]["P50"])):
+                immig_medians[lbl] = float(row.iloc[0]["P50"])
+
+        if len(immig_medians) >= 2:
+            highest_lbl = max(immig_medians, key=immig_medians.get)
+            lowest_lbl  = min(immig_medians, key=immig_medians.get)
+            
+            clean_labels = {
+                "Native": "Native",
+                "1st-gen immigrant": "first-generation",
+                "2nd-gen immigrant": "second-generation",
+                "First-generation": "first-generation",
+                "Second-generation": "second-generation"
+            }
+            
+            high_clean = clean_labels.get(highest_lbl, highest_lbl.lower())
+            low_clean  = clean_labels.get(lowest_lbl, lowest_lbl.lower())
+            
             equity_gaps.append({
                 "label": "Immigration status",
-                "value": nat_med - gen1_med,
-                "sub":   "Native vs first-generation students",
+                # Round the individual medians BEFORE subtracting
+                "value": round(immig_medians[highest_lbl]) - round(immig_medians[lowest_lbl]),
+                "sub":   f"{high_clean.capitalize()} vs {low_clean} students",
                 "type":  "immig"
             })
 
@@ -1296,19 +1423,25 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         # Immigration gap from raw data
         if not check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
-            native_subset = df_immig[
-                (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 1.0)
-            ]
-            gen1_subset = df_immig[
-                (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 3.0)
-            ]
-            nat_med  = weighted_percentiles_pv(native_subset, story_subject, [50])
-            gen1_med = weighted_percentiles_pv(gen1_subset,   story_subject, [50])
-            if not (np.isnan(nat_med).all() or np.isnan(gen1_med).all()):
+            immig_medians = {}
+            # Check all three available IMMIG codes
+            for code, clean_name in [(1.0, "Native"), (2.0, "second-generation"), (3.0, "first-generation")]:
+                subset = df_immig[
+                    (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == code)
+                ]
+                med = weighted_percentiles_pv(subset, story_subject, [50])
+                if not np.isnan(med).all():
+                    immig_medians[clean_name] = med[0]
+
+            if len(immig_medians) >= 2:
+                highest_group = max(immig_medians, key=immig_medians.get)
+                lowest_group  = min(immig_medians, key=immig_medians.get)
+                
                 equity_gaps.append({
                     "label": "Immigration status",
-                    "value": nat_med[0] - gen1_med[0],
-                    "sub":   "Native vs first-generation students",
+                    # Round the individual medians BEFORE subtracting
+                    "value": round(immig_medians[highest_group]) - round(immig_medians[lowest_group]),
+                    "sub":   f"{highest_group.capitalize()} vs {lowest_group} students",
                     "type":  "immig"
                 })
 
@@ -1342,7 +1475,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         findings.append(
             f"The largest difference in {_cnt_label(story_country)} is by "
             f"<strong>{biggest['label'].lower()}</strong> — "
-            f"a {biggest['value']:.0f}-point difference at the median "
+            f"a {biggest['value']:.0f} point difference at the median "
             f"in {subject_label}. {biggest['sub']}."
         )
 
@@ -1354,38 +1487,15 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 findings.append(
                     f"The socioeconomic difference within "
                     f"{_cnt_label(story_country)} "
-                    f"({ses_gap_entry['value']:.0f} pts) is larger than "
+                    f"({ses_gap_entry['value']:.0f} points) is larger than "
                     f"the difference between this country and the OECD "
-                    f"average ({country_vs_oecd:.0f} pts). "
+                    f"average ({country_vs_oecd:.0f} points). "
                     f"Domestic equity is a bigger lever than "
                     f"international benchmarking."
                 )
-            # Make sure df_s1 is available or pass the appropriate df
-            # if df_pre is not None:
-            #     oecd_pre_check = df_pre[
-            #         (df_pre["CNT"]        == "OECD")        &
-            #         (df_pre["YEAR"]       == story_year)    &
-            #         (df_pre["SUBJECT"]    == story_subject) &
-            #         (df_pre["GROUP_TYPE"] == "oecd")
-            #     ]
-            #     oecd_m = np.array([oecd_pre_check.iloc[0]["P50"]]) if not oecd_pre_check.empty else np.array([np.nan])
-            # else:
-            #     oecd_m = get_oecd_percentiles(df_s1, story_subject, [50], year=story_year) 
-            # if not (np.isnan(cnt_m).all() or np.isnan(oecd_m).all()):
-            #     country_vs_oecd = abs(cnt_m[0] - oecd_m[0])
-            #     if ses_gap_entry["value"] > country_vs_oecd and country_vs_oecd > 5:
-            #         findings.append(
-            #             f"The socioeconomic difference within "
-            #             f"{_cnt_label(story_country)} "
-            #             f"({ses_gap_entry['value']:.0f} pts) is larger than "
-            #             f"the difference between this country and the OECD "
-            #             f"average ({country_vs_oecd:.0f} pts). "
-            #             f"Domestic equity is a bigger lever than "
-            #             f"international benchmarking."
-            #         )
         
         # Print combined findings
-        _insight_box(findings)
+        _add_story_finding(findings)
 
         # Print metric cards side-by-side
         card_cols = st.columns(len(equity_gaps))
@@ -1484,9 +1594,8 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         )
 
     else:
-        st.info(
-            f"Insufficient data to compute equity differences "
-            f"for {_cnt_label(story_country)}."
+        st.warning(
+            f"⚠️ **Data unavailable:** Insufficient data to compute equity differences for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}"
         )
 
     st.divider()
@@ -1522,29 +1631,60 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
+        # School type key finding:
+        # Compare the highest-median school type group with the lowest-median group.
         if df_pre is not None:
-            type_rows = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_type")]
-            pub_row  = type_rows[type_rows["GROUP_LABEL"] == "Public"]
-            priv_row = type_rows[type_rows["GROUP_LABEL"] == "Independent private"]
-            pub_med  = float(pub_row.iloc[0]["P50"])  if not pub_row.empty  else np.nan
-            priv_med = float(priv_row.iloc[0]["P50"]) if not priv_row.empty else np.nan
-        else:
-            type_curves = compute_group_percentiles(
-                df_type, story_subject, "SCHLTYPE",
-                {3: "Public", 1: "Independent private"},
-                [50], cnt=story_country, year=story_year
-            )
-            pub_med  = type_curves.get("Public",              [np.nan])[0]
-            priv_med = type_curves.get("Independent private", [np.nan])[0]
+            type_rows = df_pre[
+                (df_pre["CNT"] == story_country)
+                & (df_pre["YEAR"] == story_year)
+                & (df_pre["SUBJECT"] == story_subject)
+                & (df_pre["GROUP_TYPE"] == "school_type")
+            ].copy()
 
-        if not (np.isnan(pub_med) or np.isnan(priv_med)):
-            diff = abs(priv_med - pub_med)
-            higher = "private" if priv_med > pub_med else "public"
-            _insight_box(
-                f"Students in {higher} schools in "
-                f"{_cnt_label(story_country)} score {diff:.0f} points "
-                f"higher at the median in {subject_label}."
+            type_rows = type_rows.dropna(subset=["P50"])
+
+            type_medians = {
+                row["GROUP_LABEL"]: float(row["P50"])
+                for _, row in type_rows.iterrows()
+            }
+
+        else:
+            group_col_type, group_labels_type = GROUP_OPTIONS["School type"]
+
+            type_curves = compute_group_percentiles(
+                df_type,
+                story_subject,
+                group_col_type,
+                group_labels_type,
+                [50],
+                cnt=story_country,
+                year=story_year,
             )
+
+            type_medians = {
+                label: vals[0]
+                for label, vals in type_curves.items()
+                if vals is not None and len(vals) > 0 and not np.isnan(vals[0])
+            }
+
+        if len(type_medians) >= 2:
+            highest_group = max(type_medians, key=type_medians.get)
+            lowest_group = min(type_medians, key=type_medians.get)
+
+            highest_med = type_medians[highest_group]
+            lowest_med = type_medians[lowest_group]
+            highest_med_display = int(round(highest_med))
+            lowest_med_display = int(round(lowest_med))
+            diff_display = highest_med_display - lowest_med_display
+
+            _add_story_finding(
+                f"The largest difference in school-type scores in {_cnt_label(story_country)} is between "
+                f"{highest_group.lower()} and {lowest_group.lower()} schools: "
+                f"students in {highest_group.lower()} schools score "
+                f"{diff_display:.0f} points higher at the median in {subject_label} "
+                f"in {_cnt_label(story_country)}."
+            )
+        
 
         group_col, group_labels = GROUP_OPTIONS["School type"]
         fig4a = plot_group_shaded_density_precomputed(
@@ -1556,19 +1696,22 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             group_title="School Type", year=story_year,
             sort_by_median=True
         )
-        _chart_expander(
-            "Show school type chart",
-            fig4a,
-            GROUP_HOW_TO_READ.get("School type", "Each bar shows the score distribution for one group.")
-        )
+        if not fig4a.data:
+            st.warning(f"⚠️ **Data unavailable:** School type comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
+        else:
+            _chart_expander(
+                "Collapse chart",
+                fig4a,
+                GROUP_HOW_TO_READ.get("School type", "Each bar shows the score distribution for one group.")
+            )
 
-        _policy_box(
-            "Differences between public and private school scores "
-            "often reflect the socioeconomic composition of each "
-            "school type rather than school quality itself. "
-            "Interpreting these figures alongside the SES data "
-            "in Chapter 3 is important."
-        )
+            _policy_box(
+                "Differences between public and private school scores "
+                "often reflect the socioeconomic composition of each "
+                "school type rather than school quality itself. "
+                "Interpreting these figures alongside the SES data "
+                "in Chapter 3 is important."
+            )
 
     # ── Urban vs rural ────────────────────────────────────────────────────
     st.markdown("#### Urban vs rural")
@@ -1581,27 +1724,59 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             f"{_cnt_label(story_country)}."
         )
     else:
-        if df_pre is not None:
-            loc_rows    = df_pre[(df_pre["CNT"] == story_country) & (df_pre["YEAR"] == story_year) & (df_pre["SUBJECT"] == story_subject) & (df_pre["GROUP_TYPE"] == "school_loc")]
-            city_row    = loc_rows[loc_rows["GROUP_LABEL"] == "City"]
-            village_row = loc_rows[loc_rows["GROUP_LABEL"] == "Village"]
-            city_med    = float(city_row.iloc[0]["P50"])    if not city_row.empty    else np.nan
-            village_med = float(village_row.iloc[0]["P50"]) if not village_row.empty else np.nan
-        else:
-            loc_curves = compute_group_percentiles(
-                df_loc, story_subject, "SC001Q01TA",
-                {5.0: "Large city", 4.0: "City", 1.0: "Village"},
-                [50], cnt=story_country, year=story_year
-            )
-            city_med    = loc_curves.get("City",    [np.nan])[0]
-            village_med = loc_curves.get("Village", [np.nan])[0]
 
-        if not (np.isnan(city_med) or np.isnan(village_med)):
-            diff = abs(city_med - village_med)
-            _insight_box(
-                f"Students in city schools score {diff:.0f} points "
-                f"higher than those in villages at the median "
-                f"in {subject_label} in {_cnt_label(story_country)}."
+
+        # School location key finding:
+        # Compare the highest-median location group with the lowest-median location group.
+        if df_pre is not None:
+            loc_rows = df_pre[
+                (df_pre["CNT"] == story_country)
+                & (df_pre["YEAR"] == story_year)
+                & (df_pre["SUBJECT"] == story_subject)
+                & (df_pre["GROUP_TYPE"] == "school_loc")
+            ].copy()
+
+            loc_rows = loc_rows.dropna(subset=["P50"])
+
+            loc_medians = {
+                row["GROUP_LABEL"]: float(row["P50"])
+                for _, row in loc_rows.iterrows()
+            }
+
+        else:
+            group_col, group_labels = GROUP_OPTIONS["School location"]
+
+            loc_curves = compute_group_percentiles(
+                df_loc,
+                story_subject,
+                group_col,
+                group_labels,
+                [50],
+                cnt=story_country,
+                year=story_year,
+            )
+
+            loc_medians = {
+                label: vals[0]
+                for label, vals in loc_curves.items()
+                if vals is not None and len(vals) > 0 and not np.isnan(vals[0])
+            }
+
+        if len(loc_medians) >= 2:
+            highest_group = max(loc_medians, key=loc_medians.get)
+            lowest_group = min(loc_medians, key=loc_medians.get)
+
+            highest_med = loc_medians[highest_group]
+            lowest_med = loc_medians[lowest_group]
+            highest_med_display = int(round(highest_med))
+            lowest_med_display = int(round(lowest_med))
+            diff_display = highest_med_display - lowest_med_display
+
+            _add_story_finding(
+                f"The largest difference in school-location scores in {_cnt_label(story_country)} is between "
+                f"{highest_group.lower()} and {lowest_group.lower()} schools: "
+                f"students in {highest_group.lower()} schools score "
+                f"{diff_display:.0f} points higher at the median in {subject_label}. "
             )
 
         group_col, group_labels = GROUP_OPTIONS["School location"]
@@ -1614,20 +1789,59 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             group_title="School Location", year=story_year,
             sort_by_median=True
         )
-        _chart_expander(
-            "Show school location chart",
-            fig4b,
-            GROUP_HOW_TO_READ.get("School location", "Each bar shows the score distribution for one group.")
-        )
 
-        _policy_box(
-            "Urban-rural score differences in PISA typically reflect "
-            "resource allocation across school systems — teacher "
-            "quality, infrastructure, and support services. "
-            "These are addressable through targeted policy."
-        )
+        if not fig4b.data:
+            st.warning(f"⚠️ **Data unavailable:** School location comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
+        else:
+            _chart_expander(
+                "Collapse chart",
+                fig4b,
+                GROUP_HOW_TO_READ.get("School location", "Each bar shows the score distribution for one group.")
+            )
+
+            _policy_box(
+                "Urban-rural score differences in PISA typically reflect "
+                "resource allocation across school systems — teacher "
+                "quality, infrastructure, and support services. "
+                "These are addressable through targeted policy."
+            )
 
     st.divider()
+    
+    # ── Summary of key findings ────────────────────────────────────────────
+
+    st.markdown("## Summary of key findings")
+    st.markdown(
+        f"Main takeaways for {_cnt_label(story_country)} in {subject_label}."
+    )
+
+    if story_findings:
+        summary_items = "".join(
+            f"<li>{finding}</li>"
+            for finding in story_findings
+        )
+
+        st.markdown(
+            f"""
+            <div style="
+                background: #e8f4fd;
+                border: 1px solid #b3d9f5;
+                border-radius: 8px;
+                padding: 16px 20px;
+                margin: 10px 0 18px 0;
+                color: #1a3a52;
+                line-height: 1.55;
+            ">
+                <strong>Summary of key findings:</strong>
+                <ul style="margin-top: 8px; margin-bottom: 0; padding-left: 22px;">
+                    {summary_items}
+                </ul>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning(f"⚠️ **Data unavailable:** No key findings can be generated for {_cnt_label(story_country)} in {story_year}.")
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
@@ -1663,12 +1877,29 @@ app_mode = st.sidebar.radio(
     label_visibility="collapsed" # Hides the word "Navigation" for a cleaner look
 )
 
-# st.sidebar.info(
-#     "**Interactive Dashboard:** Hover over charts for exact values, "
-#     "click legend items to hide/show groups, and drag to zoom."
-# )
-
 st.sidebar.markdown("---")
+# Reduce vertical spacing in the sidebar
+st.markdown(
+    """
+    <style>
+        /* Reduce the main gap between widgets in the sidebar */
+        [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+            gap: 0.6rem !important; 
+        }
+        
+        /* Reduce the space between the widget label and the dropdown/input itself */
+        [data-testid="stSidebar"] div[data-testid="stWidgetLabel"] {
+            padding-bottom: 0.1rem !important;
+        }
+        
+        /* Slightly reduce the bottom margin of the widgets */
+        [data-testid="stSidebar"] .row-widget {
+            margin-bottom: -0.1rem !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ==========================================
 # MODE 1: DATA STORY
@@ -1716,7 +1947,7 @@ elif app_mode == "🔍 Explore":
     country_pool = all_countries
 
     DEFAULT_COUNTRIES = ["CAN", "USA"]
-    SINGLE_COUNTRY_CHARTS = ["Score change over time", "Group comparison", "Intersectional Heatmap"]
+    SINGLE_COUNTRY_CHARTS = ["Score Change Over Time", "Group Comparison", "Intersectional Heatmap"]
 
     if "memory_countries" not in st.session_state:
         st.session_state.memory_countries = [
@@ -1781,36 +2012,26 @@ elif app_mode == "🔍 Explore":
     st.sidebar.markdown("---")
     
     is_time_chart = (
-        (not side_by_side and chart_type == "Score change over time") or
+        (not side_by_side and chart_type == "Score Change Over Time") or
         (side_by_side and (
-            chart_type_left == "Score change over time" or
-            chart_type_right == "Score change over time"
+            chart_type_left == "Score Change Over Time" or
+            chart_type_right == "Score Change Over Time"
             ))
     )
 
     if is_time_chart:
-        st.sidebar.markdown("### Time comparison")
-        ref_year = st.sidebar.selectbox(
-            "Baseline year", available_years[:-1], index=0, key="ref_year"
-            )
-        later_years = [y for y in available_years if y > ref_year]
-        comp_year = st.sidebar.selectbox(
-            "Compare to", later_years, index=len(later_years) - 1, key="comp_year"
-            )
         selected_year = None
     else:
         selected_year = st.sidebar.selectbox(
             "Year", available_years, 
             index=available_years.index(2022) if 2022 in available_years else len(available_years) - 1
         )
-        ref_year = None
-        comp_year = None
+
+    ref_year = None
+    comp_year = None
 
     primary_country = selected_countries[0]
 
-    st.title("PISA Score Distribution Dashboard")
-    st.caption(f"Data: PISA {', '.join(str(y) for y in available_years)}  |  "
-               f"{len(all_countries)} countries")
 
     # Chart-Specific Controls injected directly into the main view
     group_key = None
@@ -1819,44 +2040,148 @@ elif app_mode == "🔍 Explore":
 
     # ── Draw the main area for Explore ───────────────────────────────────────
     if side_by_side:
-        left_col, right_col = st.columns(2)
-        with left_col:
-            st.subheader(chart_type_left)
-            render_chart(
-                chart_type=chart_type_left, 
-                subject=subject, 
-                selected_countries=selected_countries,
-                selected_year=selected_year, 
-                available_years=available_years,
-                primary_country=country_left,
-                ref_year=ref_year, 
-                comp_year=comp_year,
-                compact=True,
-                widget_key="left"
-            )
-        with right_col:
-            st.subheader(chart_type_right)
-            render_chart(
-                chart_type=chart_type_right, 
-                subject=subject, 
-                selected_countries=selected_countries,
-                selected_year=selected_year, 
-                available_years=available_years,
-                primary_country=country_right,
-                ref_year=ref_year, 
-                comp_year=comp_year,
-                compact=True,
-                widget_key="right"
-            )
+
+        # Special case:
+        # When comparing two score-change-over-time charts, use the same y-axis
+        # so the two countries are visually comparable.
+        if (
+            chart_type_left == "Score Change Over Time"
+            and chart_type_right == "Score Change Over Time"
+        ):
+            reference_year = min(available_years)
+
+            # Build both figures first
+            if df_pre is not None:
+                fig_left = plot_percentile_change_from_baseline_precomputed(
+                    df_pre=df_pre,
+                    subject=subject,
+                    cnt=country_left,
+                    reference_year=reference_year,
+                )
+
+                fig_right = plot_percentile_change_from_baseline_precomputed(
+                    df_pre=df_pre,
+                    subject=subject,
+                    cnt=country_right,
+                    reference_year=reference_year,
+                )
+
+            else:
+                df_time = fetch(
+                    tuple(set([country_left, country_right])),
+                    None,
+                    tuple(BASE_COLS + PV_BY_SUBJ[subject])
+                )
+
+                fig_left = plot_percentile_change_from_baseline(
+                    df=df_time,
+                    subject=subject,
+                    cnt=country_left,
+                    reference_year=reference_year,
+                )
+
+                fig_right = plot_percentile_change_from_baseline(
+                    df=df_time,
+                    subject=subject,
+                    cnt=country_right,
+                    reference_year=reference_year,
+                )
+
+            # Compute shared y-axis range from both figures
+            y_values = []
+
+            for fig in [fig_left, fig_right]:
+                for trace in fig.data:
+                    if hasattr(trace, "y") and trace.y is not None:
+                        vals = pd.to_numeric(
+                            pd.Series(trace.y),
+                            errors="coerce"
+                        ).dropna()
+                        y_values.extend(vals.tolist())
+
+            if y_values:
+                y_min = min(min(y_values), 0)
+                y_max = max(max(y_values), 0)
+
+                # Add padding so the lines do not touch the plot boundary
+                pad = max(3, 0.08 * (y_max - y_min))
+
+                shared_y_range = [y_min - pad, y_max + pad]
+
+                fig_left.update_yaxes(range=shared_y_range)
+                fig_right.update_yaxes(range=shared_y_range)
+
+            # Apply compact layout after setting shared axis
+            fig_left = apply_compact_plotly_layout(fig_left)
+            fig_right = apply_compact_plotly_layout(fig_right)
+
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader(f"{chart_type_left}: {_cnt_label(country_left)}")
+                render_plotly_chart_with_note(
+                    fig_left,
+                    note=get_chart_note(
+                        "Score Change Over Time",
+                        reference_year=reference_year,
+                    ),
+                    key=f"time_change_left_{subject}_{reference_year}_{country_left}",
+                )
+
+            with right_col:
+                st.subheader(f"{chart_type_right}: {_cnt_label(country_right)}")
+                render_plotly_chart_with_note(
+                    fig_right,
+                    note=get_chart_note(
+                        "Score Change Over Time",
+                        reference_year=reference_year,
+                    ),
+                    key=f"time_change_right_{subject}_{reference_year}_{country_right}",
+                )
+
+        # All other side-by-side combinations keep the existing logic
+        else:
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader(chart_type_left)
+                render_chart(
+                    chart_type=chart_type_left,
+                    subject=subject,
+                    selected_countries=selected_countries,
+                    selected_year=selected_year,
+                    available_years=available_years,
+                    primary_country=country_left,
+                    ref_year=ref_year,
+                    comp_year=comp_year,
+                    compact=True,
+                    widget_key="left"
+                )
+
+            with right_col:
+                st.subheader(chart_type_right)
+                render_chart(
+                    chart_type=chart_type_right,
+                    subject=subject,
+                    selected_countries=selected_countries,
+                    selected_year=selected_year,
+                    available_years=available_years,
+                    primary_country=country_right,
+                    ref_year=ref_year,
+                    comp_year=comp_year,
+                    compact=True,
+                    widget_key="right"
+                )
+
     else:
         render_chart(
-            chart_type=chart_type, 
-            subject=subject, 
+            chart_type=chart_type,
+            subject=subject,
             selected_countries=selected_countries,
-            selected_year=selected_year, 
-            available_years=available_years, 
+            selected_year=selected_year,
+            available_years=available_years,
             primary_country=primary_country,
-            ref_year=ref_year, 
+            ref_year=ref_year,
             comp_year=comp_year,
             compact=False,
             widget_key="main"
