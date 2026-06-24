@@ -883,6 +883,21 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     subject_label = SUBJECTS[story_subject]
     pv_cols       = PV_BY_SUBJ[story_subject]
 
+    if df_pre is not None:
+        country_years = sorted(df_pre[
+            (df_pre["CNT"] == story_country) & 
+            (df_pre["SUBJECT"] == story_subject)
+        ]["YEAR"].dropna().unique().tolist())
+    else:
+        # If no precomputed data is available, skip the hint to avoid a heavy raw data query
+        country_years = []
+
+    if len(country_years) > 0 and story_year not in country_years:
+        years_str = ", ".join([str(int(y)) for y in country_years])
+        data_hint = f" **Tip:** Data is available for {years_str}. Switch to Explore Mode to view it."
+    else:
+        data_hint = ""
+
     st.markdown("""
     <style>
     [data-testid="stMetric"] {
@@ -986,8 +1001,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
     if missing_s1:
         st.warning(
-            f"⚠️ Data unavailable for {_cnt_label(story_country)} "
-            f"in {subject_label}."
+            f"⚠️ **Data unavailable:** No overall {subject_label} scores for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}"
         )
     else:
             
@@ -1180,8 +1194,8 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         if len(country_years) < 2:
             st.warning(
-                f"⚠️ {_cnt_label(story_country)} does not have enough "
-                f"historical data to show trends."
+                f"⚠️ **Data unavailable:** {_cnt_label(story_country)} "
+                f"requires at least two years of data to show historical trends."
             )
         else:
             reference_year   = min(country_years)
@@ -1581,7 +1595,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
     else:
         st.warning(
-            f"⚠️ Insufficient data to compute equity differences for {_cnt_label(story_country)} in {story_year}."
+            f"⚠️ **Data unavailable:** Insufficient data to compute equity differences for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}"
         )
 
     st.divider()
@@ -1683,7 +1697,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             sort_by_median=True
         )
         if not fig4a.data:
-            st.warning(f"⚠️ {_cnt_label(story_country)} does not have enough school location data.")
+            st.warning(f"⚠️ **Data unavailable:** School location comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
         else:
             _chart_expander(
                 "Collapse chart",
@@ -1777,7 +1791,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
         )
 
         if not fig4b.data:
-            st.warning(f"⚠️ {_cnt_label(story_country)} does not have enough school location data.")
+            st.warning(f"⚠️ **Data unavailable:** School type comparisons are unavailable for {_cnt_label(story_country)} in {story_year}.\n\n{data_hint}")
         else:
             _chart_expander(
                 "Collapse chart",
@@ -1827,7 +1841,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             unsafe_allow_html=True,
         )
     else:
-        st.warning(f"⚠️ No key findings are available for {_cnt_label(story_country)} in {subject_label}.")
+        st.warning(f"⚠️ **Data unavailable:** No key findings can be generated for {_cnt_label(story_country)} in {story_year}.")
 
     # ── Footer ─────────────────────────────────────────────────────────────
     st.markdown("""
