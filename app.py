@@ -737,17 +737,17 @@ def _story_section_header(number, title, subtitle):
             border-left: 4px solid #0072B2;
             padding: 8px 16px;
             margin: 24px 0 8px 0;
-            background: #f7f9fc;
+            background-color: rgba(0, 114, 178, 0.05);
             border-radius: 0 6px 6px 0;
         ">
             <span style="color:#0072B2; font-size:0.8rem; font-weight:700;
                          letter-spacing:0.08em; text-transform:uppercase;">
                 Section {number}
             </span><br>
-            <span style="font-size:1.25rem; font-weight:700; color:#1a1a2e;">
+            <span style="font-size:1.25rem; font-weight:700; color: var(--text-color);">
                 {title}
             </span><br>
-            <span style="font-size:0.9rem; color:#555;">{subtitle}</span>
+            <span style="font-size:0.9rem; color: var(--text-color); opacity: 0.75;">{subtitle}</span>
         </div>
         """,
         unsafe_allow_html=True,
