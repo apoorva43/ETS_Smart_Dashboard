@@ -286,27 +286,7 @@ GROUP_HOW_TO_READ = {
         "The vertical line marks the group's median score. "
         "Percentages indicate the share of students in each location."
     )
-}
-
-def render_chart_help(chart_type, group_key=None):
-    """Renders a collapsible help section above complex charts."""
-    
-    # Determine which help text to grab
-    help_key = None
-    if chart_type == "Score distribution":
-        help_key = "Score distribution"
-    elif chart_type == "Score by gender":
-        help_key = "Score by gender"
-    elif chart_type == "Country Scatterplot":
-        help_key = "Country Scatterplot"
-    elif chart_type == "Group comparison" and group_key == "School location":
-        help_key = "Box Plot"
-
-    # Render it if it exists
-    if help_key and help_key in CHART_HELP_TEXT:
-        with st.expander(f"How to read the {chart_type.lower()} chart"):
-            st.markdown(CHART_HELP_TEXT[help_key])
-            
+}           
 
 def apply_compact_plotly_layout(fig, hide_legend=False):
     """
@@ -520,7 +500,6 @@ def render_chart(chart_type, subject, selected_countries,
             st.warning(f"⚠️ **Data Unavailable:** Excluded **{', '.join(_cnt_label(c) for c in missing_cnts)}** due to missing {SUBJECTS[subject]} scores.")
             
         if valid_countries:
-            # render_chart_help(chart_type)
             fig = plot_country_shaded_density(
                 df, subject, valid_countries, year=selected_year, compact=compact
             )
@@ -711,7 +690,6 @@ def render_chart(chart_type, subject, selected_countries,
         if missing_cnts:
             st.warning(f"⚠️ **Data Unavailable:** Highlighting disabled for **{', '.join(_cnt_label(c) for c in missing_cnts)}** (missing data).")
         
-        # render_chart_help(chart_type)
         fig = plot_resource_scatter(
             df=df,
             subject=subject,
@@ -1348,15 +1326,32 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             })
 
         # Immigration gap
-        nat_row  = immig_rows[immig_rows["GROUP_LABEL"] == "Native"]
-        gen1_row = immig_rows[immig_rows["GROUP_LABEL"] == "1st-gen immigrant"]
-        if not nat_row.empty and not gen1_row.empty:
-            nat_med  = float(nat_row.iloc[0]["P50"])
-            gen1_med = float(gen1_row.iloc[0]["P50"])
+        immig_medians = {}
+        for lbl in immig_rows["GROUP_LABEL"].unique():
+            row = immig_rows[immig_rows["GROUP_LABEL"] == lbl]
+            if not row.empty and not np.isnan(float(row.iloc[0]["P50"])):
+                immig_medians[lbl] = float(row.iloc[0]["P50"])
+
+        if len(immig_medians) >= 2:
+            highest_lbl = max(immig_medians, key=immig_medians.get)
+            lowest_lbl  = min(immig_medians, key=immig_medians.get)
+            
+            clean_labels = {
+                "Native": "Native",
+                "1st-gen immigrant": "first-generation",
+                "2nd-gen immigrant": "second-generation",
+                "First-generation": "first-generation",
+                "Second-generation": "second-generation"
+            }
+            
+            high_clean = clean_labels.get(highest_lbl, highest_lbl.lower())
+            low_clean  = clean_labels.get(lowest_lbl, lowest_lbl.lower())
+            
             equity_gaps.append({
                 "label": "Immigration status",
-                "value": nat_med - gen1_med,
-                "sub":   "Native vs first-generation students",
+                # Round the individual medians BEFORE subtracting
+                "value": round(immig_medians[highest_lbl]) - round(immig_medians[lowest_lbl]),
+                "sub":   f"{high_clean.capitalize()} vs {low_clean} students",
                 "type":  "immig"
             })
 
@@ -1391,19 +1386,25 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
 
         # Immigration gap from raw data
         if not check_missing_countries(df_immig, ["IMMIG"], [story_country], story_year):
-            native_subset = df_immig[
-                (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 1.0)
-            ]
-            gen1_subset = df_immig[
-                (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == 3.0)
-            ]
-            nat_med  = weighted_percentiles_pv(native_subset, story_subject, [50])
-            gen1_med = weighted_percentiles_pv(gen1_subset,   story_subject, [50])
-            if not (np.isnan(nat_med).all() or np.isnan(gen1_med).all()):
+            immig_medians = {}
+            # Check all three available IMMIG codes
+            for code, clean_name in [(1.0, "Native"), (2.0, "second-generation"), (3.0, "first-generation")]:
+                subset = df_immig[
+                    (df_immig["CNT"] == story_country) & (df_immig["IMMIG"] == code)
+                ]
+                med = weighted_percentiles_pv(subset, story_subject, [50])
+                if not np.isnan(med).all():
+                    immig_medians[clean_name] = med[0]
+
+            if len(immig_medians) >= 2:
+                highest_group = max(immig_medians, key=immig_medians.get)
+                lowest_group  = min(immig_medians, key=immig_medians.get)
+                
                 equity_gaps.append({
                     "label": "Immigration status",
-                    "value": nat_med[0] - gen1_med[0],
-                    "sub":   "Native vs first-generation students",
+                    # Round the individual medians BEFORE subtracting
+                    "value": round(immig_medians[highest_group]) - round(immig_medians[lowest_group]),
+                    "sub":   f"{highest_group.capitalize()} vs {lowest_group} students",
                     "type":  "immig"
                 })
 
