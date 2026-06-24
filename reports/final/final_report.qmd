@@ -27,6 +27,12 @@ from src.plotting_plotly import (
     plot_percentile_change_from_baseline_precomputed,
     plot_group_shaded_density_precomputed
 )
+from src.config import (
+  KEEP_COLS,
+  WEIGHT_COLS,
+  SCORE_COLS, 
+  MIN_GROUP_N
+)
 
 df_pre = load_precomputed()
 
@@ -92,6 +98,11 @@ can_p90_2022 = con.execute("""
 
 p10_decline = round(abs(can_p10_2022 - can_p10_2018), 1)
 p90_decline = round(abs(can_p90_2022 - can_p90_2018), 1)
+
+n_keep_cols = len(KEEP_COLS)
+n_replicate_weights = len(WEIGHT_COLS) - 1 # exclude W_FSTUWT
+n_pv_cols = len(SCORE_COLS)
+n_pv_per_subject = n_pv_cols // 3
 ```
 
 
@@ -116,7 +127,7 @@ Research suggests that mean-centric reporting leads audiences to attribute score
 
 While the initial goal was to build a dashboard to counter deficit thinking, it shaped three concrete objectives that guided the technical and design work:
 
-- **Objective 1: Handling complex survey data at scale.** PISA data requires computing scores across ten plausible values per subject and applying replicate weights to produce accurate population estimates. The objective was to build a data pipeline that could handle these calculations dynamically across three survey cycles, without making users wait.
+- **Objective 1: Handling complex survey data at scale.** PISA data requires computing scores across `{python} n_pv_per_subject` plausible values per subject and applying replicate weights to produce accurate population estimates. The objective was to build a data pipeline that could handle these calculations dynamically across three survey cycles, without making users wait.
 - **Objective 2: Showing distributions, not just averages.** Rather than summarizing performance as a single number, the visualizations show where students are actually spread across the score range. A shaded percentile distribution plot displays each group's full distribution, with darker shading where students are most concentrated and a median marker for reference. The same format is used consistently across the score profile view and group comparisons, so patterns are easy to read across different breakdowns. A separate chart tracks how scores at different percentiles have shifted over PISA cycles, making trends visible beyond the average.
 - **Objective 3: Supporting different kinds of users.** The dashboard offers two entry points. The Explore mode lets analysts and researchers interact with the data directly, cross-referencing variables like socioeconomic background, immigration status, and school type without a fixed path. The Story mode takes a different approach, guiding policymakers through key findings with contextual framing built in. Automated text generation accompanies each chart, describing patterns in neutral language and avoiding interpretations that reduce group differences to inherent traits.
 
@@ -128,11 +139,11 @@ The dataset originates from the Programme for International Student Assessment (
 
 ### Observational units
 
-The unit of observation is the individual student. Each record corresponds to one student's responses to the assessment and contextual questionnaires, linked to school-level identifiers (`CNTSCHID`) and a final sampling weight (`W_FSTUWT`) used to produce nationally representative estimates. Because PISA does not report a single observed score per student, the target variables are ten plausible values per subject (`PV1MATH`–`PV10MATH`, and equivalently for reading and science) - multiple imputed draws from the posterior distribution of each student's latent ability, designed to account for measurement uncertainty in a low-stimulus assessment [@oecd_pisa_2022_technical]. All score statistics reported in the dashboard (means, percentiles, and standard errors) are computed by averaging across all ten plausible values per the PISA technical standards [@oecd_pisa_2022_technical], rather than treating any single plausible value as a point estimate.
+The unit of observation is the individual student. Each record corresponds to one student's responses to the assessment and contextual questionnaires, linked to school-level identifiers (`CNTSCHID`) and a final sampling weight (`W_FSTUWT`) used to produce nationally representative estimates. Because PISA does not report a single observed score per student, the target variables are `{python} n_pv_per_subject` plausible values per subject (`PV1MATH`–`PV10MATH`, and equivalently for reading and science) - multiple imputed draws from the posterior distribution of each student's latent ability, designed to account for measurement uncertainty in a low-stimulus assessment [@oecd_pisa_2022_technical]. All score statistics reported in the dashboard (means, percentiles, and standard errors) are computed by averaging across all `{python} n_pv_per_subject` plausible values per the PISA technical standards [@oecd_pisa_2022_technical], rather than treating any single plausible value as a point estimate.
 
 ### Size and characteristics of the dataset
 
-Across the three cycles, the combined dataset comprises `{python} f"{n_total:,}"` student records and approximately 1,700 raw columns per cycle. After removing columns with no analytic use to this project (entirely empty optional questionnaire fields, redundant identifiers), the working column set was reduced to 133 variables per record, covering the 30 plausible value columns, sampling and replicate weights, and a core set of equity-relevant context variables (socioeconomic status, immigration background, gender, school location and type, language spoken at home, and grade repetition). Sample sizes vary substantially by country: Canada, for instance, contributes `{python} f"{n_canada:,}"` student records in our working sample, while the United States contributes `{python} f"{n_usa:,}"` - a roughly `{python} f"{ratio:.1f}"`-fold difference that makes correct application of sampling weights essential to any cross-country comparison, rather than an optional refinement.
+Across the three cycles, the combined dataset comprises `{python} f"{n_total:,}"` student records and approximately 1,700 raw columns per cycle. After removing columns with no analytic use to this project (entirely empty optional questionnaire fields, redundant identifiers), the working column set was reduced to `{python} n_keep_cols` variables per record, covering the `{python} n_pv_cols` plausible value columns, sampling and replicate weights, and a core set of equity-relevant context variables (socioeconomic status, immigration background, gender, school location and type, language spoken at home, and grade repetition). Sample sizes vary substantially by country: Canada, for instance, contributes `{python} f"{n_canada:,}"` student records in our working sample, while the United States contributes `{python} f"{n_usa:,}"` - a roughly `{python} f"{ratio:.1f}"`-fold difference that makes correct application of sampling weights essential to any cross-country comparison, rather than an optional refinement.
 
 ### Data quality issues, missingness, biases or limitations
 
@@ -161,7 +172,7 @@ pd.DataFrame({
 
 ### How the available data shaped or constrained the scientific objectives
 
-The structure of the PISA data directly constrained what the dashboard could responsibly claim to show. The use of plausible values rather than single test scores meant that every statistic had to be computed as an average across ten imputations, ruling out any shortcut that treated `PV1` as a representative score. The replicate weight structure (80 Fay BRR weights per student) [@oecd_pisa_2022_technical] made standard error estimation considerably more involved than a naive weighted standard deviation, but was necessary to flag country-year-subject combinations where small sample sizes made point estimates unreliable, which directly shaped the decision to add standard error and 95% CI to the dashboard's summary statistics. Finally, because PISA microdata cannot support causal claims, the project's scope was deliberately limited to descriptive and comparative reporting (surfacing the full distribution of outcomes and how equity-relevant gaps move over time) rather than attempting to model or explain why those gaps exist, which would have required a different kind of data than PISA's cross-sectional design provides.
+The structure of the PISA data directly constrained what the dashboard could responsibly claim to show. The use of plausible values rather than single test scores meant that every statistic had to be computed as an average across ten imputations, ruling out any shortcut that treated `PV1` as a representative score. The replicate weight structure (`{python} n_replicate_weights` Fay BRR weights per student) [@oecd_pisa_2022_technical] made standard error estimation considerably more involved than a naive weighted standard deviation, but was necessary to flag country-year-subject combinations where small sample sizes made point estimates unreliable, which directly shaped the decision to add standard error and 95% CI to the dashboard's summary statistics. Finally, because PISA microdata cannot support causal claims, the project's scope was deliberately limited to descriptive and comparative reporting (surfacing the full distribution of outcomes and how equity-relevant gaps move over time) rather than attempting to model or explain why those gaps exist, which would have required a different kind of data than PISA's cross-sectional design provides.
 
 ## Data Science Methods
 
@@ -207,9 +218,9 @@ fig.show()
 
 ### Data pre-processing pipeline
 
-Several preprocessing steps were necessary before the data could be used in the dashboard. Student and school-level files were merged on the school identifier for each cycle, then written to per-year Parquet files rather than kept in CSV, since the full multi-cycle dataset could not be loaded into memory as a single pandas DataFrame without causing out-of-memory failures in the deployed environment. Querying is instead performed on demand against the Parquet files using DuckDB, so that any given chart only loads the specific columns and country-year combinations it needs rather than the full 1.7 million-row dataset. Records missing the final sampling weight were excluded from all weighted calculations, since an unweighted estimate would not generalize to the national population PISA is designed to represent. Subgroup breakdowns (by gender, immigration status, socioeconomic quartile, school type, and school location) are suppressed in the dashboard whenever the underlying cell falls below 30 valid observations, to avoid presenting unstable percentile or mean estimates as if they were reliable.
+Several preprocessing steps were necessary before the data could be used in the dashboard. Student and school-level files were merged on the school identifier for each cycle, then written to per-year Parquet files rather than kept in CSV, since the full multi-cycle dataset could not be loaded into memory as a single pandas DataFrame without causing out-of-memory failures in the deployed environment. Querying is instead performed on demand against the Parquet files using DuckDB, so that any given chart only loads the specific columns and country-year combinations it needs rather than the full 1.7 million-row dataset. Records missing the final sampling weight were excluded from all weighted calculations, since an unweighted estimate would not generalize to the national population PISA is designed to represent. Subgroup breakdowns (by gender, immigration status, socioeconomic quartile, school type, and school location) are suppressed in the dashboard whenever the underlying cell falls below `{python} MIN_GROUP_N` valid observations, to avoid presenting unstable percentile or mean estimates as if they were reliable.
 
-Two additional pre-aggregation steps are run at pipeline build time to keep render times low. Gaussian KDE curves and weighted percentiles (P10-P90) are pre-computed across every combination of country, year, subject, subgroup, and stored in `pisa_precomputed.parquet`, so density charts render from a lookup rather than fitting KDEs at runtime. Standard errors are similarly pre-aggregated into `pisa_ se_stats.parquet`, indexed by country, subject, and year using the 80 replicate weights averaged across all ten plausible values, allowing constant-time lookup instead of loading 91 columns per chart render.  
+Two additional pre-aggregation steps are run at pipeline build time to keep render times low. Gaussian KDE curves and weighted percentiles (P10-P90) are pre-computed across every combination of country, year, subject, subgroup, and stored in `pisa_precomputed.parquet`, so density charts render from a lookup rather than fitting KDEs at runtime. Standard errors are similarly pre-aggregated into `pisa_ se_stats.parquet`, indexed by country, subject, and year using the `{python} n_replicate_weights` replicate weights averaged across all `{python} n_pv_per_subject` plausible values, allowing constant-time lookup instead of loading 91 columns per chart render.  
 
 ### Approach 
 
@@ -249,7 +260,7 @@ The OECD average is used as the reference point throughout the dashboard, which 
 
 ### Strengths and Limitations
 
-On the statistical side, the dashboard follows PISA methodology correctly. Weighted percentiles are averaged across all ten plausible values [@oecd_pisa_2022_technical] using `DescrStatsW` with the `W_FSTUWT` sampling weight. Standard errors account for both sampling variance from the 80 Fay BRR replicate weights and imputation variance across plausible values [@oecd_pisa_2022_technical]. 
+On the statistical side, the dashboard follows PISA methodology correctly. Weighted percentiles are averaged across all `{python} n_pv_per_subject` plausible values [@oecd_pisa_2022_technical] using `DescrStatsW` with the `W_FSTUWT` sampling weight. Standard errors account for both sampling variance from the `{python} n_replicate_weights` Fay BRR replicate weights and imputation variance across plausible values [@oecd_pisa_2022_technical]. 
 
 The two-level callout system (blue for key findings, green for policy implications) came directly from ETS feedback. Earlier versions stacked colored boxes on every chapter, which felt overwhelming. The added key insight only shows up when the data actually warrants extra attention, for example when the SES gap within a country is larger than the gap between that country and the OECD average.
 
