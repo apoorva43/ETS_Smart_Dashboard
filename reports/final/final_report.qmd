@@ -246,13 +246,13 @@ There are also ethical considerations in how the dashboard presents subgroup com
 
 ### Product Description
 
-The PISA Smart Dashboard is a web application built using Streamlit and Plotly, aimed at education ministry staff who work with PISA data when preparing policy briefs. The dashboard has two main modes. The Data Story tab guides users through a four-chapter narrative with a summary of the key findings at the end, for a selected country and subject. The Explore tab lets users freely choose chart types, countries, and years without a fixed structure.
+The PISA Smart Dashboard is a web application built using Streamlit and Plotly, aimed at education ministry staff who work with PISA data when preparing policy briefs. The dashboard has two main modes. The Data Story tab (@fig-data-story-tab) guides users through a four-chapter narrative with a summary of the key findings at the end, for a selected country and subject. The Explore tab (@fig-explore-tab) lets users freely choose chart types, countries, and years without a fixed structure.
 
 A key motivation behind the Data Story tab was feedback from ETS that most policymakers look only at mean scores, which hides how spread out student performance actually is within a country, and also hides differences between student groups. To address this, the narrative moves through four chapters: where the country stands relative to the OECD average, how scores have changed across PISA cycles, how outcomes differ by socioeconomic background, immigration status, and gender, and finally how school location and type relate to performance. Each chapter includes an automatically generated finding based on the computed data, alongside a plain-language policy note. The Explore tab adds chart types like a country-level scatterplot, an intersectional heatmap, and a side-by-side comparison view for users who want to dig deeper.
 
-![Data Story tab](../../data/images/story_screenshot.png)
+![Data Story tab of the PISA Data Dashboard](../../data/images/story_screenshot.png){#fig-data-story-tab fig-pos="H"}
 
-![Explore tab](../../data/images/explore_screenshot.png)
+![Explore tab of the PISA Data Dashboard](../../data/images/explore_screenshot.png){#fig-explore-tab fig-pos="H"}
 
 ### Why This Form
 
