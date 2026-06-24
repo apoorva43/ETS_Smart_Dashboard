@@ -1884,12 +1884,29 @@ app_mode = st.sidebar.radio(
     label_visibility="collapsed" # Hides the word "Navigation" for a cleaner look
 )
 
-# st.sidebar.info(
-#     "**Interactive Dashboard:** Hover over charts for exact values, "
-#     "click legend items to hide/show groups, and drag to zoom."
-# )
-
 st.sidebar.markdown("---")
+# Reduce vertical spacing in the sidebar
+st.markdown(
+    """
+    <style>
+        /* Reduce the main gap between widgets in the sidebar */
+        [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+            gap: 0.6rem !important; 
+        }
+        
+        /* Reduce the space between the widget label and the dropdown/input itself */
+        [data-testid="stSidebar"] div[data-testid="stWidgetLabel"] {
+            padding-bottom: 0.1rem !important;
+        }
+        
+        /* Slightly reduce the bottom margin of the widgets */
+        [data-testid="stSidebar"] .row-widget {
+            margin-bottom: -0.1rem !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ==========================================
 # MODE 1: DATA STORY
