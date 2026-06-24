@@ -250,6 +250,10 @@ The PISA Smart Dashboard is a web application built using Streamlit and Plotly, 
 
 A key motivation behind the Data Story tab was feedback from ETS that most policymakers look only at mean scores, which hides how spread out student performance actually is within a country, and also hides differences between student groups. To address this, the narrative moves through four chapters: where the country stands relative to the OECD average, how scores have changed across PISA cycles, how outcomes differ by socioeconomic background, immigration status, and gender, and finally how school location and type relate to performance. Each chapter includes an automatically generated finding based on the computed data, alongside a plain-language policy note. The Explore tab adds chart types like a country-level scatterplot, an intersectional heatmap, and a side-by-side comparison view for users who want to dig deeper.
 
+![Data Story tab](../../data/images/story_screenshot.png)
+
+![Explore tab](../../data/images/explore_screenshot.png)
+
 ### Why This Form
 
 We chose Streamlit over alternatives like Dash or a React frontend mainly because the tool is intended for internal use by ETS and ministry staff rather than the general public. Keeping everything in Python meant the data pipeline, statistical functions, and UI all lived in one codebase, which made it much easier to respond to partner feedback quickly across the project timeline.
