@@ -417,8 +417,8 @@ def get_chart_note(chart_type, group_key=None, reference_year=None):
         if group_key == "Socioeconomic status":
             return (
                 "This chart compares score distributions across socioeconomic quartiles. "
-                "Students are ranked by the ESCS index and split into four equal-sized groups: Q1 is the lowest socioeconomic quartile and Q4 is the highest. "
-                "Use it to see whether SES gaps are consistent across the distribution or larger for particular student groups."
+                "Students are ranked by the index of economic, social, and cultural status (ESCS) and split into four equal-sized groups: Q1 is the lowest quartile and Q4 is the highest. "
+                "Use it to see whether socioeconomic gaps are consistent across the distribution or larger for particular student groups."
             )
 
         if group_key == "Immigration status":
@@ -961,7 +961,7 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
     _story_section_header(
         1,
         "Where does this country stand?",
-        f"Comparing {_cnt_label(story_country)} to the OECD average in {subject_label}"
+        f"Comparing {_cnt_label(story_country)} to the {story_year} OECD average in {subject_label}"
     )
 
     if df_pre is None:
@@ -1064,11 +1064,28 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
             cnt_se = ci_lower = ci_upper = np.nan
 
         if delta_val is not None and not np.isnan(delta_val):
-            direction = "higher than" if delta_val > 0 else "lower than"
+            # Round the means FIRST to prevent visual math mismatches
+            cnt_mean_r = round(cnt_mean_score)
+            oecd_mean_r = round(oecd_mean_score)
+            visual_delta = cnt_mean_r - oecd_mean_r
+            
+            if visual_delta > 0:
+                direction = "higher than"
+            elif visual_delta < 0:
+                direction = "lower than"
+            else:
+                direction = "equal to"
+            
+            # Format the text dynamically based on whether there is a gap or a tie
+            if visual_delta == 0:
+                gap_text = "is equal to"
+            else:
+                gap_text = f"is {abs(visual_delta)} points {direction}"
+
             _add_story_finding(
-                f"{_cnt_label(story_country)}'s average {subject_label} score is "
-                f"{abs(delta_val):.0f} points {direction} the OECD average "
-                f"({cnt_mean_score:.0f} vs {oecd_mean_score:.0f})."
+                f"In {story_year}, {_cnt_label(story_country)}'s average {subject_label} score "
+                f"{gap_text} the OECD average "
+                f"({cnt_mean_r} vs {oecd_mean_r})."
             )
         cols = st.columns(3)
         
@@ -1193,9 +1210,14 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 last_p10, last_p50, last_p90 = last_percs[0], last_percs[1], last_percs[2]
 
             if not (np.isnan(ref_p50) or np.isnan(last_p50)):
-                delta_p10 = last_p10 - ref_p10
-                delta_p50 = last_p50 - ref_p50
-                delta_p90 = last_p90 - ref_p90
+                # Round everything FIRST to sync the math with the visual display
+                ref_p10_r, ref_p50_r, ref_p90_r = round(ref_p10), round(ref_p50), round(ref_p90)
+                last_p10_r, last_p50_r, last_p90_r = round(last_p10), round(last_p50), round(last_p90)
+
+                # Calculate deltas using the rounded integers
+                delta_p10 = last_p10_r - ref_p10_r
+                delta_p50 = last_p50_r - ref_p50_r
+                delta_p90 = last_p90_r - ref_p90_r
                 
                 if delta_p50 > 0:
                     direction = "increased"
@@ -1207,12 +1229,13 @@ def render_story_tab(available_years, story_country, story_subject, df_pre=None)
                 # Initialize the findings list
                 findings = []
 
+                # Use the pre-rounded variables (ref_p50_r, last_p50_r) in the text string!
                 findings.append(
                     f"At the median, {_cnt_label(story_country)}'s "
                     f"{subject_label} score {direction} by "
-                    f"{abs(delta_p50):.0f} point(s) between "
+                    f"{abs(delta_p50)} points between "
                     f"{reference_year} and {latest_year} "
-                    f"({ref_p50:.0f} → {last_p50:.0f})."
+                    f"({ref_p50_r} → {last_p50_r})."
                 )
 
                 # Conditional finding - uneven decline/gain across distribution
