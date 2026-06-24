@@ -587,29 +587,36 @@ def render_chart(chart_type, subject, selected_countries,
             )
             return
 
+        # Extract the actual years this specific country has data for
+        country_years = sorted(df["YEAR"].dropna().astype(int).unique().tolist())
+
         if len(selected_countries) > 1:
             st.info(
                 f"Time comparison shows one country at a time — displaying {_cnt_label(primary_country)}."
             )
 
-        reference_year = min(available_years)
-        comparison_years = [y for y in available_years if y != reference_year]
-        
-        fig = plot_percentile_change_from_baseline(
-            df=df,
-            subject=subject,
-            cnt=primary_country,
-            reference_year=reference_year
-        )
-
-        render_plotly_chart_with_note(
-            fig,
-            note=get_chart_note(
-                "Score change over time",
+        # Country-specific check: Are there enough years to draw a line?
+        if len(country_years) < 2:
+            st.warning(f"⚠️ **Data unavailable:** {_cnt_label(primary_country)} requires at least two years of data to show historical trends.")
+        else:
+            # Set the baseline to the earliest year THIS country actually participated in
+            reference_year = min(country_years)
+            
+            fig = plot_percentile_change_from_baseline(
+                df=df,
+                subject=subject,
+                cnt=primary_country,
                 reference_year=reference_year
-            ),
-            key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
-        )
+            )
+
+            render_plotly_chart_with_note(
+                fig,
+                note=get_chart_note(
+                    "Score change over time",
+                    reference_year=reference_year
+                ),
+                key=f"time_change_{widget_key}_{subject}_{reference_year}_{primary_country}",
+            )
 
     # 4. Intersectional Heatmap
     elif chart_type == "Intersectional Heatmap":
