@@ -26,7 +26,7 @@ PISA_SCHOOL_URLS = {
 HEAD_TIMEOUT = 10
 DOWNLOAD_TIMEOUT = 60 * 30      # 30 minutes for large files
 CHUNK_SIZE = 1024 * 1024        # 1 MB chunks
-S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
+S3_BASE_URL = "https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com"
 
 def validate_url(url: str, year: int) -> bool:
     """

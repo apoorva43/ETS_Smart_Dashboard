@@ -63,6 +63,7 @@ The pipeline runs in order:
 
 > **Note on data access and speed:**  
 > If you do not want to run the full download and preprocessing pipeline (which can take several minutes), you can directly use the precomputed datasets:
+>
 > - [pisa_all.parquet](https://drive.google.com/file/d/14agrHgJC03yvsuj5nI936EAuwVCUSb2Z/view?usp=sharing)
 > - [pisa_country_stats.parquet](https://drive.google.com/file/d/1QNSRkj7o9AFi4T0_SqHi6Wz8WGf9AMBi/view?usp=sharing)
 > - [pisa_precomputed.parquet](https://drive.google.com/file/d/1cnu-5s6SNMumJ_0UMoqdxKJalDpLllHq/view?usp=sharing)
@@ -89,7 +90,7 @@ The pipeline runs in order:
 
 From the root directory of the repository, run: 
 ```bash
-PYTHONPATH=. streamlit run app.py
+streamlit run app.py
 ```
 
 The app will open at `http://localhost:8501`. Please ensure that you've run the `make data` command before this. 
@@ -98,15 +99,16 @@ The app will open at `http://localhost:8501`. Please ensure that you've run the 
 
 A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-aa54-3548-1eae51bbdb21.share.connect.posit.cloud/).
 
-> **Note on data hosting (S3 deployment dependency):**  
-> The current public S3 bucket (`pisa-dashboard-data.s3.ca-central-1.amazonaws.com`) is linked to an AWS account and will remain accessible until **10 August 2026**.
+> **Note on data hosting (Cloud CDN):**  
+> The processed parquet files are currently hosted via a DigitalOcean Spaces CDN at `https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com`.
 >
-> After this date, the bucket will no longer be available, and any deployments (including Posit Cloud) relying on it will fail to load data.
+> If local data files are not found in the `data/processed/` directory, the application will automatically fall back to querying these public cloud endpoints. No manual configuration or API keys are required.
 >
-> To ensure uninterrupted deployment, the four processed parquet files must be re-uploaded to a new S3 bucket, and the base URL must be updated accordingly in:
+> **If the hosting endpoint ever changes:** You can migrate the processed `.parquet` files to any public S3-compatible bucket or CDN. To point the dashboard to the new location, simply update the `S3_BASE_URL` variable in these three files:
 >
-> - `S3_BASE_URL` in `app.py`
-> - `S3_BASE_URL` in `src/data_loader.py`
+> - `app.py`
+> - `src/data_loader.py`
+> - `src/precompute.py`
 >
 > No other code changes are required - only updating the base URL to point to the new bucket.
 
@@ -126,9 +128,9 @@ pip install pytest pytest-cov
 
 ### Run all unit tests
 
-From the project root directory, run: 
+From the project root directory, run:
 ```bash
-PYTHONPATH=. pytest tests/ \
+pytest tests/ \
   --cov=src \
   --cov-report=term-missing \
   -v \
@@ -138,13 +140,13 @@ PYTHONPATH=. pytest tests/ \
 ### Run integration tests separately
 
 ```bash
-PYTHONPATH=. pytest tests/test_integration.py -v
+pytest tests/test_integration.py -v
 ```
 
 ### Run a specific test file
 
 ```bash
-PYTHONPATH=. pytest tests/<test_file>.py -v
+pytest tests/<test_file>.py -v
 ```
 
 Replace `<test_file>` with any file in the `tests/` directory. 

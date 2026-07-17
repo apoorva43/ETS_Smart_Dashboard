@@ -32,7 +32,7 @@ from src.config import (
     SUBJECTS, GENDER_MAP, IMMIG_MAP, LOC_MAP, SCHLTYPE_MAP
 )
 
-S3_BASE_URL  = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
+S3_BASE_URL  = "https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com"
 PERCENTILES  = [10, 25, 50, 75, 90]
 X_GRID       = np.linspace(100, 900, 200)
 

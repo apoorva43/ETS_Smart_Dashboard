@@ -44,7 +44,7 @@ from src.text_generator import (ses_difference_text,
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
 
-S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
+S3_BASE_URL = "https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com"
 
 CHART_TYPES = [
     "Percentile Score Profile",
