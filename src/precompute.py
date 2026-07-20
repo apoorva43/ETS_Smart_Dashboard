@@ -29,10 +29,9 @@ from pathlib import Path
 from scipy.stats import gaussian_kde
 from src.pisa_stats import weighted_percentiles_pv, weighted_mean_pv
 from src.config import (
-    SUBJECTS, GENDER_MAP, IMMIG_MAP, LOC_MAP, SCHLTYPE_MAP
+    SUBJECTS, GENDER_MAP, IMMIG_MAP, LOC_MAP, SCHLTYPE_MAP, S3_BASE_URL
 )
 
-S3_BASE_URL  = "https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com"
 PERCENTILES  = [10, 25, 50, 75, 90]
 X_GRID       = np.linspace(100, 900, 200)
 

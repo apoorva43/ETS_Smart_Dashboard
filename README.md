@@ -104,11 +104,9 @@ A hosted version of the app is available on [Posit Cloud](https://019e4677-6a04-
 >
 > If local data files are not found in the `data/processed/` directory, the application will automatically fall back to querying these public cloud endpoints. No manual configuration or API keys are required.
 >
-> **If the hosting endpoint ever changes:** You can migrate the processed `.parquet` files to any public S3-compatible bucket or CDN. To point the dashboard to the new location, simply update the `S3_BASE_URL` variable in these three files:
+> **If the hosting endpoint ever changes:** You can migrate the processed `.parquet` files to any public S3-compatible bucket or CDN. To point the dashboard to the new location, simply update the `S3_BASE_URL` variable in:
 >
-> - `app.py`
-> - `src/data_loader.py`
-> - `src/precompute.py`
+> - `src/config.py`
 >
 > No other code changes are required - only updating the base URL to point to the new bucket.
 

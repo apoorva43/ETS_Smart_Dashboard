@@ -185,3 +185,5 @@ COUNTRY_NAMES = {
     "UZB": "Uzbekistan",
     "VNM": "Viet Nam"
 }
+
+S3_BASE_URL  = "https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com"

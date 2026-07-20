@@ -7,15 +7,18 @@ contextual groupings. It uses PISA sampling weights and plausible values to comp
 
 Notes
 -----
-The app expects the sample PISA dataset to be available at:
+The app expects the processed PISA parquet files to be available at:
 
-    data/raw/sampledat.csv
+    data/processed/
+    
+If the local files are not found, it will automatically fall back to querying 
+the cloud CDN endpoint configured in src/config.py.
     
 Examples
 --------
 Run the app from the project root with:
 
-    PYTHONPATH=. streamlit run src/app.py
+    streamlit run app.py
 """
 import streamlit as st
 import pandas as pd
@@ -28,7 +31,7 @@ from src.pisa_stats import (
     compute_escs_quartile_percentiles,
     compute_group_percentiles
 )
-from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP
+from src.config import SUBJECTS, GROUP_OPTIONS, IMMIG_MAP, S3_BASE_URL
 from src.plotting_plotly import (
                           plot_country_shaded_density,
                           plot_percentile_change_from_baseline,
@@ -43,8 +46,6 @@ from src.text_generator import (ses_difference_text,
                                 scatter_correlation_text)
 
 st.set_page_config(page_title="PISA Dashboard", layout="wide")
-
-S3_BASE_URL = "https://mds26-ets-capstone.sfo3.cdn.digitaloceanspaces.com"
 
 CHART_TYPES = [
     "Percentile Score Profile",
