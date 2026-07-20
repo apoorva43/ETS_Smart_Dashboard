@@ -5,7 +5,7 @@ import requests
 import zipfile
 from pathlib import Path
 from typing import Union
-from src.config import KEEP_COLS, SCHOOL_COLS
+from src.config import KEEP_COLS, SCHOOL_COLS, S3_BASE_URL
 from src.pisa_stats import weighted_mean_pv, compute_weighted_se_pv
 
 # Student questionnaire files (SPSS format).
@@ -26,7 +26,6 @@ PISA_SCHOOL_URLS = {
 HEAD_TIMEOUT = 10
 DOWNLOAD_TIMEOUT = 60 * 30      # 30 minutes for large files
 CHUNK_SIZE = 1024 * 1024        # 1 MB chunks
-S3_BASE_URL = "https://pisa-dashboard-data.s3.ca-central-1.amazonaws.com"
 
 def validate_url(url: str, year: int) -> bool:
     """
